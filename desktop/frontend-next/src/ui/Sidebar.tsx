@@ -10,6 +10,7 @@ import { RemoteHosts } from "./RemoteHosts";
 import { StudioIcon } from "./StudioIcon";
 import { Palette, type Command } from "./Palette";
 import { Workspaces } from "./Workspaces";
+import { MASK, useHidesAmounts } from "./wallet";
 
 interface Props {
   hub: HubPort;
@@ -89,6 +90,7 @@ export function Sidebar({
   const [railScope, setRailScope] = useState<"all" | "live" | "pinned" | "archived">("all");
   const [palette, setPalette] = useState(false);
   const [folded, setFolded] = useState<Set<string>>(new Set());
+  const hideAmounts = useHidesAmounts();
   const newSessionRoot = activeWorkspace?.root;
 
   // The shortcut the button prints. It was drawn and never bound, so the one
@@ -240,7 +242,7 @@ export function Sidebar({
       </RailSearch>
       </div>
       <div className="railfoot">
-        <button className="studio-wallet" data-action="settings.section" data-value="usage" onClick={() => onSettings("usage")}><span aria-hidden="true"><StudioIcon name="wallet" /></span><b>{t("钱包与用量")}</b>{wallet && <small>{wallet}</small>}</button>
+        <button className="studio-wallet" data-action="settings.section" data-value="usage" onClick={() => onSettings("usage")}><span aria-hidden="true"><StudioIcon name="wallet" /></span><b>{t("钱包与用量")}</b>{wallet && <small>{hideAmounts ? MASK : wallet}</small>}</button>
         <div className="studio-user-foot">
           <AccountRow account={account} unread={accountUnread} onOpen={() => onSettings("account")} />
           <span className="studio-workspace-kind">{t(account?.signedIn ? "个人工作空间" : "本地工作空间")}</span>
