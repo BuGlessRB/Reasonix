@@ -1,6 +1,6 @@
-import { StrictMode } from "react";
+import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { boot as bootLang } from "./i18n";
+import { boot as bootLang, t } from "./i18n";
 import { reason } from "./i18n/kernel";
 import { track as trackWidth } from "./ui/viewport";
 import "./styles/tokens.css";
@@ -14,7 +14,31 @@ import { install as installFileDrop } from "./ui/filedrop";
 import { host } from "./port/host";
 import { play } from "./boot/intro";
 import { settled } from "./boot/gate";
-import { remoteHub } from "./port/cloud_remote";
+import { onRemoteConnectionEnded, remoteConnectionEnded, remoteHub } from "./port/cloud_remote";
+
+function RemoteAwareApp({ hub, remote }: { hub: HubPort; remote: boolean }) {
+  const [disconnected, setDisconnected] = useState(() => remote && remoteConnectionEnded());
+  useEffect(() => {
+    if (!remote) return;
+    const closed = () => setDisconnected(true);
+    return onRemoteConnectionEnded(closed);
+  }, [remote]);
+  return (
+    <>
+      <App hub={hub} />
+      {disconnected && (
+        <div className="remote-closed" role="alert" aria-label={t("远程连接已断开")}>
+          <span aria-hidden="true" />
+          <div>
+            <b>{t("远程连接已断开")}</b>
+            <p>{t("这台电脑已停止网页控制。重新连接需要再次验证设备状态。")}</p>
+          </div>
+          <button onClick={() => location.reload()}>{t("重新连接")}</button>
+        </div>
+      )}
+    </>
+  );
+}
 
 // The dev proxy only exists when REASONIX_SERVE was set at vite start; probing
 // /runtimes decides which port to boot on, so neither mode needs a build flag.
@@ -110,7 +134,7 @@ pick().then(
     installFileDrop();
     root.render(
       <StrictMode>
-        <App hub={hub} />
+        <RemoteAwareApp hub={hub} remote={new URLSearchParams(location.search).has("device")} />
       </StrictMode>,
     );
     intro.progress(2);

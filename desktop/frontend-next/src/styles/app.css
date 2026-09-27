@@ -3615,7 +3615,11 @@
   }
   .errbar span { flex: 1; min-width: 0; word-break: break-word }
   .cmpalert { position: absolute; top: 0; left: 0; right: 0; height: 0; z-index: 6; pointer-events: none }
-  .cmpalert > .errbar { position: absolute; right: 0; bottom: 8px; max-width: min(460px, 100%); pointer-events: auto }
+  .cmpalert > .errbar,
+  .composenotes > .errbar {
+    position: fixed; right: 16px; bottom: 16px; z-index: 20;
+    max-width: min(460px, calc(100vw - 32px)); pointer-events: auto;
+  }
   .main > .errbar { position: absolute; right: 16px; bottom: 16px; z-index: 6 }
   .errbar button {
     flex: none; border: 0; background: transparent; cursor: pointer;

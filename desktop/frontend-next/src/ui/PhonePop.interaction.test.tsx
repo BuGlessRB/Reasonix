@@ -10,7 +10,9 @@ import type { ShareStatus } from "../port/share";
 
 afterEach(cleanup);
 
-const status = (open: boolean): ShareStatus => ({ open, addresses: [{ ip: "10.0.0.2", interface: "en0", kind: "lan" }], devices: [] }) as ShareStatus;
+const status = (open: boolean): ShareStatus => ({
+  open, addresses: [{ ip: "10.0.0.2", interface: "en0", kind: "lan" }], devices: [], cloudDevices: [],
+});
 
 function hubWith(reads: ShareStatus[], offerShare: () => Promise<unknown>) {
   let at = 0;
@@ -28,7 +30,7 @@ it("does not ask for a code when the read on opening finds the door shut", async
   const { hub, shareStatus } = hubWith([status(true), status(true), status(false)], () => Promise.reject(closed));
   render(<PhonePop hub={hub} />);
   await waitFor(() => expect(shareStatus).toHaveBeenCalledTimes(2));
-  await userEvent.click(screen.getByRole("button", { name: "手机扫码访问" }));
+  await userEvent.click(screen.getByRole("button", { name: "设备访问" }));
   await waitFor(() => expect(shareStatus).toHaveBeenCalledTimes(3));
   expect(hub.offerShare).not.toHaveBeenCalled();
   expect(screen.queryByRole("alert")).toBeNull();
@@ -38,7 +40,27 @@ it("does not ask for a code when the read on opening finds the door shut", async
 it("says a failed code request inside the card", async () => {
   const { hub } = hubWith([status(true)], () => Promise.reject(closed));
   render(<PhonePop hub={hub} />);
-  await userEvent.click(await screen.findByRole("button", { name: "手机扫码访问" }));
+  await userEvent.click(await screen.findByRole("button", { name: "设备访问" }));
   const dialog = await screen.findByRole("dialog");
   await waitFor(() => expect(dialog.querySelector('[role="alert"]')?.textContent).toBe("手机访问已关闭，请先开启。"));
+});
+
+it("disconnects an Internet controller after the same two-step confirmation", async () => {
+  const remote = {
+    ...status(false),
+    cloudDevices: [{ id: "cloud-a", name: "Web Studio", connectedAt: new Date().toISOString(), lastSeen: new Date().toISOString(), ordinal: 1 }],
+  };
+  const revokeDevice = vi.fn(async () => ({ ...remote, cloudDevices: [] }));
+  const hub = {
+    shareStatus: vi.fn(async () => remote),
+    offerShare: vi.fn(),
+    revokeDevice,
+  } as unknown as HubPort;
+  render(<PhonePop hub={hub} />);
+  await userEvent.click(await screen.findByRole("button", { name: "设备访问" }));
+  const disconnect = await screen.findByRole("button", { name: "断开" });
+  await userEvent.click(disconnect);
+  expect(screen.getByRole("button", { name: "确认断开" })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "确认断开" }));
+  await waitFor(() => expect(revokeDevice).toHaveBeenCalledWith("cloud-a"));
 });
