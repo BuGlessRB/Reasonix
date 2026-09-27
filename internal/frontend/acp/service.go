@@ -246,6 +246,8 @@ func (s *service) bindClientIO(p *SessionParams, sessionID string) {
 type acpController interface {
 	control.Lifecycle
 	control.TurnControl
+	RunTurnWithRaw(ctx context.Context, input, raw, invokedSkill string) error
+	RunSkillWithName(input string) (sent, name string, found bool)
 	TrySteer(text string) bool
 	control.Approvals
 	control.SlashDispatch
@@ -1375,28 +1377,28 @@ func availableCommandsFor(ctrl acpController) []AvailableCommand {
 	return out
 }
 
-func (s *service) resolveSlashPrompt(ctx context.Context, sess *acpSession, text string) string {
+func (s *service) resolveSlashPrompt(ctx context.Context, sess *acpSession, text string) (string, string) {
 	line := strings.TrimSpace(text)
 	if sess == nil || !strings.HasPrefix(line, "/") {
-		return text
+		return text, ""
 	}
 	ctrl := sess.currentCtrl()
 	if ctrl == nil {
-		return text
+		return text, ""
 	}
 	if sent, ok := ctrl.CustomCommand(line); ok {
-		return sent
+		return sent, ""
 	}
-	if sent, ok := ctrl.RunSkill(line); ok {
-		return sent
+	if sent, name, ok := ctrl.RunSkillWithName(line); ok {
+		return sent, name
 	}
 	if sent, ok, err := ctrl.MCPPrompt(ctx, line); err == nil && ok {
-		return sent
+		return sent, ""
 	}
 	if sent, ok := invokeExtensionAction(ctx, ctrl, line); ok {
-		return sent
+		return sent, ""
 	}
-	return text
+	return text, ""
 }
 
 // invokeExtensionAction resolves a "/<plugin>:<action> args…" line against the
