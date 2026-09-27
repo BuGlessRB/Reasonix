@@ -279,6 +279,12 @@ func blankRunRanges(contentLines, oldLines []lineSegment) []editRange {
 	if len(o) == 0 || len(o) > len(c) {
 		return nil
 	}
+	// Only a run bounded by non-blank lines on both sides may drift in length.
+	// A window that starts or ends blank has no anchoring text on that side, so
+	// an all-blank old_string would otherwise name every blank run in the file.
+	if o[0].blank || o[len(o)-1].blank {
+		return nil
+	}
 	var ranges []editRange
 	for i := 0; i+len(o) <= len(c); {
 		if blankRunWindowMatches(c[i:i+len(o)], o) {
@@ -298,6 +304,12 @@ func blankRunRanges(contentLines, oldLines []lineSegment) []editRange {
 func blankRunWindowMatches(window, old []blankRunToken) bool {
 	for i, tok := range window {
 		if tok.blank != old[i].blank || (!old[i].blank && tok.text != old[i].text) {
+			return false
+		}
+		// Same trailing-newline rule the other fuzzy modes apply: an old_string
+		// that ends in a newline must not match a final line that lacks one,
+		// or the write would append a newline the file never had.
+		if lineHasNewline(old[i].lastLine.raw) && !lineHasNewline(tok.lastLine.raw) {
 			return false
 		}
 	}

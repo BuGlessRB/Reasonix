@@ -332,6 +332,27 @@ func TestApplyOldStringEditBlankLineRunCases(t *testing.T) {
 			old:     "a = 1\n\nc = 3",
 			want:    false,
 		},
+		{
+			// Nothing but blank lines names no span: it would match any run in
+			// any file, which is the opposite of the anchored relaxation.
+			name:    "blank-only old_string never matches",
+			content: "a\n\n\nb\n",
+			old:     "\n\n\n\n\n",
+			want:    false,
+		},
+		{
+			name:    "old_string starting in a blank run has no anchor",
+			content: "a = 1\n\nb = 2\n",
+			old:     "\n\n\nb = 2",
+			want:    false,
+		},
+		{
+			// The file has no final newline; matching would write one in.
+			name:    "old_string newline must not outrun the file's last line",
+			content: "a = 1\n\n\nb = 2",
+			old:     "a = 1\n\nb = 2\n",
+			want:    false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -429,5 +450,36 @@ func TestEditFileBlankLineRunKeepsFinalNewline(t *testing.T) {
 	}
 	if want := "a = 9\n\nb = 9\n"; string(got) != want {
 		t.Fatalf("content = %q, want %q", got, want)
+	}
+}
+
+// TestMultiEditBlankLineRunReplaceAllRejectsBlankOnly keeps replace_all from
+// becoming a file-wide blank-run rewrite: without an anchoring non-blank line,
+// a blank-only old_string would land on every run at once.
+func TestMultiEditBlankLineRunReplaceAllRejectsBlankOnly(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "runs.py")
+	seed := "a = 1\n\n\nb = 2\n\n\nc = 3\n"
+	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := (multiEdit{}).Execute(context.Background(), argsJSON(t, map[string]any{
+		"path": path,
+		"edits": []map[string]any{{
+			"old_string":  "\n\n\n\n",
+			"new_string":  "",
+			"replace_all": true,
+		}},
+	}))
+	if err == nil {
+		t.Fatal("a blank-only old_string must not match every blank run")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != seed {
+		t.Fatalf("file must be untouched, got %q", got)
 	}
 }
