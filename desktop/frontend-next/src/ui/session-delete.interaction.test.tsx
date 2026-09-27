@@ -28,10 +28,10 @@ function draw(over: { runtimes?: RuntimeView[]; workspaces?: TreeWorkspace[] } =
   const onClose = vi.fn().mockResolvedValue(undefined);
   const reload = vi.fn().mockResolvedValue(undefined);
   const onError = vi.fn();
-  render(
+  const view = (workspaces: TreeWorkspace[]) => (
     <Workspaces
       hub={hub}
-      tree={over.workspaces ?? tree()}
+      tree={workspaces}
       runtimes={over.runtimes ?? []}
       active=""
       folded={new Set()}
@@ -45,9 +45,12 @@ function draw(over: { runtimes?: RuntimeView[]; workspaces?: TreeWorkspace[] } =
       onRename={() => {}}
       onError={onError}
       adder={{ add: () => {}, close: () => {}, at: null } as never}
-    />,
+    />
   );
-  return { removeSession, onClose, reload, onError };
+  const { rerender } = render(view(over.workspaces ?? tree()));
+  // What the kernel lists after a write: the tree the next reload brings back.
+  const relist = (workspaces: TreeWorkspace[]) => rerender(view(workspaces));
+  return { removeSession, onClose, reload, onError, relist };
 }
 
 it("projects each open session's run state onto its own row", () => {
@@ -136,5 +139,83 @@ describe("the conversation action menu", () => {
 
     await userEvent.click(document.body);
     expect(screen.queryByRole("menu", { name: "会话操作" })).toBeNull();
+  });
+});
+
+describe("the Delete key on a focused conversation", () => {
+  const row = () => screen.getByRole("treeitem", { name: /the one to delete/ });
+
+  it("asks through the same confirmation the menu uses, and Escape deletes nothing", async () => {
+    const { removeSession } = draw();
+    row().focus();
+    await userEvent.keyboard("{Delete}");
+    expect(screen.getByRole("alertdialog", { name: "删除「the one to delete」？" })).toBeTruthy();
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(removeSession).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(row());
+  });
+
+  it("deletes once the question is answered", async () => {
+    const { removeSession } = draw();
+    row().focus();
+    await userEvent.keyboard("{Delete}");
+    await userEvent.click(confirmGo());
+    expect(removeSession).toHaveBeenCalledWith(SESSION);
+  });
+
+  it("acts on the focused row only, never the hovered one", async () => {
+    draw();
+    await userEvent.hover(row());
+    await userEvent.keyboard("{Delete}");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("does not pull focus back to a row whose question another one replaced", async () => {
+    const OTHER = "/w/.reasonix/sessions/20260902-120000.jsonl";
+    draw({
+      workspaces: tree({
+        sessions: [
+          { path: SESSION, name: "20260901-120000", title: "the one to delete" },
+          { path: OTHER, name: "20260902-120000", title: "the other one" },
+        ],
+      }),
+    });
+    row().focus();
+    await userEvent.keyboard("{Delete}");
+    await userEvent.click(screen.getByRole("button", { name: /会话操作：the other one/ }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "删除会话" }));
+
+    const other = screen.getByRole("alertdialog", { name: "删除「the other one」？" });
+    expect(other.contains(document.activeElement)).toBe(true);
+  });
+
+  it("hands focus to the next row once the focused one is deleted", async () => {
+    const NEXT = "/w/.reasonix/sessions/20260902-120000.jsonl";
+    const both = tree({
+      sessions: [
+        { path: SESSION, name: "20260901-120000", title: "the one to delete" },
+        { path: NEXT, name: "20260902-120000", title: "the next one" },
+      ],
+    });
+    const { reload, relist } = draw({ workspaces: both });
+    reload.mockImplementation(async () => relist(tree({ sessions: [both[0].sessions[1]] })));
+    row().focus();
+    await userEvent.keyboard("{Delete}");
+    await userEvent.keyboard("{Enter}");
+
+    expect(screen.queryByRole("treeitem", { name: /the one to delete/ })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("treeitem", { name: /the next one/ }));
+  });
+
+  it("leaves a rename field's Delete to the field", async () => {
+    draw();
+    await userEvent.click(screen.getByRole("button", { name: /会话操作：/ }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /重命名/ }));
+    const field = screen.getByRole("textbox", { name: "重命名该会话" });
+    field.focus();
+    await userEvent.keyboard("{Delete}");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 });

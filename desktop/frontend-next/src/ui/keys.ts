@@ -14,3 +14,11 @@ const mac = /mac|iphone|ipad|ipod/i.test(
 export function chord(key: string): string {
   return mac ? `⌘${key}` : `Ctrl ${key}`;
 }
+
+// asksDelete reads the key that deletes whatever holds focus: Delete everywhere,
+// and ⌘⌫ on macOS, whose main key sends Backspace.
+export function asksDelete(ev: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }): boolean {
+  if (ev.ctrlKey || ev.altKey || ev.shiftKey) return false;
+  if (ev.key === "Delete") return !ev.metaKey;
+  return mac && ev.metaKey && ev.key === "Backspace";
+}
