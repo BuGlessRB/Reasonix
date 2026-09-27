@@ -112,3 +112,36 @@ func TestAnUnclassifiedPlanCheckSettlesItsFrozenCriterion(t *testing.T) {
 		t.Fatalf("frozen = %+v, want the check that ran after the edit satisfied", got)
 	}
 }
+
+// A plan naming files to change holds an answer that changed nothing, and the
+// hold lifts on each legitimate end: the change itself, a declared blocker, a
+// wait on the user, or a change a restart carried in.
+func TestAPlanNamingFilesHoldsAnAnswerThatChangedNothing(t *testing.T) {
+	held := func(a *Agent) bool {
+		return strings.Contains(a.finalReadinessCheckFor().reason, "names files to change")
+	}
+	plan := deliverablePlan()
+	if !held(rejectionAgent(t, &plan)) {
+		t.Fatal("an answer that changed nothing finished under a plan naming files to change")
+	}
+	for name, r := range map[string]evidence.Receipt{
+		"changed":  {ToolName: "edit_file", Mutation: true, Write: true, Success: true, Paths: []string{"parser.go"}},
+		"blocked":  {ToolName: "conclude_blocked", Success: true},
+		"awaiting": {ToolName: evidence.UserGateTool, Success: true, Args: []byte(`{"need":"the sample file"}`)},
+	} {
+		a := rejectionAgent(t, &plan)
+		a.task.ledger.Record(r)
+		if held(a) {
+			t.Fatalf("%s: the deliverable still held the answer", name)
+		}
+	}
+	analysis := deliverablePlan()
+	analysis.Steps[0].CandidateFiles = nil
+	if held(rejectionAgent(t, &analysis)) {
+		t.Fatal("a plan naming no files was held for a change")
+	}
+	a := rejectionAgent(t, &plan)
+	if got := a.appendPlanDeliverableGap(&finalReadinessCheck{}, nil, true); len(got) != 0 {
+		t.Fatalf("a change a restart carried in still owed the deliverable: %v", got)
+	}
+}

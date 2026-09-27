@@ -205,6 +205,7 @@ func (a *Agent) finalReadinessCheckFor() finalReadinessCheck {
 			return out
 		}
 	}
+	missing = a.appendPlanDeliverableGap(&out, missing, checkpointApplies && (checkpoint.PendingMutation || checkpoint.MutationObserved))
 	if !hasWriter {
 		if len(missing) > 0 {
 			out.reason = strings.Join(missing, "; ")
