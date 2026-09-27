@@ -7,8 +7,42 @@ package agent
 import (
 	"strings"
 
+	"reasonix/internal/contract/tool"
 	"reasonix/internal/safety/evidence"
 )
+
+// withObligationNotice is every notice a call owes the model about the host's
+// debts: what it changed, and why a command that ran code settled none of them.
+func (a *Agent) withObligationNotice(result string, before []evidence.Obligation, execution *tool.ShellExecution, readOnly bool) string {
+	after := a.obligations()
+	result = withObligationDelta(result, evidence.DiffObligations(before, after))
+	if a.turn.uncountedCheckNoted || !uncountedCheck(after, execution, readOnly) {
+		return result
+	}
+	a.turn.uncountedCheckNoted = true
+	return strings.TrimRight(result, "\n") + "\n\n" + uncountedCheckNotice
+}
+
+// uncountedCheckNotice says why a command did not settle the verification the
+// work owes. Without it the debt reads as a new change and nothing more, and
+// the model concludes its check ran.
+var uncountedCheckNotice = "host: this command ran code the host cannot prove read-only and is not a recognized check, " +
+	"so it counts as a possible change rather than a check and the work is still unverified. " +
+	evidence.VerificationCommandSummary()
+
+// uncountedCheck reports a shell command that ran code, was not a recognized
+// check, and left the work owing verification.
+func uncountedCheck(after []evidence.Obligation, execution *tool.ShellExecution, readOnly bool) bool {
+	if readOnly || execution == nil || execution.Verification != tool.ShellVerificationNotVerification {
+		return false
+	}
+	for _, o := range after {
+		if o.Kind == evidence.ObligationStaleVerification {
+			return true
+		}
+	}
+	return false
+}
 
 // withObligationDelta appends what this call did to the host's debts. A call
 // can settle one and create another at once — establishing a change's scope
