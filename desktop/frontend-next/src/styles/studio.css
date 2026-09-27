@@ -3679,24 +3679,25 @@ body { font-size: 14px; line-height: 1.75; }
   max-height: min(60vh, 520px);
   overflow: auto;
 }
+.svcrow-wrap { position: relative; min-width: 0; border: 1px solid transparent; border-radius: 8px; }
+.svcrow-wrap:hover { background: var(--overlay); }
+.svcrow-wrap[data-selected="true"] { border-color: var(--border); background: var(--raised); }
+.svcrow-wrap:focus-within { outline: 2px solid var(--focus); outline-offset: -2px; }
 .svcrow {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  min-width: 0;
+  padding: 8px 58px 8px 10px;
+  border: 0;
+  border-radius: inherit;
   background: transparent;
   color: var(--muted);
   text-align: left;
   cursor: pointer;
 }
-.svcrow:hover { background: var(--overlay); }
-.svcrow:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.svcrow[aria-pressed="true"] {
-  border-color: var(--border);
-  background: var(--raised);
-}
+.svcrow:focus-visible { outline: 0; }
 .svcrow .tx { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
 .svcrow .nm {
   overflow: hidden;
@@ -3706,6 +3707,33 @@ body { font-size: 14px; line-height: 1.75; }
   color: var(--text);
 }
 .svcrow .ds { font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--faint); }
+.svcrow .pstate { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); }
+.svcrow-wrap:is(:hover, :focus-within, [data-selected="true"]) .pstate { visibility: hidden; }
+.svcrow-order {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
+  visibility: hidden;
+  pointer-events: none;
+}
+.svcrow-wrap:is(:hover, :focus-within, [data-selected="true"]) .svcrow-order { visibility: visible; pointer-events: auto; }
+.svcrow-order button {
+  width: 24px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: var(--w-med) var(--fs-ui) var(--ui);
+}
+.svcrow-order button:hover { background: var(--overlay); color: var(--text); }
+.svcrow-order button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.svcrow-order .studio-icon { width: 14px; height: 14px; }
+.svcrow-arrow-down { transform: rotate(180deg); }
 .pstate { flex: none; width: 6px; height: 6px; border-radius: 50%; }
 .pstate[data-state="use"] { background: var(--ok); }
 .pstate[data-state="warn"] { background: var(--warn); }

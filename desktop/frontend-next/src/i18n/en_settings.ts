@@ -25,6 +25,9 @@ export const EN_SETTINGS: Record<string, string> = {
     "The default model runs this conversation and most tasks, and every other use follows it unless you give that job a model of its own. Switching keeps the conversation and rebuilds the runtime; it cannot be done while a task runs.",
   "添加模型服务": "Add model service",
   "搜索已添加的服务": "Search added services",
+  "上移 {name}（Alt+上方向键）": "Move {name} up (Alt+Up Arrow)",
+  "下移 {name}（Alt+下方向键）": "Move {name} down (Alt+Down Arrow)",
+  "无法保存服务顺序。": "Could not save the service order.",
   "没有匹配的服务。": "No matching service.",
   "添加一个模型服务后，在这里查看和修改它。": "Add a model service to see and change it here.",
   "选择一个服务查看和修改；地址、密钥与模型列表保存后生效。自定义中转站的协议与模型会在连接后自动探测。":
