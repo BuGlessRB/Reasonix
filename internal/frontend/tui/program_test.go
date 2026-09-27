@@ -13,6 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"reasonix/internal/base/i18n"
 	"reasonix/internal/contract/eventwire"
 )
 
@@ -304,6 +305,48 @@ func TestAskIsAnsweredQuestionByQuestion(t *testing.T) {
 		t.Fatal("the answered card stayed open")
 	}
 	want := `POST /answer {"answers":[{"QuestionID":"q1","Selected":["SQLite"]},{"QuestionID":"q2","Selected":["queue","metrics"]}],"id":"ask1"}`
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, want) {
+		t.Fatalf("answer call missing:\n%s", calls)
+	}
+}
+
+// An option can ask for more than itself ("paste the output"): Tab picks it
+// and opens a note line, and the note goes to the kernel after the pick.
+func TestAskPickCarriesATypedNote(t *testing.T) {
+	m, k := testModel(t)
+	apply(m, eventwire.Event{Kind: "ask_request", Ask: &eventwire.Ask{ID: "ask1", Questions: []eventwire.AskQuestion{
+		{ID: "q1", Prompt: "How to go on?", Options: []eventwire.AskOption{{Label: "Skip"}, {Label: "Paste the output"}}},
+	}}})
+	press(m, "down")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	if m.tr.OpenPrompt() == nil {
+		t.Fatal("Tab answered the question instead of opening a note")
+	}
+	typeText(m, "exit 1")
+	if v := m.View().Content; !strings.Contains(v, i18n.M.AskNoteHint) {
+		t.Fatalf("the note line is not shown under the pick:\n%s", v)
+	}
+	run(m, press(m, "enter"))
+	want := `POST /answer {"answers":[{"QuestionID":"q1","Selected":["Paste the output","exit 1"]}],"id":"ask1"}`
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, want) {
+		t.Fatalf("answer call missing:\n%s", calls)
+	}
+}
+
+// Picking an option replaces an answer typed earlier for a single-choice
+// question; it is not sent alongside the pick.
+func TestAskPickReplacesATypedAnswer(t *testing.T) {
+	m, k := testModel(t)
+	apply(m, askEvent())
+	m.Update(tea.KeyPressMsg{Code: '3', Text: "3"})
+	typeText(m, "MySQL")
+	run(m, press(m, "enter"))
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
+	m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	run(m, press(m, "enter"))
+	want := `POST /answer {"answers":[{"QuestionID":"q1","Selected":["SQLite"]},{"QuestionID":"q2","Selected":["cache"]}],"id":"ask1"}`
 	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, want) {
 		t.Fatalf("answer call missing:\n%s", calls)
 	}

@@ -35,7 +35,7 @@ func (m *model) bottomLines() bottom {
 		rows = append(rows, w)
 	}
 	at := -1
-	if m.picker == nil && (open == nil || (open.Kind == ItemAsk && m.ask != nil && m.ask.typing)) {
+	if m.picker == nil && (open == nil || (open.Kind == ItemAsk && m.ask != nil && m.ask.entering())) {
 		at = len(rows)
 		rows = append(rows, m.composerLines()...)
 	}

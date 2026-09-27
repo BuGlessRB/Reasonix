@@ -359,6 +359,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "agent 已收到拒绝，将改用其他方式或终止。": "The agent takes the refusal and either finds another way or stops.",
   "下次同样的操作仍会请求确认。": "The same operation will ask again next time.",
   "在此填写你希望采用的方案": "Which one you want, or write your own here",
+  "补充说明（可选）": "Note (optional)",
+  "补充说明（可选），会随所选项一起发送": "Add a note (optional) — it is sent with your choice",
   "问题 {n}": "Question {n}",
   "未答": "Unanswered",
   "确认（还有 {n} 个没答）": "Confirm ({n} left)",

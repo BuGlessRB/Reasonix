@@ -172,6 +172,77 @@ describe("decision cards", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: /小/ }));
   });
 
+  // An option can ask for more than itself ("paste the output"), so a single
+  // pick keeps a note box open and the note rides with the pick; choosing Other
+  // still makes the typed text the whole answer.
+  it("sends a note typed under a single-choice pick alongside it", async () => {
+    const answer = vi.fn(pending);
+    const item = {
+      t: "ask", id: "row", ask: { id: "ask", questions: [
+        { id: "next", header: "下一步", prompt: "怎么继续", multi: false, options: [{ label: "回传命令输出" }, { label: "跳过" }] },
+      ] },
+    } as Extract<Item, { t: "ask" }>;
+    render(<AskCard item={item} onAnswer={answer} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /回传命令输出/ }));
+    await userEvent.type(screen.getByRole("textbox", { name: "补充说明（可选）" }), "exit 1: missing go.sum");
+    expect(screen.getByRole("button", { name: /其他 —— 自行填写/ }).getAttribute("aria-pressed")).toBe("false");
+    await userEvent.click(screen.getByRole("button", { name: "确认" }));
+    expect(answer).toHaveBeenCalledWith("row", "ask", [
+      { questionId: "next", selected: ["回传命令输出", "exit 1: missing go.sum"] },
+    ]);
+  });
+
+  // Leaving Other for an option takes its answer back rather than sending it as
+  // a note, and returning to Other finds it still typed.
+  it("does not turn an abandoned Other answer into a pick's note", async () => {
+    const answer = vi.fn(pending);
+    const item = {
+      t: "ask", id: "row", ask: { id: "ask", questions: [
+        { id: "lang", header: "语言", prompt: "用什么写", multi: false, options: [{ label: "A" }, { label: "B" }] },
+      ] },
+    } as Extract<Item, { t: "ask" }>;
+    render(<AskCard item={item} onAnswer={answer} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /其他 —— 自行填写/ }));
+    await userEvent.keyboard("use C instead");
+    await userEvent.click(screen.getByRole("button", { name: /^A$/ }));
+    expect((screen.getByRole("textbox", { name: "补充说明（可选）" }) as HTMLInputElement).value).toBe("");
+    await userEvent.click(screen.getByRole("button", { name: /其他 —— 自行填写/ }));
+    expect((screen.getByRole("textbox", { name: "其他 —— 自行填写" }) as HTMLInputElement).value).toBe("use C instead");
+    await userEvent.click(screen.getByRole("button", { name: /^A$/ }));
+    await userEvent.click(screen.getByRole("button", { name: "确认" }));
+    expect(answer).toHaveBeenCalledWith("row", "ask", [{ questionId: "lang", selected: ["A"] }]);
+  });
+
+  // Enter in a pick's note answers the way Enter in the Other box does.
+  it("answers a pick's note from the keyboard", async () => {
+    const answer = vi.fn(pending);
+    const item = {
+      t: "ask", id: "row", ask: { id: "ask", questions: [
+        { id: "next", header: "下一步", prompt: "怎么继续", multi: false, options: [{ label: "回传命令输出" }, { label: "跳过" }] },
+      ] },
+    } as Extract<Item, { t: "ask" }>;
+    render(<AskCard item={item} onAnswer={answer} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /回传命令输出/ }));
+    await userEvent.click(screen.getByRole("textbox", { name: "补充说明（可选）" }));
+    await userEvent.keyboard("exit 1{Enter}");
+    expect(answer).toHaveBeenCalledWith("row", "ask", [{ questionId: "next", selected: ["回传命令输出", "exit 1"] }]);
+  });
+
+  it("shows a sealed pick's note under the pick, not as Other", () => {
+    const item = {
+      t: "ask", id: "row", answered: [["回传命令输出", "exit 1"]], ask: { id: "ask", questions: [
+        { id: "next", header: "下一步", prompt: "怎么继续", multi: false, options: [{ label: "回传命令输出" }, { label: "跳过" }] },
+      ] },
+    } as Extract<Item, { t: "ask" }>;
+    render(<AskCard item={item} onAnswer={vi.fn(pending)} />);
+    expect(screen.getByRole("button", { name: /回传命令输出/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /其他 —— 自行填写/ }).getAttribute("aria-pressed")).toBe("false");
+    expect((screen.getByRole("textbox", { name: "补充说明（可选）" }) as HTMLInputElement).value).toBe("exit 1");
+  });
+
   // Several questions are walked, not hunted for: a single-choice pick moves on
   // by itself, a multi-choice one waits for Next, and Confirm appears only once
   // every question has an answer.

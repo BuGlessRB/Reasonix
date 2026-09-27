@@ -202,7 +202,7 @@ func (m *model) promptKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if cmd, handled := answer(open, msg.String()); handled {
 		return cmd, true
 	}
-	if open.Kind == ItemAsk && m.ask != nil && m.ask.typing {
+	if open.Kind == ItemAsk && m.ask != nil && m.ask.entering() {
 		var cmd tea.Cmd
 		m.composer, cmd = m.composer.Update(msg)
 		return cmd, true
