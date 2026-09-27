@@ -102,6 +102,9 @@ func (a *Agent) sealShadowBundle(input string, c *taskcontract.Contract, rep com
 		Blocked:         c.Blocked(),
 	})
 	div := verdict.Classify(rep.Verdict, c, res)
+	if cs.Failure == "" {
+		a.turn.outcome = &res
+	}
 	payload, err := json.Marshal(shadowBundle{
 		Kind:         shadowBundleKind,
 		InputDigest:  sha256Hex([]byte(input)),

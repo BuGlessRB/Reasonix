@@ -211,5 +211,7 @@ func (a *Agent) CompletionReceipt() *event.CompletionReceipt {
 	if a == nil || a.turn.completion == nil {
 		return nil
 	}
-	return completionReceipt(*a.turn.completion)
+	rep := *a.turn.completion
+	rep.Gaps = a.planCriterionGaps(rep.Gaps)
+	return completionReceipt(rep)
 }
