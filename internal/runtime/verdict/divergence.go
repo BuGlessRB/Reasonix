@@ -92,7 +92,7 @@ func stricterReasons(c *taskcontract.Contract, res Result) []string {
 		if claimed[o.ID] {
 			add(ReasonClaimOnly)
 		}
-		if o.Cause == CauseHostObligation {
+		if o.Cause == CauseHostObligation || o.Cause == CauseContractOwed {
 			add(o.Source)
 			continue
 		}

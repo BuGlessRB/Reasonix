@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"reasonix/internal/runtime/contract"
 	"sync/atomic"
 
 	"reasonix/internal/safety/evidence"
@@ -17,9 +18,13 @@ type taskRuntime struct {
 	// baselineCriteria names what each rewritten file's criteria said first,
 	// keyed by path. The first capture of a path wins.
 	baselineCriteria map[string]evidence.TestCriterion
-	ledger           *evidence.Ledger
-	outcome          *evidence.OutcomeTracker
-	budget           runBudget
+	// contract caches the revision checkpoint.Contract names; contractRecord is
+	// the record it was read from, so a checkpoint naming another invalidates it.
+	contract       *contract.Contract
+	contractRecord string
+	ledger         *evidence.Ledger
+	outcome        *evidence.OutcomeTracker
+	budget         runBudget
 	// witness holds, per changed path, the lines a later output has to carry to
 	// have shown that change. It is working state, not evidence: the verdict
 	// lands on the receipt, so the ledger never holds file content.
@@ -83,5 +88,8 @@ func (t *taskRuntime) restartLedger() {
 		overScanLimit: new(atomic.Bool),
 		criteriaEpoch: new(atomic.Uint64),
 	}
+	// A new task is accepted under a new contract; a resumed one is not
+	// restarted, so the revision its checkpoint names stays in force.
+	t.checkpoint.Contract = ""
 	t.ledger.Reset()
 }

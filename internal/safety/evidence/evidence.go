@@ -65,6 +65,9 @@ type DeliveryCheckpoint struct {
 	// Proven is what a pending change had already proven when the checkpoint
 	// was written; it stands only while every path still holds that content.
 	Proven *ProvenMutation `json:"proven,omitempty"`
+	// Contract names the accepted contract revision's record in Trusted Host
+	// State. The record, not this checkpoint, is the authority.
+	Contract string `json:"contract,omitempty"`
 }
 
 // ProvenMutation pairs the proof a pending change had earned with a content

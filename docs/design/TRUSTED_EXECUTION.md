@@ -512,7 +512,7 @@ Honesty metrics carry about ±10pp noise at one sample per task. A stage exit MU
 | Phase | Delivers | Exit criterion |
 | --- | --- | --- |
 | P1 Evidence Bundle | THS with trusted head and integrity level, WorkspaceSnapshot, durable receipts, content-addressed artifacts, sealed shadow bundle | bundle survives restart; divergence taxonomy populated; effect test at the trajectory boundary |
-| P2 Task Contract | canonical contract, templates, auto-acceptance (A1–A5), revisions, RiskPolicy and ObservationPolicy revisions, Goal `VerificationContract` folded in | the Goal-resume check bypass (`internal/agent/project_check_probe_test.go`) flips to refused; I1–I5 and I13 have effect tests through `boot.Build` |
+| P2 Task Contract | canonical contract, templates, auto-acceptance (A1–A5), revisions, RiskPolicy and ObservationPolicy revisions, Goal `VerificationContract` folded in | a resumed goal is held to the revision it accepted, read from THS; I1–I5 and I13 have effect tests through `boot.Build` |
 | P3 Eval corpus | capability digests on every run, corpus from e2ebench + integrity corpus + dogfood failures | two runs of one capability digest reproduce within the noise floor |
 | P4 Rollout | offline-authority rollout for all seven capability kinds | one skill promoted and one rolled back on dogfood, both from bundle metrics |
 
@@ -520,13 +520,13 @@ Honesty metrics carry about ±10pp noise at one sample per task. A stage exit MU
 
 | Target | Today | Gap |
 | --- | --- | --- |
-| Canonical contract | `internal/runtime/taskcontract` is rebuilt from receipts each turn (`agent/contract_shadow.go`); no id, revision, digest or persistence | P2 |
+| Canonical contract | `internal/runtime/contract` holds revisions in THS (`contract/1`), derived from the baseline check identities and captured test criteria; host policy accepts only tightening, the checkpoint names the revision, and a goal resumed in another process keeps it. The gate still reads `internal/runtime/taskcontract`, rebuilt each turn | templates, plan criteria, admission, the gate reading the revision |
 | I2 claim inertness | a todo marked `completed` resolves its requirement `Satisfied` with no evidence (`buildShadowContract`); the shadow bundle's `verdict.Evaluate` takes no claim input and records such a turn as `new_stricter` / `claim_only` | P2 removes the edge from the gate |
 | I2 claim inertness | `complete_step` checks that the cited command ran; the criterion binding is the model's | P2 moves binding into the frozen verifier |
 | Atomic tasks | `taskcontract.Atomic` treats any mutation as proof of the ask | acceptable at L1 only |
 | Durable evidence | the root agent seals each turn's contract, report and receipts (arguments by digest) as a `shadow_bundle/1` record in THS; receipts carry no blob digests and no snapshot yet | P1: snapshot, verdicts, divergence |
 | Frozen test criteria | `evidence.TestCriterion` keeps host-owned bytes and digest identity | reuse as the `test` verifier subject |
-| Frozen check set | `evidence.VerificationContract` freezes a Goal's checks; `Epoch` never moves | P2 generalises it to revisions |
+| Frozen check set | `evidence.VerificationContract` freezes a Goal's checks; `Epoch` never moves. Since `7a8b720bc` a rewritten declaration no longer retires the check a goal began under | fold into contract revisions |
 | Host report | `internal/runtime/completion` builds a host-authored report with gaps by subtraction | P1 seals it into the bundle |
 | Risk policy | `sensitive:` is read from the workspace `REASONIX.md` at each boot, so an edit changes enforcement for the next session | P2 (I13) |
 | Observation | `scanWorkspace` skips VCS stores and stops at 50k files; exclusions are code, not a revisioned policy | P1 |

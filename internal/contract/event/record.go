@@ -150,6 +150,11 @@ type EvidenceBundleAudit struct {
 	Outcome           string
 	DivergenceClass   string
 	DivergenceReasons []string
+	// ContractRevision is the accepted contract revision in force, and
+	// ContractDecision what host policy did with this turn's derivation.
+	ContractRevision int
+	ContractDecision string
+	ContractFailure  string
 }
 
 // EvidenceBundleAuditSink is an optional sink capability; implementations must

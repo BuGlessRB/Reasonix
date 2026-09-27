@@ -192,6 +192,10 @@ type EvidenceBundle struct {
 	Outcome           string   `json:"outcome,omitempty"`
 	DivergenceClass   string   `json:"divergence_class,omitempty"`
 	DivergenceReasons []string `json:"divergence_reasons,omitempty"`
+
+	ContractRevision int    `json:"contract_revision,omitempty"`
+	ContractDecision string `json:"contract_decision,omitempty"`
+	ContractFailure  string `json:"contract_failure,omitempty"`
 }
 
 // ReadinessAudit mirrors hostaudit.ReadinessAudit with stable snake_case keys.
@@ -439,6 +443,10 @@ func (r *Recorder) RecordEvidenceBundle(a event.EvidenceBundleAudit) {
 		Outcome:           a.Outcome,
 		DivergenceClass:   a.DivergenceClass,
 		DivergenceReasons: a.DivergenceReasons,
+
+		ContractRevision: a.ContractRevision,
+		ContractDecision: a.ContractDecision,
+		ContractFailure:  a.ContractFailure,
 	}})
 	event.RecordEvidenceBundle(r.inner, a)
 }
