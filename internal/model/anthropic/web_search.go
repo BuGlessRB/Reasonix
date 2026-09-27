@@ -14,10 +14,65 @@ import (
 // the client answers, so they leave as one already-finished call.
 
 // serverBlock is the server-run call a result block answers. A result follows the
-// block that issued it, so the latest one is the one being answered.
+// block that issued it, so the latest one is the one being answered. owed holds
+// result blocks that opened empty: some gateways send the array in a later
+// web_search_tool_result_delta instead of the block start.
 type serverBlock struct {
 	call  provider.ToolCall
 	index int
+	owed  map[int]string // result block index -> tool_use_id
+}
+
+// blockStart is a content_block_start payload.
+type blockStart struct {
+	Type      string          `json:"type"`
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	ToolUseID string          `json:"tool_use_id"` // web_search_tool_result
+	Content   json.RawMessage `json:"content"`     // web_search_tool_result: array of result objects
+}
+
+// begin records a server-run block; a result block that already carries its
+// array becomes a call at once. It reports false once the consumer is gone.
+func (s *serverBlock) begin(index int, b *blockStart, send func(provider.Chunk) bool) bool {
+	switch b.Type {
+	case "server_tool_use":
+		s.call, s.index = provider.ToolCall{ID: b.ID, Name: b.Name}, index
+	case "web_search_tool_result":
+		if chunk, ok := webSearchChunk(s.call, b.ToolUseID, index, b.Content); ok {
+			return send(chunk)
+		}
+		if s.owed == nil {
+			s.owed = map[int]string{}
+		}
+		s.owed[index] = b.ToolUseID
+	}
+	return true
+}
+
+// args accumulates the query of the server-run call, reporting whether the
+// fragment belonged to it.
+func (s *serverBlock) args(index int, partial string) bool {
+	if index != s.index {
+		return false
+	}
+	s.call.Arguments += partial
+	return true
+}
+
+// resultDelta completes an owed result block. It answers once per block, so a
+// gateway repeating the array does not produce a second card.
+func (s *serverBlock) resultDelta(index int, results json.RawMessage, send func(provider.Chunk) bool) bool {
+	id, owed := s.owed[index]
+	if !owed {
+		return true
+	}
+	chunk, ok := webSearchChunk(s.call, id, index, results)
+	if !ok {
+		return true
+	}
+	delete(s.owed, index)
+	return send(chunk)
 }
 
 // webSearchResult is a single result from a web_search_tool_result block.

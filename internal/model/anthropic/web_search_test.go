@@ -214,3 +214,72 @@ func TestStreamWebSearchWithoutToolUseID(t *testing.T) {
 		t.Fatalf("provider call ids = %v, want two distinct non-empty ids", ids)
 	}
 }
+
+// TestStreamSurfacesWebSearchResultDelta covers streams that open the result
+// block empty and deliver its array in a web_search_tool_result_delta: the card
+// must still carry the results, once, under the query that produced them.
+func TestStreamSurfacesWebSearchResultDelta(t *testing.T) {
+	sse := strings.Join([]string{
+		`data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}`,
+		``,
+		`data: {"type":"content_block_start","index":0,"content_block":{"type":"server_tool_use","id":"s1","name":"web_search"}}`,
+		``,
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"query\":\"latest\"}"}}`,
+		``,
+		`data: {"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","tool_use_id":"s1","content":[]}}`,
+		``,
+		`data: {"type":"content_block_delta","index":1,"delta":{"type":"web_search_tool_result_delta","results":[{"title":"Change Log","url":"https://api-docs.deepseek.com/updates/"}]}}`,
+		``,
+		`data: {"type":"content_block_delta","index":1,"delta":{"type":"web_search_tool_result_delta","results":[{"title":"Change Log","url":"https://api-docs.deepseek.com/updates/"}]}}`,
+		``,
+		`data: {"type":"content_block_start","index":2,"content_block":{"type":"text"}}`,
+		``,
+		`data: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"answer"}}`,
+		``,
+		`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}`,
+		``,
+		`data: {"type":"message_stop"}`,
+		``,
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(sse))
+	}))
+	defer srv.Close()
+
+	p, err := New(provider.Config{Name: "deepseek", BaseURL: srv.URL, Model: "deepseek-v4-flash", APIKey: "k", Extra: map[string]any{"web_search": true}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ch, err := p.Stream(context.Background(), provider.Request{
+		Messages: []provider.Message{{Role: provider.RoleUser, Content: "search something"}},
+	})
+	if err != nil {
+		t.Fatalf("Stream: %v", err)
+	}
+	var text strings.Builder
+	var calls []provider.Chunk
+	for chunk := range ch {
+		switch chunk.Type {
+		case provider.ChunkText:
+			text.WriteString(chunk.Text)
+		case provider.ChunkProviderTool:
+			calls = append(calls, chunk)
+		case provider.ChunkError:
+			t.Fatalf("stream error: %v", chunk.Err)
+		}
+	}
+	if len(calls) != 1 {
+		t.Fatalf("want 1 provider-run call from the result delta, got %d: %+v", len(calls), calls)
+	}
+	call := calls[0]
+	if call.ToolCall == nil || call.ToolCall.ID != "s1#1" || call.ToolCall.Arguments != `{"query":"latest"}` {
+		t.Fatalf("provider call = %+v, want id s1#1 with the query", call.ToolCall)
+	}
+	if !strings.Contains(call.Text, "**Change Log**") || !strings.Contains(call.Text, "<https://api-docs.deepseek.com/updates/>") {
+		t.Fatalf("provider call result missing the delta's results: %q", call.Text)
+	}
+	if got := text.String(); got != "answer" {
+		t.Fatalf("answer text = %q, want the model's answer alone", got)
+	}
+}

@@ -614,10 +614,8 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 					if !send(provider.Chunk{Type: provider.ChunkToolCallStart, ToolCall: &provider.ToolCall{ID: tc.ID, Name: tc.Name}}) {
 						return
 					}
-				case "server_tool_use":
-					server = serverBlock{call: provider.ToolCall{ID: ev.ContentBlock.ID, Name: ev.ContentBlock.Name}, index: ev.Index}
-				case "web_search_tool_result":
-					if chunk, ok := webSearchChunk(server.call, ev.ContentBlock.ToolUseID, ev.Index, ev.ContentBlock.Content); ok && !send(chunk) {
+				default:
+					if !server.begin(ev.Index, ev.ContentBlock, send) {
 						return
 					}
 				}
@@ -645,9 +643,12 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 						return
 					}
 				}
+			case "web_search_tool_result_delta":
+				if !server.resultDelta(ev.Index, ev.Delta.WebSearchResults, send) {
+					return
+				}
 			case "input_json_delta":
-				if ev.Index == server.index { // no progress ticks: nothing is waiting on us
-					server.call.Arguments += ev.Delta.PartialJSON
+				if server.args(ev.Index, ev.Delta.PartialJSON) { // no progress ticks: nothing is waiting on us
 					continue
 				}
 				if tc := tools[ev.Index]; tc != nil {
@@ -844,14 +845,8 @@ type streamEvent struct {
 	Message *struct {
 		Usage *wireUsage `json:"usage"`
 	} `json:"message"`
-	ContentBlock *struct {
-		Type      string          `json:"type"`
-		ID        string          `json:"id"`
-		Name      string          `json:"name"`
-		ToolUseID string          `json:"tool_use_id"` // web_search_tool_result
-		Content   json.RawMessage `json:"content"`     // web_search_tool_result: array of result objects
-	} `json:"content_block"`
-	Delta *struct {
+	ContentBlock *blockStart `json:"content_block"`
+	Delta        *struct {
 		Type             string          `json:"type"`         // text_delta | thinking_delta | signature_delta | input_json_delta | web_search_tool_result_delta
 		Text             string          `json:"text"`         // text_delta
 		Thinking         string          `json:"thinking"`     // thinking_delta
