@@ -638,3 +638,81 @@ func TestWriteFileAcceptsTheSessionTemporaryDirectory(t *testing.T) {
 		t.Error("a path outside both the roots and the session temp should error")
 	}
 }
+
+// Every writer refuses a path outside the scope under the workspace code, and
+// the session-temp alternative keeps it: the writers answer the same on every
+// OS, so the identity is what separates this refusal from an OS sandbox's.
+func TestWritersRefuseOutsideScopeWithWorkspaceCode(t *testing.T) {
+	root := testenv.TempDir(t)
+	inside := filepath.Join(root, "in.txt")
+	if err := os.WriteFile(inside, []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(testenv.TempDir(t), "out.txt")
+	if err := os.WriteFile(outside, []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	temp := sessiontemp.NewWithRoot(testenv.TempDir(t))
+	temp.Retain()
+	defer temp.Release()
+	lease, err := temp.Acquire()
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	defer lease.Release()
+
+	tools := map[string]tool.Tool{}
+	for _, tl := range ConfineWriters([]string{root}, SessionDataGuard{}, ManagedConfigPaths{}) {
+		bound, ok := BindSessionTemp(tl, temp)
+		if !ok {
+			t.Fatalf("%s did not take the session temp", tl.Name())
+		}
+		tools[tl.Name()] = bound
+	}
+	for name, args := range map[string]map[string]any{
+		"write_file": {"path": outside, "content": "x"},
+		"edit_file":  {"path": outside, "old_string": "old", "new_string": "new"},
+		"multi_edit": {"path": outside, "edits": []map[string]any{{"old_string": "old", "new_string": "new"}}},
+		"move_file":  {"source_path": inside, "destination_path": outside + ".moved"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw, _ := json.Marshal(args)
+			_, err := tools[name].Execute(context.Background(), raw)
+			var refusal tool.Refusal
+			if !errors.As(err, &refusal) || refusal.Code != CodeWriteOutsideScope {
+				t.Fatalf("want a %s refusal, got %v", CodeWriteOutsideScope, err)
+			}
+			msg := err.Error()
+			for _, want := range []string{"workspace write scope", "not an OS sandbox", "allow_write", lease.Dir()} {
+				if !strings.Contains(msg, want) {
+					t.Errorf("refusal lacks %q: %s", want, msg)
+				}
+			}
+		})
+	}
+	if b, err := os.ReadFile(outside); err != nil || string(b) != "old\n" {
+		t.Fatalf("the file outside the scope changed: %q, %v", b, err)
+	}
+}
+
+// The refusal names the target as the model would type it back: a Windows path
+// keeps single backslashes on every OS instead of Go's %q escaping.
+func TestConfineRefusalPrintsTheTargetVerbatim(t *testing.T) {
+	root := testenv.TempDir(t)
+	target := `C:\Users\EXAMPLE~1\AppData\Local\Temp\notes.md`
+	err := confine([]string{root}, target)
+	var refusal tool.Refusal
+	if !errors.As(err, &refusal) || refusal.Code != CodeWriteOutsideScope {
+		t.Fatalf("want a %s refusal, got %v", CodeWriteOutsideScope, err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "`"+target+"`") {
+		t.Errorf("refusal does not name %s verbatim: %s", target, msg)
+	}
+	if strings.Contains(msg, `\\`) {
+		t.Errorf("refusal escapes the path's backslashes: %s", msg)
+	}
+	if !strings.Contains(msg, "only under "+root+".") {
+		t.Errorf("refusal does not name the scope %s: %s", root, msg)
+	}
+}
