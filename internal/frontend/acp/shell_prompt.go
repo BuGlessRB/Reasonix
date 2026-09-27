@@ -14,10 +14,10 @@ const shellPollInterval = 20 * time.Millisecond
 // as typed and streamed back as a tool call before the model answers it;
 // anything else is a model turn.
 // The editor is a frontend in the kernel's process, so it holds that grant.
-func runPrompt(ctx context.Context, ctrl acpController, text, raw string) error {
+func runPrompt(ctx context.Context, ctrl acpController, text, raw, invokedSkill string) error {
 	cmd, ok := strings.CutPrefix(strings.TrimSpace(text), "!")
 	if !ok {
-		return ctrl.RunTurnWithRaw(ctx, text, raw)
+		return ctrl.RunTurnWithRaw(ctx, text, raw, invokedSkill)
 	}
 	ctrl.RunShell(cmd)
 	tick := time.NewTicker(shellPollInterval)
