@@ -230,8 +230,10 @@ export function AskCard({ item, onAnswer }: Props) {
               </div>
             ))}
             {sealed && (
-              <div className="ask-done">
-                {item.answeredElsewhere ? (
+              <div className="ask-done" data-recorded={item.recorded !== undefined ? "" : undefined}>
+                {item.recorded !== undefined ? (
+                  item.recorded
+                ) : item.answeredElsewhere ? (
                   <b>{answeredBy || t("已在其他窗口处理，请以最新运行状态为准。")}</b>
                 ) : (
                   <>

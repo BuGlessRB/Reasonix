@@ -33,7 +33,7 @@ export function saidBy(it: Item): string[] {
     case "approval":
       return [it.a.tool, it.a.subject, it.a.reason ?? ""];
     case "ask":
-      return it.ask.questions.flatMap((q) => [q.header ?? "", q.prompt, ...q.options.map((o) => o.label)]);
+      return [...it.ask.questions.flatMap((q) => [q.header ?? "", q.prompt, ...q.options.map((o) => o.label)]), it.recorded ?? ""];
     case "compaction":
       return [it.c.summary ?? ""];
     case "remember":
