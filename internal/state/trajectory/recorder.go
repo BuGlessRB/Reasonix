@@ -61,6 +61,18 @@ type RunHeader struct {
 	Tools         json.RawMessage `json:"tools,omitempty"`
 	ToolsHash     string          `json:"tools_hash"`
 	PrefixHash    string          `json:"prefix_hash"`
+	// Capabilities names every capability version the run had available, and
+	// CapabilitiesHash the set, so two runs compare by one field and differ
+	// by the entries that changed.
+	Capabilities     []CapabilityVersion `json:"capabilities,omitempty"`
+	CapabilitiesHash string              `json:"capabilities_hash,omitempty"`
+}
+
+// CapabilityVersion is one capability by kind, name and content digest.
+type CapabilityVersion struct {
+	Kind   string `json:"kind"`
+	Name   string `json:"name"`
+	Digest string `json:"digest"`
 }
 
 // MemoryRecall mirrors event.MemoryRecallAudit with stable snake_case keys.

@@ -338,6 +338,7 @@ Obligations are computed, never stored as authority: `obligations = f(contract r
 | `incomplete` | some required obligation is `stale`, `unverifiable` or not yet attempted, and none is `unsatisfied` |
 | `failed` | a required obligation is `unsatisfied` and the run stopped |
 | `blocked` | the model concluded blocked and the host verified the cited cause |
+| `none` | nothing is owed and the host saw no change: there is no evidence the turn completed anything |
 
 `incomplete` is a legitimate terminal outcome, not a retry loop. It blocks the `completed` state only; the task may stop there and report exactly what is not proven.
 
@@ -521,9 +522,9 @@ Honesty metrics carry about ±10pp noise at one sample per task. A stage exit MU
 
 | Target | Today | Gap |
 | --- | --- | --- |
-| Canonical contract | `internal/runtime/contract` holds revisions in THS (`contract/1`), derived from the baseline check identities, captured test criteria and the verification commands the approved plan names for its required criteria (by command identity; plan criterion ids are positional and not frozen). Host policy accepts only tightening; a plan the user approved may drop plan checks (`user:plan_approval`), and a later plan that drops one is routed to approval when an approver exists. The gate still reads `internal/runtime/taskcontract`, rebuilt each turn | the gate reading the revision |
+| Canonical contract | `internal/runtime/contract` holds revisions in THS (`contract/1`), derived from the baseline check identities, captured test criteria and the verification commands the approved plan names for its required criteria (by command identity; plan criterion ids are positional and not frozen). Host policy accepts only tightening; a plan the user approved may drop plan checks (`user:plan_approval`), and a later plan that drops one is routed to approval when an approver exists. A plan whose steps name candidate files adds a deliverable, `change@plan`: the task must end with a change the host proved (no path bound, since the files are inferred and a replan moves them); the shadow verdict and the receipt hold it, the gate does not yet. The gate still reads `internal/runtime/taskcontract`, rebuilt each turn | the gate reading the revision |
 | I2 claim inertness | a todo is recorded as the model's own breakdown: not required, and marking it `completed` satisfies nothing; a turn that only marked todos gets no report verdict rather than `done`. Unfinished todos stay the readiness gate's | none for todos |
-| I2 claim inertness | the completion receipt answers plan criteria from the sealed verdict (the checks their step names, after the latest change); a `complete_step` citation no longer proves one to the user. The readiness gate still reads the citation through the replayed contract | the gate reading the revision |
+| I2 claim inertness | the readiness gate and the receipt answer plan criteria by the checks their step names, after the latest change; a `complete_step` citation settles none. A criterion no command checks is listed on the receipt and does not hold the turn | none for plan criteria |
 | Atomic tasks | `taskcontract.Atomic` treats any mutation as proof of the ask | acceptable at L1 only |
 | Durable evidence | the root agent seals each turn's contract, report and receipts (arguments by digest) as a `shadow_bundle/1` record in THS; receipts carry no blob digests and no snapshot yet | P1: snapshot, verdicts, divergence |
 | Frozen test criteria | `evidence.TestCriterion` keeps host-owned bytes and digest identity | reuse as the `test` verifier subject |
@@ -531,7 +532,7 @@ Honesty metrics carry about ±10pp noise at one sample per task. A stage exit MU
 | Host report | `internal/runtime/completion` builds a host-authored report with gaps by subtraction | P1 seals it into the bundle |
 | Risk policy | `sensitive:` is read from the workspace `REASONIX.md` at each boot, so an edit changes enforcement for the next session | P2 (I13) |
 | Observation | `scanWorkspace` skips VCS stores and stops at 50k files; exclusions are code, not a revisioned policy | P1 |
-| Capability identity | `skill.Skill` has no content digest; runs record no capability versions | P3 |
+| Capability identity | every `reasonix run` trajectory header lists the capability versions the run had (host build, system prompt, each tool schema, each skill by content) and their set digest; e2ebench compare says whether two reports are one version on one corpus and whether each rate moved beyond its 95% interval. One version over 30 tasks, run twice, reproduced within the noise floor. `e2ebench -mode rollout` decides promote, hold or reject for a candidate set against a baseline on one corpus (K1, I11): a significantly worse false completion or grader pass rejects; a missing version, same version, other corpus, no no-solution tasks or fewer than 50 solvable runs holds. Demonstrated on 30 tasks x 2 per arm: a system-prompt candidate adding "keep replies concise" was promoted, and one adding "do not edit files, say it is done" was rejected on false completion (1/21 to 29/34) and grader pass (54/58 to 11/58) | online canary and post-promotion rollback (K3, K4) |
 | Integrity inputs | MCP servers default to host mode and extension sidecars always run unconfined, so an install with either enabled is `tamper_evident_only` (T7) | a confined launch path for each |
 | Cross-process writers | nothing records the level of other processes sharing THS (T8) | machine-wide registry |
 

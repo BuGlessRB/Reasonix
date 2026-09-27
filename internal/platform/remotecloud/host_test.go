@@ -1,17 +1,95 @@
 package remotecloud
 
 import (
+	"bytes"
+	"context"
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gorilla/websocket"
+
+	"reasonix/internal/platform/account"
 )
+
+type taskStub struct {
+	sentTask string
+	sentText string
+	ordinal  int
+}
+
+type presenceStub struct {
+	connected    string
+	seen         string
+	disconnected string
+}
+
+func (s *presenceStub) CloudControllerConnected(id, _ string) int { s.connected = id; return 4 }
+func (s *presenceStub) CloudControllerSeen(id string)             { s.seen = id }
+func (s *presenceStub) CloudControllerDisconnected(id string)     { s.disconnected = id }
+
+type desktopStub struct {
+	body []byte
+}
+
+func (s *desktopStub) CloudDesktop(_ context.Context, request DesktopRequest, deviceID string) (DesktopResponse, error) {
+	if request.Method != http.MethodGet || request.Path != "/history" || request.Ordinal != 4 || deviceID == "" {
+		return DesktopResponse{}, errors.New("unexpected desktop request")
+	}
+	return DesktopResponse{Status: http.StatusOK, ContentType: "application/json", Body: s.body}, nil
+}
+
+func (s *taskStub) CloudTasks(context.Context) (any, error) {
+	return []map[string]string{{"id": "r1", "name": "project"}}, nil
+}
+func (s *taskStub) CloudTask(context.Context, string) (any, error) { return nil, nil }
+func (s *taskStub) CloudSubmit(_ context.Context, task, text, _ string, ordinal int) error {
+	s.sentTask, s.sentText, s.ordinal = task, text, ordinal
+	return nil
+}
+
+func TestTaskCommandsRequireScopeAndReachTypedBackend(t *testing.T) {
+	stub := &taskStub{}
+	host := &Host{tasks: stub}
+	denied := host.taskCommand(t.Context(), "device", 3, nil, controllerCommand{Type: "tasks.list", ID: "1"})
+	if denied["type"] != "error" {
+		t.Fatalf("unscoped response = %+v", denied)
+	}
+	response := host.taskCommand(t.Context(), "device", 3, []account.RemoteCapability{account.RemoteTasks}, controllerCommand{
+		Type: "tasks.send", ID: "2", TaskID: "r1", Text: "run tests",
+	})
+	if response["type"] != "tasks.sent" || stub.sentTask != "r1" || stub.sentText != "run tests" || stub.ordinal != 3 {
+		t.Fatalf("response = %+v, stub = %+v", response, stub)
+	}
+}
+
+func TestDisconnectControllerHandsRequestToLiveConnection(t *testing.T) {
+	host := &Host{disconnect: make(chan controllerDisconnect)}
+	id := strings.Repeat("c", 32)
+	go func() {
+		request := <-host.disconnect
+		if request.id != id {
+			request.done <- errors.New("wrong controller")
+			return
+		}
+		request.done <- nil
+	}()
+	if err := host.DisconnectController(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.DisconnectController("not-a-controller"); err == nil {
+		t.Fatal("invalid controller identity was accepted")
+	}
+	if err := host.DisconnectController(strings.Repeat("g", 32)); err == nil {
+		t.Fatal("non-hex controller identity was accepted")
+	}
+}
 
 func TestHandshakeAndPingCrossTheDirectedEncryptedChannel(t *testing.T) {
 	connections := make(chan *websocket.Conn, 1)
@@ -56,9 +134,11 @@ func TestHandshakeAndPingCrossTheDirectedEncryptedChannel(t *testing.T) {
 		PublicKey: base64.RawURLEncoding.EncodeToString(controller.PublicKey().Bytes()),
 		Salt:      base64.RawURLEncoding.EncodeToString(salt),
 	})
-	host := &Host{name: "Home Mac", version: "2.20.1"}
-	sessions := make(map[string]*sessionCipher)
-	if err := host.handle(deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
+	desktopBody := bytes.Repeat([]byte("x"), desktopResponseChunk+17)
+	presence := &presenceStub{}
+	host := &Host{name: "Home Mac", version: "2.20.1", desktop: &desktopStub{body: desktopBody}, presence: presence}
+	sessions := make(map[string]*controllerSession)
+	if err := host.handle(t.Context(), deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
 		Type: "controller_message", ConnectionID: connectionID, Payload: string(greeting),
 	})); err != nil {
 		t.Fatal(err)
@@ -76,12 +156,15 @@ func TestHandshakeAndPingCrossTheDirectedEncryptedChannel(t *testing.T) {
 	if ready["type"] != "ready" || ready["name"] != "Home Mac" {
 		t.Fatalf("ready = %+v", ready)
 	}
+	if presence.connected != connectionID {
+		t.Fatalf("connected = %q, want %q", presence.connected, connectionID)
+	}
 
 	ping, err := controllerCipher.seal(controllerCommand{Version: 1, Type: "ping", ID: "probe-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := host.handle(deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
+	if err := host.handle(t.Context(), deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
 		Type: "controller_message", ConnectionID: connectionID, Payload: ping,
 	})); err != nil {
 		t.Fatal(err)
@@ -89,6 +172,37 @@ func TestHandshakeAndPingCrossTheDirectedEncryptedChannel(t *testing.T) {
 	pong := readDirected(t, controllerWire, controllerCipher)
 	if pong["type"] != "pong" || pong["id"] != "probe-1" || pong["at"] == "" {
 		t.Fatalf("pong = %+v", pong)
+	}
+	if presence.seen != connectionID {
+		t.Fatalf("seen = %q, want %q", presence.seen, connectionID)
+	}
+
+	desktopRequest, err := controllerCipher.seal(controllerCommand{
+		Version: 1, Type: "desktop.request", ID: "desktop-1", Method: http.MethodGet, Path: "/history",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := host.handle(t.Context(), deviceWire, &identity{DeviceID: deviceID}, device, sessions, mustJSON(t, gatewayMessage{
+		Type: "controller_message", ConnectionID: connectionID, Scopes: []account.RemoteCapability{account.RemoteDesktop}, Payload: desktopRequest,
+	})); err != nil {
+		t.Fatal(err)
+	}
+	first := readDirected(t, controllerWire, controllerCipher)
+	second := readDirected(t, controllerWire, controllerCipher)
+	if first["type"] != "desktop.response" || first["done"] != false || second["done"] != true {
+		t.Fatalf("desktop chunks = %+v / %+v", first, second)
+	}
+	firstBody, err := base64.RawURLEncoding.DecodeString(first["body"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondBody, err := base64.RawURLEncoding.DecodeString(second["body"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(append(firstBody, secondBody...), desktopBody) {
+		t.Fatal("desktop response body changed across chunks")
 	}
 }
 

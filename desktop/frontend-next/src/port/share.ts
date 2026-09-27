@@ -21,6 +21,14 @@ export interface PairedDevice {
   online: boolean;
 }
 
+export interface CloudDevice {
+  id: string;
+  name: string;
+  connectedAt: string;
+  lastSeen: string;
+  ordinal: number;
+}
+
 // A paired device's answer about itself. Mirrors serve.DeviceSelf.
 export interface DeviceSelf {
   id: string;
@@ -34,6 +42,7 @@ export interface ShareStatus {
   origin?: string;
   addresses: ShareAddress[];
   devices: PairedDevice[];
+  cloudDevices: CloudDevice[];
   offerExpires?: string;
 }
 

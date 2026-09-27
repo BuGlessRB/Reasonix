@@ -36,6 +36,7 @@ var tailnetPrefix = netip.MustParsePrefix("100.64.0.0/10")
 // device.
 type DeviceShare struct {
 	registry *DeviceRegistry
+	cloud    *cloudPresence
 	page     fs.FS
 	// addresses lists what may be bound; a variable seam so tests need no NIC.
 	addresses func() []ShareAddress
@@ -43,9 +44,10 @@ type DeviceShare struct {
 	// running that nothing will ever stop.
 	turn sync.Mutex
 
-	mu      sync.Mutex
-	handler http.Handler
-	live    *shareListener
+	mu              sync.Mutex
+	handler         http.Handler
+	live            *shareListener
+	cloudDisconnect func(string) error
 }
 
 type shareListener struct {
@@ -80,11 +82,12 @@ var addressRank = map[AddressKind]int{AddressLAN: 0, AddressTailnet: 1, AddressV
 
 // ShareStatus is the whole state a window draws its sharing panel from.
 type ShareStatus struct {
-	Open         bool           `json:"open"`
-	Origin       string         `json:"origin,omitempty"`
-	Addresses    []ShareAddress `json:"addresses"`
-	Devices      []DeviceView   `json:"devices"`
-	OfferExpires *time.Time     `json:"offerExpires,omitempty"`
+	Open         bool                  `json:"open"`
+	Origin       string                `json:"origin,omitempty"`
+	Addresses    []ShareAddress        `json:"addresses"`
+	Devices      []DeviceView          `json:"devices"`
+	CloudDevices []CloudControllerView `json:"cloudDevices"`
+	OfferExpires *time.Time            `json:"offerExpires,omitempty"`
 }
 
 // ShareOffer is a pairing code as a device receives it: a link that carries the
@@ -97,7 +100,7 @@ type ShareOffer struct {
 
 // NewDeviceShare returns a closed share serving page to devices.
 func NewDeviceShare(page fs.FS) *DeviceShare {
-	return &DeviceShare{registry: NewDeviceRegistry(), page: page, addresses: PrivateAddresses}
+	return &DeviceShare{registry: NewDeviceRegistry(), cloud: newCloudPresence(), page: page, addresses: PrivateAddresses}
 }
 
 // Attach names the handler devices reach. The hub is built after the share it
@@ -180,15 +183,30 @@ func (s *DeviceShare) Offer() (ShareOffer, error) {
 	return ShareOffer{URL: link, QR: svg, Expires: expires}, nil
 }
 
-// Revoke unpairs one device.
-func (s *DeviceShare) Revoke(id string) bool { return s.registry.Revoke(id) }
+// Revoke unpairs one LAN device or disconnects one authenticated Internet
+// controller. Both are host-only actions exposed by the same device list.
+func (s *DeviceShare) Revoke(id string) bool {
+	if s.registry.Revoke(id) {
+		return true
+	}
+	s.mu.Lock()
+	disconnect := s.cloudDisconnect
+	s.mu.Unlock()
+	return s.cloud.contains(id) && disconnect != nil && disconnect(id) == nil
+}
+
+func (s *DeviceShare) setCloudDisconnect(disconnect func(string) error) {
+	s.mu.Lock()
+	s.cloudDisconnect = disconnect
+	s.mu.Unlock()
+}
 
 // Status reports what is open, what could be, and who is paired.
 func (s *DeviceShare) Status() ShareStatus {
 	s.mu.Lock()
 	live := s.live
 	s.mu.Unlock()
-	st := ShareStatus{Addresses: s.addresses(), Devices: s.registry.Devices()}
+	st := ShareStatus{Addresses: s.addresses(), Devices: s.registry.Devices(), CloudDevices: s.cloud.views()}
 	if live != nil {
 		st.Open, st.Origin = true, live.origin
 	}

@@ -50,7 +50,7 @@ func Classify(old completion.Verdict, c *taskcontract.Contract, res Result) Dive
 	oldCompleted := old == completion.VerdictDone
 	newCompleted := res.Outcome == Completed
 	switch {
-	case old == completion.VerdictUnknown && newCompleted:
+	case old == completion.VerdictUnknown && (newCompleted || res.Outcome == NoOutcome):
 		d.Class = ClassAgree
 	case old == completion.VerdictUnknown:
 		d.Class = ClassOldSilent

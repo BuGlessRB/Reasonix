@@ -290,6 +290,7 @@ func (c *client) send(ctx context.Context, body map[string]any) (*http.Response,
 			req.Header.Set("x-dashscope-session-cache", "enable")
 		}
 		provider.ApplyOpenCodeGoIdentity(req, c.session.openCode)
+		provider.ApplyClientIdentity(req)
 		return req, nil
 	}
 	return provider.SendWithRetry(ctx, c.http, c.sendOpts(), newRequest)

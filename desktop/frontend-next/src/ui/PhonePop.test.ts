@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PairedDevice } from "../port/share";
-import { presenceNote } from "./PhonePop";
+import { cloudPresenceNote, presenceNote } from "./PhonePop";
 
 const dev = (id: string, online: boolean): PairedDevice => ({ id, name: "", pairedAt: "", lastSeen: "", online });
 
@@ -19,5 +19,15 @@ describe("the phone card's presence note", () => {
 
   it("says nothing when nothing changed", () => {
     expect(presenceNote([dev("a", true)], [dev("a", true)])).toBe("");
+  });
+});
+
+describe("cloudPresenceNote", () => {
+  const cloud = (id: string) => ({ id, name: "Web Studio", connectedAt: "", lastSeen: "", ordinal: 1 });
+
+  it("announces Web Studio arrival and departure", () => {
+    expect(cloudPresenceNote([], [cloud("a")])).toBe("Web Studio 已连接");
+    expect(cloudPresenceNote([cloud("a")], [])).toBe("Web Studio 已断开");
+    expect(cloudPresenceNote([cloud("a")], [cloud("a")])).toBe("");
   });
 });
