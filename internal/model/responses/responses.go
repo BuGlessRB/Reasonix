@@ -110,7 +110,8 @@ type client struct {
 	baseURL, requestURL, model, effort string
 	vendor, mode                       string
 	caps                               vendorCapabilities
-	sessionCache, webSearch            bool
+	webSearch                          bool
+	session                            sessionHeaders
 	maxOutputTokens                    int
 	vision                             bool // model accepts image input; embed Images as input_image parts
 	http                               *http.Client
@@ -120,6 +121,13 @@ type client struct {
 	mu                   sync.Mutex
 	lastResponseID       string
 	expectedPrefixDigest string
+}
+
+// sessionHeaders are the per-conversation routing headers a gateway may ask
+// for, fixed for the client's lifetime.
+type sessionHeaders struct {
+	dashScopeCache bool   // x-dashscope-session-cache, where the vendor offers it
+	openCode       string // x-opencode-session, sent only to OpenCode Go
 }
 
 // New creates a Responses API provider.
@@ -163,7 +171,7 @@ func New(cfg Config) provider.Provider {
 	return &client{
 		name: cfg.Name, apiKey: cfg.apiKeyResolver(), keyEnv: cfg.KeyEnv, keySource: cfg.KeySource,
 		baseURL: baseURL, requestURL: requestURL, model: cfg.Model, effort: cfg.Effort,
-		vendor: vendor, caps: cap, mode: cfg.mode(), sessionCache: sessionCache, webSearch: cfg.WebSearch, maxOutputTokens: maxOutputTokens,
+		vendor: vendor, caps: cap, mode: cfg.mode(), session: sessionHeaders{dashScopeCache: sessionCache, openCode: provider.NewOpenCodeSessionID()}, webSearch: cfg.WebSearch, maxOutputTokens: maxOutputTokens,
 		vision: vision,
 		http:   httpClient, idleTimeout: defaultStreamIdleTimeout,
 	}
@@ -278,9 +286,10 @@ func (c *client) send(ctx context.Context, body map[string]any) (*http.Response,
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+c.apiKey())
-		if c.caps.sessionCacheHeader && c.sessionCache {
+		if c.caps.sessionCacheHeader && c.session.dashScopeCache {
 			req.Header.Set("x-dashscope-session-cache", "enable")
 		}
+		provider.ApplyOpenCodeGoIdentity(req, c.session.openCode)
 		return req, nil
 	}
 	return provider.SendWithRetry(ctx, c.http, c.sendOpts(), newRequest)

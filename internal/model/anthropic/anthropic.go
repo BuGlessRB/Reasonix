@@ -144,7 +144,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		vision:           vision,
 		mimo:             provider.IsMiMoEndpoint(root),
 		webSearch:        webSearch,
-		headers:          cleanCustomHeaders(headers),
+		headers:          requestHeaders{custom: cleanCustomHeaders(headers), openCodeSession: provider.NewOpenCodeSessionID()},
 		authHeader:       authHeader,
 		defaultMaxTokens: maxOutputTokens,
 		http:             httpClient, // no overall timeout; lifecycle is ctx-driven
@@ -172,7 +172,7 @@ type client struct {
 	vision           bool   // model accepts image input — embed attached images as base64 image blocks
 	mimo             bool   // true for MiMo — upgrades legacy tuple schemas to Draft 2020-12
 	webSearch        bool   // enable server-side web_search tool (DeepSeek Anthropic API)
-	headers          map[string]string
+	headers          requestHeaders
 	authHeader       bool // send Authorization: Bearer instead of Anthropic's x-api-key header
 	defaultMaxTokens int
 	http             *http.Client
@@ -271,6 +271,18 @@ func reservedCustomHeader(name string) bool {
 	}
 }
 
+// requestHeaders is what a client adds to every request beyond auth and
+// content negotiation, fixed for the client's lifetime.
+type requestHeaders struct {
+	custom          map[string]string
+	openCodeSession string
+}
+
+func (h requestHeaders) apply(req *http.Request) {
+	applyCustomHeaders(req.Header, h.custom)
+	provider.ApplyOpenCodeGoIdentity(req, h.openCodeSession)
+}
+
 func applyCustomHeaders(h http.Header, headers map[string]string) {
 	for name, value := range cleanCustomHeaders(headers) {
 		h.Set(name, value)
@@ -309,7 +321,7 @@ func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provi
 			httpReq.Header.Set("x-api-key", c.apiKey())
 		}
 		httpReq.Header.Set("anthropic-version", anthropicVersion)
-		applyCustomHeaders(httpReq.Header, c.headers)
+		c.headers.apply(httpReq)
 		return httpReq, nil
 	}
 	resp, err := provider.SendWithRetry(requestCtx, c.http, c.sendOpts(wireReq.reasoningHint), newReq)
