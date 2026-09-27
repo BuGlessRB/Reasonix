@@ -31,6 +31,7 @@ import (
 	"reasonix/internal/platform/appupdate"
 	"reasonix/internal/platform/instanceid"
 	"reasonix/internal/platform/notify"
+	"reasonix/internal/platform/telemetry"
 	"reasonix/internal/platform/update"
 	// Kinds register from init, so a binary builds only what it links. Without
 	// these every Anthropic model answers "unknown kind" at switch time.
@@ -292,6 +293,12 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 	}
 	bc := serve.NewBroadcaster()
 	paneSink := decorate(bc)
+	if cfg.DesktopTelemetry() || cfg.DesktopMetrics() {
+		reporter := telemetry.Start(studioTelemetryOptions(cfg, shell.version))
+		if cfg.DesktopMetrics() {
+			paneSink = reporter.Wrap(paneSink)
+		}
+	}
 	root := boot.ResolveWorkspaceRoot("")
 	built, err := boot.BuildRuntime(ctx, boot.Options{
 		Version:       version,
@@ -345,6 +352,19 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 	}
 	hub.StartRecoveryGC(ctx)
 	return hub, nil
+}
+
+func studioTelemetryOptions(cfg *config.Config, studioVersion string) telemetry.Options {
+	return telemetry.Options{
+		Mode:         "on",
+		Version:      studioVersion,
+		Surface:      surface.Studio,
+		SuppressPing: !cfg.DesktopTelemetry(),
+		HomeDir:      config.ReasonixHomeDir(),
+		Interactive:  true,
+		Proxy:        cfg.NetworkProxySpec(),
+		Language:     cfg.Language,
+	}
 }
 
 // hostServeConfig is the user's serve settings with their authentication taken
