@@ -106,7 +106,7 @@ func cloudBoundText(value string, budget *int) string {
 	return string(bytes) + "…"
 }
 
-func (h *Hub) CloudSubmit(ctx context.Context, id, input, deviceID string) error {
+func (h *Hub) CloudSubmit(ctx context.Context, id, input, deviceID string, ordinal int) error {
 	rt := h.Get(strings.TrimSpace(id))
 	if rt == nil || !rt.Local() || rt.Server == nil {
 		return ErrCloudTaskNotFound
@@ -124,7 +124,7 @@ func (h *Hub) CloudSubmit(ctx context.Context, id, input, deviceID string) error
 	}
 	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/submit", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(withDeviceReach(req.Context(), deviceID, 0))
+	req = req.WithContext(withDeviceReach(req.Context(), deviceID, ordinal))
 	rec := httptest.NewRecorder()
 	rt.Server.submit(rec, req)
 	if rec.Code >= 200 && rec.Code < 300 {

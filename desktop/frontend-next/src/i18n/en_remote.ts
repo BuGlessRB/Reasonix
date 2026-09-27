@@ -117,6 +117,12 @@ export const EN_REMOTE: Record<string, string> = {
   // ── 手机访问 ─────────────────────────────────────────────────
   "手机访问": "Phone access",
   "手机扫码访问": "Open on your phone",
+  "设备访问": "Device access",
+  "设备访问 · {n} 台在线": "Device access · {n} online",
+  "查看并管理正在操作这台电脑的设备": "See and manage devices controlling this computer",
+  "互联网远程": "Internet remote access",
+  "Web Studio 已连接": "Web Studio connected",
+  "Web Studio 已断开": "Web Studio disconnected",
   "允许手机访问": "Allow phones to connect",
   "这台电脑现在没有局域网地址，连上 Wi-Fi 或网线后再试。": "This computer has no private network address right now. Connect to Wi-Fi or Ethernet and try again.",
   "手机和这台电脑在同一个网络里，扫码后就能看会话、发消息、批准操作。关闭或退出 Studio 会断开所有手机。": "A phone on the same network as this computer can scan a code to follow sessions, send messages and approve actions. Turning this off or quitting Studio disconnects every phone.",

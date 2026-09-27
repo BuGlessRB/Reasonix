@@ -23,7 +23,7 @@ func TestCloudTasksExposeOnlyBoundedConversationSurface(t *testing.T) {
 		t.Fatalf("tasks = %+v", tasks)
 	}
 	for _, input := range []string{"!rm -rf somewhere", "/model another", strings.Repeat("x", (32<<10)+1)} {
-		if err := hub.CloudSubmit(context.Background(), runtime.ID, input, "phone"); !errors.Is(err, ErrCloudInputRefused) {
+		if err := hub.CloudSubmit(context.Background(), runtime.ID, input, "phone", 2); !errors.Is(err, ErrCloudInputRefused) {
 			t.Errorf("CloudSubmit(%q) = %v, want refused", input[:min(len(input), 20)], err)
 		}
 	}

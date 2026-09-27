@@ -225,6 +225,7 @@ export class MockHub implements HubPort {
       { interface: "vEthernet (WSL)", ip: "172.28.160.1", kind: "virtual" },
     ],
     devices: [],
+    cloudDevices: [],
   };
 
   shareStatus() {
@@ -257,7 +258,11 @@ export class MockHub implements HubPort {
   }
 
   revokeDevice(id: string) {
-    this.share = { ...this.share, devices: this.share.devices.filter((d) => d.id !== id) };
+    this.share = {
+      ...this.share,
+      devices: this.share.devices.filter((d) => d.id !== id),
+      cloudDevices: this.share.cloudDevices.filter((d) => d.id !== id),
+    };
     return Promise.resolve({ ...this.share });
   }
 

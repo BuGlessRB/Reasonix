@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import type { HubPort } from "../port/hub";
-import type { PairedDevice } from "../port/share";
+import type { CloudDevice, PairedDevice } from "../port/share";
 import { copyText } from "./CopyButton";
 import { useDismiss } from "./dismiss";
 import { clock, deviceLabel, type Share, useShare } from "./PhoneAccess";
@@ -49,10 +49,11 @@ export function PhonePop({ hub }: { hub: HubPort }) {
     };
   }, [open, refresh, newCode]);
 
-  const note = usePresenceNote(share.st?.devices, open);
+  const localNote = usePresenceNote(share.st?.devices, open);
+  const cloudNote = useCloudPresenceNote(share.st?.cloudDevices, open);
 
   if (!share.st) return null;
-  const online = share.st.devices.filter((d) => d.online).length;
+  const online = share.st.devices.filter((d) => d.online).length + share.st.cloudDevices.length;
   return (
     <div className="phonepop" ref={box}>
       <button
@@ -61,8 +62,8 @@ export function PhonePop({ hub }: { hub: HubPort }) {
         data-live={shareOpen ? "" : undefined}
         data-online={online > 0 ? "" : undefined}
         aria-expanded={open}
-        aria-label={t("手机扫码访问")}
-        title={shareOpen ? t("手机访问已开启 · {n} 台在线", { n: online }) : t("手机扫码访问")}
+        aria-label={t("设备访问")}
+        title={online > 0 ? t("设备访问 · {n} 台在线", { n: online }) : t("设备访问")}
         onClick={() => setOpen((v) => !v)}
       >
         <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -74,7 +75,7 @@ export function PhonePop({ hub }: { hub: HubPort }) {
         {online > 0 && <b className="pc-count">{online}</b>}
       </button>
       {open && <PhoneCard share={share} failure={failure} />}
-      {note && <div className="pc-note-pop" role="status">{note}</div>}
+      {(cloudNote || localNote) && <div className="pc-note-pop" role="status">{cloudNote || localNote}</div>}
     </div>
   );
 }
@@ -95,6 +96,13 @@ export function presenceNote(prev: PairedDevice[], next: PairedDevice[]): string
   return said;
 }
 
+export function cloudPresenceNote(prev: CloudDevice[], next: CloudDevice[]): string {
+  const connected = next.find((device) => !prev.some((was) => was.id === device.id));
+  if (connected) return t("Web Studio 已连接");
+  const disconnected = prev.find((device) => !next.some((now) => now.id === device.id));
+  return disconnected ? t("Web Studio 已断开") : "";
+}
+
 /** A line under the button when a phone comes or goes, for as long as it takes
  *  to read. Not while the card is open: the list there already shows it. */
 function usePresenceNote(devices: PairedDevice[] | undefined, open: boolean): string {
@@ -108,6 +116,25 @@ function usePresenceNote(devices: PairedDevice[] | undefined, open: boolean): st
     before.current = devices;
     if (!prev || open) return;
     const said = presenceNote(prev, devices);
+    if (!said) return;
+    setNote(said);
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setNote(""), 3200);
+  }, [devices, open]);
+  return open ? "" : note;
+}
+
+function useCloudPresenceNote(devices: CloudDevice[] | undefined, open: boolean): string {
+  const [note, setNote] = useState("");
+  const before = useRef<CloudDevice[] | null>(null);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
+  useEffect(() => {
+    if (!devices) return;
+    const prev = before.current;
+    before.current = devices;
+    if (!prev || open) return;
+    const said = cloudPresenceNote(prev, devices);
     if (!said) return;
     setNote(said);
     if (timer.current !== null) window.clearTimeout(timer.current);
@@ -151,11 +178,11 @@ function PhoneCard({ share, failure }: { share: Share; failure: string }) {
   };
 
   return (
-    <div className="phonecard" role="dialog" aria-label={t("手机扫码访问")}>
+    <div className="phonecard" role="dialog" aria-label={t("设备访问")}>
       <header>
         <span>
-          <b>{t("手机访问")}</b>
-          <small>{noNetwork ? t("这台电脑现在没有局域网地址") : t("同一网络里的手机扫码即可操作这里的会话")}</small>
+          <b>{t("设备访问")}</b>
+          <small>{t("查看并管理正在操作这台电脑的设备")}</small>
         </span>
         <Switch data-action="share.toggle" on={st.open} busy={busy || noNetwork} label={t("允许手机访问")} onClick={() => void toggle()} />
       </header>
@@ -180,6 +207,30 @@ function PhoneCard({ share, failure }: { share: Share; failure: string }) {
             </button>
           )}
         </div>
+      )}
+
+      {st.cloudDevices.length > 0 && (
+        <section>
+          <div className="pc-hd">
+            <b>{t("互联网远程")}</b>
+            <small>{st.cloudDevices.length}</small>
+          </div>
+          {st.cloudDevices.map((device) => (
+            <div className="pc-dev" key={device.id} data-online="">
+              <i aria-hidden="true" />
+              <span>{t("设备 {n}", { n: device.ordinal })}</span>
+              <small>{device.name} · {t("在线")}</small>
+              <button
+                data-action={arming === device.id ? "share.revoke" : "share.ask-revoke"}
+                data-target={device.id}
+                data-armed={arming === device.id ? "" : undefined}
+                onClick={() => disconnect(device.id)}
+              >
+                {arming === device.id ? t("确认断开") : t("断开")}
+              </button>
+            </div>
+          ))}
+        </section>
       )}
 
       {st.addresses.length > 1 && (

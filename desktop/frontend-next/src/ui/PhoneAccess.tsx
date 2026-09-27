@@ -50,11 +50,11 @@ export function useShare(hub: HubPort, onError: (e: unknown) => void, watch = tr
   }, [read]);
 
   useEffect(() => {
-    if (!st?.open || !watch) return;
+    if (!watch) return;
     void read().catch(() => {});
     const timer = setInterval(() => read().catch(() => {}), POLL_MS);
     return () => clearInterval(timer);
-  }, [st?.open, watch, read]);
+  }, [watch, read]);
 
   // The kernel withdraws a code once it pairs or lapses; the picture of it has
   // to go too, or the next phone scans a code that can no longer work.
