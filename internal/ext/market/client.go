@@ -33,6 +33,9 @@ var (
 	ErrNotFound = errors.New("market: no such package")
 	// ErrBadSlug: the slug is not <handle>/<name>.
 	ErrBadSlug = errors.New("market: not a package slug")
+	// ErrFilterUnsupported: an installable-only listing was asked for and the
+	// registry answered without applying that filter.
+	ErrFilterUnsupported = errors.New("market: registry cannot filter to installable packages")
 )
 
 var slugSegment = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
@@ -57,6 +60,9 @@ type Package struct {
 	Verified      bool     `json:"verified"`
 	Status        string   `json:"status"`
 	UpdatedAt     string   `json:"updatedAt"`
+	// Pinned is the registry's word that the latest version carries a reviewed
+	// digest; nil when it did not say. Install still checks the digest itself.
+	Pinned *bool `json:"pinned,omitempty"`
 }
 
 // Version is one immutable published version row.
@@ -82,6 +88,9 @@ type Query struct {
 	Q      string
 	Sort   string
 	Offset int
+	// Pinned asks the registry for installable packages only. It filters
+	// server-side so pages stay whole.
+	Pinned bool
 }
 
 // Page is one listing page.
@@ -140,6 +149,9 @@ func (c *Client) List(ctx context.Context, q Query) (Page, error) {
 	if s := strings.TrimSpace(q.Sort); s != "" {
 		v.Set("sort", s)
 	}
+	if q.Pinned {
+		v.Set("pinned", "1")
+	}
 	v.Set("limit", strconv.Itoa(defaultPageSize))
 	v.Set("offset", strconv.Itoa(max(0, min(q.Offset, 10000))))
 	var page Page
@@ -148,6 +160,9 @@ func (c *Client) List(ctx context.Context, q Query) (Page, error) {
 	}
 	kept := page.Packages[:0]
 	for _, p := range page.Packages {
+		if q.Pinned && (p.Pinned == nil || !*p.Pinned) {
+			return Page{}, ErrFilterUnsupported
+		}
 		if p.Status == "active" {
 			kept = append(kept, p)
 		}
