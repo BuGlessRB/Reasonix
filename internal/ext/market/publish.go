@@ -184,6 +184,8 @@ func registryRefusal(status int, body []byte) error {
 		return ErrEmailUnverified
 	case code == "not_owner":
 		return ErrNotOwner
+	case code == "own_package":
+		return ErrOwnPackage
 	case code == "version_exists":
 		return ErrVersionExists
 	case status == http.StatusTooManyRequests:

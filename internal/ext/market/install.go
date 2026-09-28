@@ -50,7 +50,14 @@ type Service struct {
 	// an apply without a planId answers with the plan instead of installing.
 	NewInstaller func() *installsource.Tool
 	Now          func() time.Time
+	// Report and InstallKey (the market's InstallID) tell the registry an
+	// install landed. Either left empty sends nothing; the host leaves them
+	// empty unless the person has anonymous usage statistics switched on.
+	Report     InstallReporter
+	InstallKey string
 }
+
+const reportTimeout = 10 * time.Second
 
 // Outcome is install_source's own answer plus which approved version it was.
 type Outcome struct {
@@ -129,6 +136,11 @@ func (s *Service) execute(ctx context.Context, pkg Package, v Version, expect st
 			if err := saveRecord(s.Home, rec); err != nil {
 				fields["ledgerError"], _ = json.Marshal(err.Error())
 			}
+			// A publisher's own unreviewed install is not a listed package's
+			// install; the registry would not count it anyway.
+			if !own {
+				s.report(ctx, pkg.Slug)
+			}
 		}
 	}
 	return Outcome{Fields: fields, Version: v, Unreviewed: own}, nil
@@ -148,6 +160,19 @@ func (s *Service) themeCheck(ctx context.Context, body map[string]any, slug stri
 		return fmt.Errorf("%w: %s", ErrNotTheme, slug)
 	}
 	return nil
+}
+
+// report is fire-and-forget: a count the registry missed is not worth holding
+// the install's answer for, and outlives the request that triggered it.
+func (s *Service) report(ctx context.Context, slug string) {
+	if s.Report == nil || s.InstallKey == "" {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), reportTimeout)
+		defer cancel()
+		_ = s.Report.ReportInstall(ctx, slug, s.InstallKey)
+	}()
 }
 
 func (s *Service) now() time.Time {

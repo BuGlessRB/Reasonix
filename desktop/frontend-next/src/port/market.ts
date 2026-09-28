@@ -26,6 +26,12 @@ export interface MarketPackage {
   latestVersion: string;
   installCount: number;
   starCount: number;
+  upCount: number;
+  downCount: number;
+  // up / (up + down); null while nobody has voted, which is not zero approval.
+  approvalRate: number | null;
+  // The registry's recommended score, 0..1; the order itself is the registry's.
+  score: number;
   verified: boolean;
   status: string;
   updatedAt: string;
@@ -62,7 +68,7 @@ export interface MarketList {
 export interface MarketQuery {
   kind?: MarketKind | "";
   q?: string;
-  sort?: "trending" | "new" | "installs";
+  sort?: "recommended" | "trending" | "new" | "installs";
   offset?: number;
   // Filtered by the registry, so paging stays whole.
   pinned?: boolean;
@@ -109,3 +115,16 @@ export interface MarketPublished {
 }
 
 export type MarketReviewStatus = "pending" | "active" | "rejected" | "hidden" | "private";
+
+// The signed-in person's vote on one package. signedIn false is an answer, not
+// an error: the entry offers sign-in instead of the buttons.
+export interface MarketVote {
+  signedIn: boolean;
+  value: -1 | 0 | 1;
+  upCount?: number;
+  downCount?: number;
+  approvalRate?: number | null;
+  canVote?: boolean;
+  own?: boolean;
+  emailVerified?: boolean;
+}

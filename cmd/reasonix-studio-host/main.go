@@ -461,4 +461,7 @@ func grantHostCapabilities(srv *serve.Server) {
 	srv.AllowAccountAuth()
 	srv.AllowProviderEdit()
 	srv.AllowLocalDesktop()
+	if telemetry.ReleaseVersion(version) {
+		srv.AllowMarketInstallReport()
+	}
 }

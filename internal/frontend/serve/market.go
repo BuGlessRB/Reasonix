@@ -25,6 +25,7 @@ func (s *Server) registerMarketRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /market/packages/{handle}/{name}", s.marketDetail)
 	mux.HandleFunc("POST /market/plan", s.marketPlan)
 	mux.HandleFunc("POST /market/install", s.marketInstall)
+	s.registerMarketVoteRoutes(mux)
 }
 
 // marketEntry is a listed package plus what this machine holds of it.
@@ -130,6 +131,11 @@ func (s *Server) marketRun(w http.ResponseWriter, r *http.Request, apply bool) {
 		Home:         config.ReasonixHomeDir(),
 		NewInstaller: market.NewInstallSource(s.ctl().WorkspaceRoot(), marketHTTP(), s.ctl().DisconnectMCPServer),
 	}
+	if apply {
+		if key := s.marketInstallKey(r); key != "" {
+			svc.Report, svc.InstallKey = marketReporter(marketHTTP()), key
+		}
+	}
 	run := svc.Plan
 	if apply {
 		run = svc.Install
@@ -182,6 +188,16 @@ func refuseMarket(w http.ResponseWriter, err error) {
 		refuse(w, http.StatusConflict, "market.content_changed", "the source no longer holds the reviewed content", detail)
 	case errors.Is(err, installsource.ErrNotPinnable):
 		refuse(w, http.StatusConflict, "market.not_pinnable", "the source resolves to content that cannot be pinned", detail)
+	case errors.Is(err, market.ErrSignedOut):
+		refuse(w, http.StatusUnauthorized, "market.signed_out", "sign in to the account first", detail)
+	case errors.Is(err, market.ErrEmailUnverified):
+		refuse(w, http.StatusForbidden, "market.email_unverified", "verify the account email first", detail)
+	case errors.Is(err, market.ErrOwnPackage):
+		refuse(w, http.StatusForbidden, "market.own_package", "publishers cannot vote on their own packages", detail)
+	case errors.Is(err, market.ErrBadVote):
+		refuse(w, http.StatusBadRequest, "market.bad_vote", "a vote is +1, -1 or 0", detail)
+	case errors.Is(err, market.ErrRateLimited):
+		refuse(w, http.StatusTooManyRequests, "market.rate_limited", "the community registry is throttling requests", detail)
 	case errors.Is(err, installsource.ErrApprovalDenied):
 		refuse(w, http.StatusConflict, "market.plan_changed", "what the source resolves to changed since the plan was shown", detail)
 	default:
