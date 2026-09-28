@@ -18,8 +18,13 @@ func (h *Hub) RunGraceful(ctx context.Context, addr string) error {
 // RunGracefulListener is RunGraceful over a caller-supplied listener, for hosts
 // that need the bound address before serving (--addr :0 with --port-file).
 func (h *Hub) RunGracefulListener(ctx context.Context, ln net.Listener) error {
+	h.auth.hosts.ListenOn(ln.Addr().String())
 	return runGracefulListener(ctx, ln, h.Handler())
 }
+
+// AllowHost lets an auth-disabled hub answer requests addressed to host, such
+// as the name a proxy in front of it forwards.
+func (h *Hub) AllowHost(host string) { h.auth.hosts.Allow(host) }
 
 // StartRecoveryGC sweeps redundant recovery branches for every open pane, and
 // for each one opened later.

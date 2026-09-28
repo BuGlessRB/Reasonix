@@ -13,7 +13,7 @@ import (
 func surfaceServer(t *testing.T) string {
 	t.Helper()
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
-	srv := httptest.NewServer(New(&pluginCtl{root: testenv.TempDir(t)}, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(&pluginCtl{root: testenv.TempDir(t)}, NewBroadcaster(), config.ServeConfig{})))
 	t.Cleanup(srv.Close)
 	return srv.URL
 }

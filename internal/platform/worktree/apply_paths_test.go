@@ -27,7 +27,7 @@ func isolatedCandidate(t *testing.T) (repo string, snap Snapshot, c Candidate, f
 	gitIn(t, repo, "commit", "-q", "-m", "init")
 	ctx := context.Background()
 	var err error
-	if snap, err = TakeSnapshot(ctx, repo); err != nil {
+	if snap, err = TakeSnapshot(ctx, opened(t, repo)); err != nil {
 		t.Fatal(err)
 	}
 	if c, err = CreateCandidate(ctx, snap, filepath.Join(testenv.TempDir(t), "isolated")); err != nil {

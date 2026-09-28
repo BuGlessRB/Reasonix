@@ -149,7 +149,7 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 	}{
 		Current:  current,
 		Switch:   s.grants.at(r).workspaceSwitch,
-		Isolate:  s.grants.at(r).workspaceSwitch && worktree.Inspect(r.Context(), current).Available,
+		Isolate:  s.grants.at(r).workspaceSwitch && worktree.Inspect(r.Context(), workspaceRepo(s.ctl())).Available,
 		Recents:  recents,
 		Isolated: worktree.IsManagedPath(current, config.DeliveryWorktreeDir()),
 	})
@@ -177,7 +177,7 @@ func (s *Server) workspace(w http.ResponseWriter, r *http.Request) {
 
 	dir := strings.TrimSpace(body.Path)
 	if body.Isolate {
-		res, err := worktree.Create(r.Context(), s.ctl().WorkspaceRoot(), config.DeliveryWorktreeDir())
+		res, err := worktree.Create(r.Context(), workspaceRepo(s.ctl()), config.DeliveryWorktreeDir())
 		if err != nil {
 			writeErr(w, http.StatusUnprocessableEntity, err)
 			return
@@ -283,6 +283,7 @@ func (s *Server) rebuildOptions(cur control.SessionAPI, ref string) boot.Options
 	// Keep the logical session's private temporary directory across the rebuild.
 	if ctrl, ok := cur.(*control.Controller); ok && ctrl != nil {
 		opts.SessionTemp = ctrl.SessionTemp()
+		opts.WorkspaceRepo = ctrl.WorkspaceRepo()
 		opts.BrowserSession = ctrl.BrowserSession()
 	}
 	opts.RuntimeReload = s.reuseFromLastBuild()

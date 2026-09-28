@@ -35,22 +35,23 @@ func (c Change) Deleted() bool { return strings.Contains(c.Status, "D") }
 // Added reports whether the path is new — staged or still untracked.
 func (c Change) Added() bool { return strings.Contains(c.Status, "A") || c.Status == "??" }
 
-// Status lists the working tree's changes under root. A root that is not a git
-// repository reports ok=false rather than an error: not every workspace is
-// version-controlled, and a caller should fall back rather than show a failure.
-func Status(ctx context.Context, root string) (changes []Change, ok bool, err error) {
-	if strings.TrimSpace(root) == "" {
+// Status lists the changes under repo.Dir, the workspace repo was resolved for
+// when it opened. An unresolved repo — a workspace that is not version
+// controlled — reports ok=false rather than an error, so a caller falls back.
+func Status(ctx context.Context, repo gitcmd.Repo) (changes []Change, ok bool, err error) {
+	root := repo.Dir
+	if !repo.Valid() || strings.TrimSpace(root) == "" {
 		return nil, false, nil
 	}
-	// Porcelain paths stay repository-relative even when -C points at a
+	// Porcelain paths stay repository-relative even when run from a
 	// subdirectory, and Windows spells one directory as both an 8.3 and a long
 	// path — so take the prefix from git rather than from filepath.Rel.
-	prefixRaw, err := gitcmd.Command(ctx, "", "-C", root, "rev-parse", "--show-prefix").Output()
+	prefixRaw, err := repo.Command(ctx, "rev-parse", "--show-prefix").Output()
 	if err != nil {
-		return nil, false, nil
+		return nil, false, err
 	}
 	prefix := strings.TrimSpace(string(prefixRaw))
-	raw, err := gitcmd.Command(ctx, "", "-C", root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".").Output()
+	raw, err := repo.Command(ctx, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".").Output()
 	if err != nil {
 		return nil, false, err
 	}
@@ -63,15 +64,16 @@ func Status(ctx context.Context, root string) (changes []Change, ok bool, err er
 		c.OldPath = relFromPrefix(root, prefix, c.OldPath)
 		out = append(out, c)
 	}
-	countLines(ctx, root, out)
+	countLines(ctx, repo, out)
 	return out, true, nil
 }
 
 // countLines fills in how much each path differs by. Tracked paths come from
 // one numstat; git spells a binary file "-", which stays uncounted. Untracked
 // files have nothing to diff against, so their whole length is the addition.
-func countLines(ctx context.Context, root string, changes []Change) {
-	raw, err := gitcmd.Command(ctx, "", "-C", root, "diff", "--numstat", "-z", "HEAD", "--", ".").Output()
+func countLines(ctx context.Context, repo gitcmd.Repo, changes []Change) {
+	root := repo.Dir
+	raw, err := repo.Command(ctx, "diff", "--numstat", "-z", "HEAD", "--", ".").Output()
 	if err == nil {
 		byPath := ParseNumstatZ(raw)
 		for i := range changes {
@@ -223,21 +225,18 @@ func safeRel(root, rel string) (string, error) {
 // against HEAD so a staged change is included with an unstaged one. Untracked
 // files are diffed against the null device instead: they have nothing in HEAD,
 // and that is the only way git prints them without first writing to the index.
-func Diff(ctx context.Context, root, path string) (text string, truncated bool, err error) {
-	rel, err := safeRel(root, path)
+func Diff(ctx context.Context, repo gitcmd.Repo, path string) (text string, truncated bool, err error) {
+	rel, err := safeRel(repo.Dir, path)
 	if err != nil {
 		return "", false, err
 	}
-	// root goes through the dir parameter, not an "-C" argument: gitcmd hardens
-	// only a subcommand it can see at args[0], and a diff against someone else's
-	// repository is exactly the invocation those flags are for.
 	var raw []byte
-	if tracked(ctx, root, rel) {
-		raw, err = gitcmd.Command(ctx, root, "diff", "--no-color", "HEAD", "--", rel).Output()
+	if tracked(ctx, repo, rel) {
+		raw, err = repo.Command(ctx, "diff", "--no-color", "HEAD", "--", rel).Output()
 		if err != nil {
 			// A repository with no commits has no HEAD to name; everything in
 			// it is either staged or untracked.
-			raw, err = gitcmd.Command(ctx, root, "diff", "--no-color", "--", rel).Output()
+			raw, err = repo.Command(ctx, "diff", "--no-color", "--", rel).Output()
 			if err != nil {
 				return "", false, err
 			}
@@ -245,7 +244,7 @@ func Diff(ctx context.Context, root, path string) (text string, truncated bool, 
 	} else {
 		// --no-index exits 1 when the two sides differ, which is the whole
 		// point of asking. Only the output matters here.
-		raw, _ = gitcmd.Command(ctx, root, "diff", "--no-color", "--no-index", "--", os.DevNull, rel).Output()
+		raw, _ = repo.Command(ctx, "diff", "--no-color", "--no-index", "--", os.DevNull, rel).Output()
 	}
 	if len(raw) > MaxDiffBytes {
 		return string(raw[:MaxDiffBytes]), true, nil
@@ -257,6 +256,6 @@ func Diff(ctx context.Context, root, path string) (text string, truncated bool, 
 // of the two diffs above can say anything at all, so it is asked rather than
 // inferred from an empty result — an unchanged tracked file and an untracked
 // one both diff to nothing against HEAD.
-func tracked(ctx context.Context, root, rel string) bool {
-	return gitcmd.Command(ctx, root, "ls-files", "--error-unmatch", "--", rel).Run() == nil
+func tracked(ctx context.Context, repo gitcmd.Repo, rel string) bool {
+	return repo.Command(ctx, "ls-files", "--error-unmatch", "--", rel).Run() == nil
 }

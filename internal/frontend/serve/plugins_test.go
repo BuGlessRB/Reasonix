@@ -42,7 +42,7 @@ func pluginHome(t *testing.T) (string, *pluginCtl, string) {
 	home := testenv.TempDir(t)
 	t.Setenv("REASONIX_HOME", home)
 	ctl := &pluginCtl{root: testenv.TempDir(t)}
-	srv := httptest.NewServer(New(ctl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctl, NewBroadcaster(), config.ServeConfig{})))
 	t.Cleanup(srv.Close)
 	return home, ctl, srv.URL
 }

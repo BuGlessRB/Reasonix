@@ -37,7 +37,10 @@ export class SseExtensions extends SseLook {
 
   marketList(q: MarketQuery) {
     const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== "") params.set(k, String(v));
+    for (const [k, v] of Object.entries(q)) {
+      if (v === undefined || v === "" || v === false) continue;
+      params.set(k, v === true ? "1" : String(v));
+    }
     const query = params.toString();
     return this.get<MarketList>("/market/packages" + (query ? "?" + query : ""));
   }

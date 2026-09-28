@@ -20,7 +20,7 @@ import (
 func TestCheckProviderReportsWhatTheEndpointSaid(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers/check", `{"name":"existing"}`)
@@ -47,7 +47,7 @@ func TestCheckProviderReportsWhatTheEndpointSaid(t *testing.T) {
 func TestCheckProviderRefusesAnUnknownName(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers/check", `{"name":"nobody"}`)
@@ -61,7 +61,7 @@ func TestCheckProviderRefusesAnUnknownName(t *testing.T) {
 // it waits on the same grant every other provider edit does.
 func TestCheckProviderWaitsOnTheGrant(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers/check", `{"name":"existing"}`)
@@ -104,7 +104,7 @@ func TestCheckProviderModelAcceptsAnUnlistedExactIDWithoutSavingIt(t *testing.T)
 		t.Fatal(err)
 	}
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers/check/model", `{"name":"existing","model":"Hidden-Preview/Exact-ID"}`)
@@ -141,7 +141,7 @@ func TestCheckProviderModelUsesUnsavedEndpointAndKeyOnlyForTheProbe(t *testing.T
 
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 	body := fmt.Sprintf(`{"name":"not-saved","model":"private-model","baseUrl":%q,"apiKey":"one-time-key","kind":"openai"}`, upstream.URL+"/v1")
 	resp := postProvider(t, srv.URL, "/providers/check/model", body)
@@ -191,7 +191,7 @@ func TestCheckProviderModelUsesSystemOneForTypeSafe(t *testing.T) {
 
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 	body := fmt.Sprintf(`{"name":"not-saved","model":"jev-latest","baseUrl":%q,"apiKey":"one-time-key","kind":"typesafe"}`, upstream.URL)
 	resp := postProvider(t, srv.URL, "/providers/check/model", body)
@@ -230,7 +230,7 @@ func TestCheckProviderModelUsesSavedDecisionKindAndEnvironmentKey(t *testing.T) 
 		t.Fatal(err)
 	}
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 	resp := postProvider(t, srv.URL, "/providers/check/model", `{"name":"existing","model":"jev-latest"}`)
 	defer resp.Body.Close()
@@ -257,7 +257,7 @@ func TestCheckProviderModelRejectsMalformedTypeSafeSuccess(t *testing.T) {
 			defer upstream.Close()
 			s := newProviderEditServer(t)
 			s.AllowProviderEdit()
-			srv := httptest.NewServer(s.Handler())
+			srv := httptest.NewServer(operatorHandler(s))
 			defer srv.Close()
 			request := fmt.Sprintf(`{"name":"not-saved","model":"jev-latest","baseUrl":%q,"apiKey":"one-time-key","kind":"typesafe"}`, upstream.URL)
 			resp := postProvider(t, srv.URL, "/providers/check/model", request)
@@ -300,7 +300,7 @@ func TestCheckProviderModelClassifiesTypeSafeHTTPFailure(t *testing.T) {
 
 			s := newProviderEditServer(t)
 			s.AllowProviderEdit()
-			srv := httptest.NewServer(s.Handler())
+			srv := httptest.NewServer(operatorHandler(s))
 			defer srv.Close()
 			body := fmt.Sprintf(`{"name":"not-saved","model":"jev-latest","baseUrl":%q,"apiKey":"one-time-key","kind":"typesafe"}`, upstream.URL)
 			resp := postProvider(t, srv.URL, "/providers/check/model", body)
@@ -344,7 +344,7 @@ func TestCheckProviderModelReportsAnEndpointThatRefusesTools(t *testing.T) {
 
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 	body := fmt.Sprintf(`{"name":"not-saved","model":"m","baseUrl":%q,"apiKey":"k","kind":"openai"}`, upstream.URL+"/v1")
 	resp := postProvider(t, srv.URL, "/providers/check/model", body)
@@ -375,7 +375,7 @@ func TestCheckProviderModelKeepsRejectionWhenRemovingToolsDoesNotHelp(t *testing
 
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 	body := fmt.Sprintf(`{"name":"not-saved","model":"m","baseUrl":%q,"apiKey":"k","kind":"openai"}`, upstream.URL+"/v1")
 	resp := postProvider(t, srv.URL, "/providers/check/model", body)
@@ -405,7 +405,7 @@ func TestCheckProviderModelRateLimitIsOneRedactedAttempt(t *testing.T) {
 
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 	body := fmt.Sprintf(`{"name":"not-saved","model":"private-model","baseUrl":%q,"apiKey":"one-time-key"}`, upstream.URL+"/v1")
 	resp := postProvider(t, srv.URL, "/providers/check/model", body)

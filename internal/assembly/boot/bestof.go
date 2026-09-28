@@ -62,11 +62,11 @@ func (b *builder) addBestOf() {
 	}
 	cfg := b.cfg
 	b.tools.reg.Add(bestof.New(bestof.Spec{
-		WorkspaceRoot: b.root,
-		ManagedRoot:   filepath.Join(config.DeliveryWorktreeDir(), "candidates"),
-		Runner:        candidateRunner(b.opts, b.sink, approval),
-		KnownModel:    func(ref string) bool { _, ok := cfg.ResolveModel(ref); return ok },
-		Judge:         judge,
+		Repo:        b.repo,
+		ManagedRoot: filepath.Join(config.DeliveryWorktreeDir(), "candidates"),
+		Runner:      candidateRunner(b.opts, b.sink, approval),
+		KnownModel:  func(ref string) bool { _, ok := cfg.ResolveModel(ref); return ok },
+		Judge:       judge,
 	}))
 }
 

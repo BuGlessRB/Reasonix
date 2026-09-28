@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,18 +12,17 @@ import (
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/config"
+	"reasonix/internal/platform/gitcmd"
 	"reasonix/internal/session/control"
 )
 
 // The panel behind this endpoint used to infer pending changes from tool events,
 // which cannot see a file a shell command removed. /changes answers from the
 // tree, and says repo=false rather than "nothing changed" when there is no git.
+// The repository is the one the session resolved when it opened.
 func TestChangesReportsTheTreeNotTheTranscript(t *testing.T) {
 	dir := testenv.TempDir(t)
-	bc := NewBroadcaster()
-	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
-	defer srv.Close()
+	srv := changesServer(t, dir, gitcmd.Repo{Dir: dir})
 
 	var body struct {
 		Repo    bool `json:"repo"`
@@ -33,7 +33,7 @@ func TestChangesReportsTheTreeNotTheTranscript(t *testing.T) {
 	}
 	read := func() {
 		t.Helper()
-		resp, err := http.Get(srv.URL + "/changes")
+		resp, err := http.Get(srv + "/changes")
 		if err != nil {
 			t.Fatalf("GET /changes: %v", err)
 		}
@@ -59,6 +59,11 @@ func TestChangesReportsTheTreeNotTheTranscript(t *testing.T) {
 			t.Skipf("git unavailable: %v\n%s", err, out)
 		}
 	}
+	repo, err := gitcmd.Open(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv = changesServer(t, dir, repo)
 	if err := os.WriteFile(filepath.Join(dir, "scratch.go"), []byte("package a\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -73,4 +78,13 @@ func TestChangesReportsTheTreeNotTheTranscript(t *testing.T) {
 	if len(body.Changes) != 0 {
 		t.Fatalf("after delete: %+v, want no pending change", body)
 	}
+}
+
+func changesServer(t *testing.T, dir string, repo gitcmd.Repo) string {
+	t.Helper()
+	bc := NewBroadcaster()
+	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir, WorkspaceRepo: repo})
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
+	t.Cleanup(srv.Close)
+	return srv.URL
 }

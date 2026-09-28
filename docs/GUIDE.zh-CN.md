@@ -136,7 +136,7 @@ allow = ["Bash(go test:*)"]                  # 从不询问
 # forbid_read    = ["${HOME}/.ssh"]   # agent 不可读取或列出的路径
 
 [serve]
-auth_mode = "none"             # none|token|password；绑定到非 localhost 前请先开启认证
+# auth_mode = "token"          # token(默认)|password|none；none 下修改与审批仍需启动令牌
 # token = ""                   # 可选固定 token；token 模式为空时启动时自动生成
 # password_hash = ""           # 用 reasonix serve --hash-password --password '...' 生成
 # behind_proxy = false         # 只在可信反向代理后方设为 true
@@ -243,9 +243,16 @@ reasonix web
 按 Ctrl-C 停止。
 
 显式传入 `reasonix web --auth none` 可以关闭默认 Token，只应在监听地址确定可信时使用。
-`reasonix serve` 则保持向后兼容：默认监听 `127.0.0.1:8787`，认证模式仍由配置决定，空配置为
-`auth_mode = "none"`。如果要绑定到非 loopback 地址、通过 tunnel 暴露，或放到反向代理后面，
-请先开启认证再分享 URL：
+`reasonix serve` 在未配置 `[serve].auth_mode` 且未传 `--auth` 时，同样默认使用每次启动新生成的 Token。
+
+- `--auth none`（或 `auth_mode = "none"`）是给自行在前面加认证的部署用的显式退出，读取接口只对发往本机或监听地址的请求开放，其他 Host 返回 421 `serve.host_rejected`。
+- 所有会改变状态的请求（包括审批）仍需启动令牌：`Authorization: Bearer <token>`，或启动时打印的 `approvals:` 链接设置的 Cookie；否则返回 403 `auth.launch_token_required`。
+- serve 把令牌写进 `<Reasonix home>/remote/` 下 0600 文件，终端只打印路径，在链接后拼上 `#token=<文件内容>` 即可；带 `--token-file` 的托管启动打印该文件路径。token 模式下终端显示的手机二维码仍含令牌。
+- 优先用 `--token-file` 而不是 `--token`：命令行参数对其他进程可见，沙盒内的进程也能看到。全局配置里明文的 `[serve].token` 在沙盒内可读，密钥请放文件。
+- macOS 和 Linux 的系统沙盒会拒绝读取该状态目录和所有令牌文件；Windows 没有 bash 沙盒，只有读文件工具会拒绝。
+- `[serve]` 只从用户配置读取，项目里的 `reasonix.toml` 不能设置它。
+
+绑定到非 loopback 地址时请显式选择认证模式：
 
 ```bash
 reasonix serve --auth token
@@ -649,6 +656,60 @@ Sandbox 是授权之后的第二层边界，不能替代命令解析，也不能
 OS 沙盒生效时也不能读取配置的 `forbid_read` roots，`[sandbox] network` 为真时才能联网。
 Reasonix 始终会从工具子进程环境中移除已保存的 provider 与 bot 凭据变量，并自动把
 全局凭据 `.env` 加入运行时禁读边界；项目 `.env` 仍保持现有的 workspace 范围行为。
+
+**Git 元数据由宿主保护。**Bash 沙盒内，工作区仓库的 Git 配置和钩子保持只读，
+因为宿主自己的 git 会读取它们。
+
+受保护的仓库是 git 自身从每个可写根发现的那个。`.git` 是文件时，按 git 的方式解析
+它指向的 gitdir（相对该文件、跟随符号链接），保护落在 git 实际读取的位置。受保护：
+
+- `.git` 本身、gitdir、公共目录及通往它们的每个符号链接：都不能被删除、改名或替换成符号链接。
+- gitdir 与公共目录中的 `config`、`config.worktree`、`commondir` 和 `hooks/`。
+- 已有 `worktrees/*` 条目的 `config`、`config.worktree`、`commondir`，以及之后新建条目的
+  `config` 和 `config.worktree`。
+- `modules/` 下每个子模块 gitdir（已有的和之后新建的）的 `config`、`config.worktree`、
+  `commondir` 和 `hooks/`。
+
+`.git` 下其余内容（objects、refs、index、logs、锁文件）仍可写，因此 add、commit、
+branch、checkout、merge、rebase、stash、tag 和创建 worktree 照常工作。以下操作的
+行为会变：
+
+| 操作 | 沙盒内 |
+| --- | --- |
+| 不带 `--global` 的 `git config`、`git remote add` / `set-url`、`git branch -m`、`git submodule init`、`git submodule update --init`、`git sparse-checkout init`、`git maintenance register`、对已有仓库执行 `git init` | 失败 |
+| 向 `.git/hooks` 安装钩子 | 失败 |
+| 对命令开始前已存在的 linked worktree 执行 `git worktree remove` / `prune` | 失败；同一条命令里新建的可以删除 |
+| 克隆新的子模块（`git submodule add`，或对尚未克隆的子模块执行 `git submodule update`） | macOS 上失败；Linux 上克隆成功但配置条目写不进去 |
+| `git branch --set-upstream-to`、`git checkout --track`、`git push -u` | 报告写入被拒但退出码为 0；不会记录上游 |
+
+需要添加或初始化子模块时，在沙盒外（终端里）运行；已克隆的子模块在沙盒内仍可更新。
+
+命令输出里出现这些路径时，bash 结果会用 `sandbox.git_metadata_protected` 指明，git
+退出码为 0 时也一样。
+
+受保护文件如果已有另一个硬链接，所有沙盒命令都会以 `sandbox.git_metadata_linked` 被拒，
+因为经另一个名字的写入会改到它；需要用户在沙盒外删掉那个链接。
+
+限制：
+
+- Linux 上 bubblewrap 只能挂载已存在的路径，也钉不住符号链接：新建尚不存在的
+  `commondir`、`config.worktree` 或钩子目录、替换 `gitdir:` 路径上的符号链接，在那里都拦不住。
+- 在 Linux 上补这一点要靠宿主一侧：宿主自己的 git 固定其 git 目录与公共目录，而不是重新发现。
+- 已有的 worktree 与子模块 gitdir 用精确规则，macOS 上各至多 128 个，Linux 上至多 512 个。
+- macOS 上其余的以及之后新建的由模式覆盖。模式跳过 `refs/` 和 `logs/`，名为 `config` 或
+  `hooks` 的分支、标签仍可写，但新建的名为 `hooks` 的子模块会整个被保护。
+- macOS 上 worktree 超过 128 个时 `git worktree add` 会失败；子模块超过 128 个时每条命令
+  启动约慢 0.1 秒。
+- Linux 上超过 512 个 gitdir 时整个 `worktrees/` 或 `modules/` 以只读挂载，命令可以通过伪造
+  `HEAD` 文件触发这一点。命令也可以伪造一个配置带硬链接的子模块 gitdir，之后所有沙盒命令都会
+  被拒，直到用户删掉它。
+- 沙盒命令新建的仓库从下一条命令起受保护。
+- 被弄成 git 不认识的 `.git`（例如损坏的 `HEAD`）会让 git 继续向上查找。
+- 工作区里嵌套的、不是 `modules/` 下子模块 gitdir 的仓库不受保护，包括命令自己建出来并
+  记录成 gitlink 的。
+- 除非宿主自己的 git 排除它，宿主可能经由该 gitlink 执行它的配置。
+- `core.hooksPath` 指向 `.git` 之外的钩子、`include.path` 引用的文件，都是普通工作区文件。
+- Windows 没有 Bash 沙盒，以上都不生效。
 
 **会话私有标准临时目录。**同一逻辑会话内的多条 Bash 命令共享一个私有临时目录，
 因此连续调用可以通过 `$TMPDIR` 交换文件（在 Linux bubblewrap 下还可以通过字面

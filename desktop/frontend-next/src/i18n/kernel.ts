@@ -272,6 +272,7 @@ const SAID: Record<string, string> = {
   "market.not_found": "社区市场中没有这个已审核的包",
   "market.unreachable": "无法连接社区市场：{detail}",
   "market.bad_response": "社区市场返回了无法识别的内容",
+  "market.filter_unsupported": "社区市场暂不支持只列出可安装的包",
   "market.unpinned": "该包的审核版本没有固定内容，暂不能从市场安装",
   "market.bad_source": "该包的审核版本指向本机或不安全的来源，不从市场安装",
   "market.version_changed": "审核版本已更新，请重新查看后再安装",
@@ -331,6 +332,8 @@ const SAID: Record<string, string> = {
   "loopback.origin_rejected": "该页面不属于 Studio，无法对其操作",
   "loopback.unauthorized": "缺少本次启动的凭据，请重新打开 Studio 后重试",
   "loopback.misconfigured": "本机通道未建立，请重新打开 Studio 后重试",
+  "serve.host_rejected": "该服务未开启认证，只接受发往本机或其监听地址的请求",
+  "auth.launch_token_required": "该服务未开启认证，修改与审批需要本次启动的令牌，请用启动时打印的链接打开",
 };
 
 /** Reason is what a refused request answers with. `error` is English fallback

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -118,5 +119,33 @@ func TestTreeHandoffRoundTripsThroughItsFile(t *testing.T) {
 	}
 	if handled, _ := MaybeRunTreeHandoff([]string{"--something-else"}); handled {
 		t.Fatal("an ordinary launch was taken for a handoff")
+	}
+}
+
+// The probe that clears an install for a swap leaves nothing behind in either
+// directory, so a check that passes costs the install nothing.
+func TestCheckTreeSwapLeavesNoTrace(t *testing.T) {
+	install, backup := testenv.TempDir(t), filepath.Join(testenv.TempDir(t), "delta")
+	if err := CheckTreeSwap(install, backup); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{install, backup} {
+		if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+			t.Fatalf("%s kept %d entries", dir, len(entries))
+		}
+	}
+}
+
+func TestCheckTreeSwapRefusesAnInstallItCannotWrite(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("a directory mode does not deny writes here")
+	}
+	install := testenv.TempDir(t)
+	if err := os.Chmod(install, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(install, 0o755) })
+	if err := CheckTreeSwap(install, filepath.Join(testenv.TempDir(t), "delta")); !errors.Is(err, ErrTreeNotSwappable) {
+		t.Fatalf("err = %v, want ErrTreeNotSwappable", err)
 	}
 }

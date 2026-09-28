@@ -16,7 +16,7 @@ import (
 func TestBrowserTabsIsAnEmptyListWithoutABrowser(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	t.Cleanup(ctrl.Close)
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	t.Cleanup(srv.Close)
 	resp, err := http.Get(srv.URL + "/browser/tabs")
 	if err != nil {

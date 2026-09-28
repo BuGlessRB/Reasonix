@@ -68,7 +68,7 @@ func newRichProviderServerAs(t *testing.T, wrap func(control.SessionAPI) control
 	})
 	s := New(wrap(ctrl), bc, config.ServeConfig{})
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -235,7 +235,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 func TestEditProviderKeepsCompatibilityFields(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	body := `{"name":"existing","models":["model-a"],"default":"model-a","contextWindow":128000,` +
@@ -270,7 +270,7 @@ func TestEditProviderKeepsCompatibilityFields(t *testing.T) {
 func TestEditProviderLeavesCompatibilityFieldsAloneWhenUnsent(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	first := postProvider(t, srv.URL, "/providers/edit",
@@ -294,7 +294,7 @@ func TestEditProviderLeavesCompatibilityFieldsAloneWhenUnsent(t *testing.T) {
 func TestEditProviderRejectsNullInExtraBody(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers/edit",

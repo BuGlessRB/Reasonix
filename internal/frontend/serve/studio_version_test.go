@@ -16,7 +16,7 @@ func studioServer(t *testing.T, in *update.Install) *httptest.Server {
 	t.Helper()
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	h := NewHub(HubOptions{Install: in})
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	t.Cleanup(srv.Close)
 	return srv
 }

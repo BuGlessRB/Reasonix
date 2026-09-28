@@ -68,6 +68,9 @@ func rebuildWithPrevious(ctx context.Context, old *control.Controller, previous 
 	if opts.BrowserSession == nil {
 		opts.BrowserSession = old.BrowserSession()
 	}
+	if opts.WorkspaceRepo.Dir == "" {
+		opts.WorkspaceRepo = old.WorkspaceRepo()
+	}
 
 	home := opts.roots().Home()
 	// fromGraph must be the PREVIOUS generation's graph when available.

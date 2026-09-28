@@ -79,7 +79,7 @@ func postProvider(t *testing.T, base, path, body string) *http.Response {
 // host says its only client is a local window.
 func TestProviderEditIsRefusedUntilTheHostGrantsIt(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	for _, path := range []string{"/providers", "/providers/probe", "/providers/check/model", "/providers/remove"} {
@@ -104,7 +104,7 @@ func TestProviderEditIsRefusedUntilTheHostGrantsIt(t *testing.T) {
 func TestSaveProviderWritesConfigAndKeepsTheKeyOutOfIt(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers", `{
@@ -172,7 +172,7 @@ func TestSaveProviderWritesConfigAndKeepsTheKeyOutOfIt(t *testing.T) {
 func TestSaveProviderNarrowsVisionToTheListedModels(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers", `{
@@ -210,7 +210,7 @@ func TestSaveProviderNarrowsVisionToTheListedModels(t *testing.T) {
 func TestSaveProviderRejectsWhatItCannotStore(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	// The status the producer chose now reaches the wire, so this asserts what a
@@ -243,7 +243,7 @@ func TestSaveProviderRejectsWhatItCannotStore(t *testing.T) {
 func TestRemoveProviderInUseGoesWhenIdle(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers/remove", `{"name":"existing"}`)
@@ -265,7 +265,7 @@ func TestRemoveProviderInUseGoesWhenIdle(t *testing.T) {
 func TestRemoveProviderInUseMovesTheConversation(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	add := postProvider(t, srv.URL, "/providers", `{"name":"spare","kind":"openai","baseUrl":"https://x.invalid","apiKey":"sk-spare","models":["m"]}`)
@@ -284,7 +284,7 @@ func TestRemoveProviderInUseMovesTheConversation(t *testing.T) {
 func TestRemoveProviderDropsAnUnusedOne(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	add := postProvider(t, srv.URL, "/providers", `{"name":"spare","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`)
@@ -308,7 +308,7 @@ func TestRemoveProviderDropsAnUnusedOne(t *testing.T) {
 
 func TestProvidersListMarksTheOneInUse(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/providers")
@@ -361,7 +361,7 @@ func readAllString(resp *http.Response) (string, error) {
 // build has to reach it without a frontend release.
 func TestProviderProtocolsListsEveryWireASourceMayBeSavedAs(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/providers/protocols")
@@ -397,7 +397,7 @@ func TestProviderProtocolsListsEveryWireASourceMayBeSavedAs(t *testing.T) {
 func TestSaveProviderAcceptsEveryCatalogedWire(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers", `{

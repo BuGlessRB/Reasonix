@@ -65,7 +65,7 @@ func (s *Server) marketList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	offset, _ := strconv.Atoi(q.Get("offset"))
 	page, err := s.marketClient().List(r.Context(), market.Query{
-		Kind: q.Get("kind"), Q: q.Get("q"), Sort: q.Get("sort"), Offset: offset,
+		Kind: q.Get("kind"), Q: q.Get("q"), Sort: q.Get("sort"), Offset: offset, Pinned: q.Get("pinned") == "1",
 	})
 	if err != nil {
 		refuseMarket(w, err)
@@ -164,6 +164,8 @@ func refuseMarket(w http.ResponseWriter, err error) {
 		refuse(w, http.StatusBadRequest, "market.bad_slug", "not a package slug", detail)
 	case errors.Is(err, market.ErrNotFound):
 		refuse(w, http.StatusNotFound, "market.not_found", "no approved package has that name", detail)
+	case errors.Is(err, market.ErrFilterUnsupported):
+		refuse(w, http.StatusBadGateway, "market.filter_unsupported", "the community registry cannot list installable packages only", detail)
 	case errors.Is(err, market.ErrUnreachable):
 		refuse(w, http.StatusBadGateway, "market.unreachable", "the community registry could not be reached", detail)
 	case errors.Is(err, market.ErrBadResponse):

@@ -46,6 +46,9 @@ this gate, and the two cannot share one cookie — a configured `auth_mode =
 `cmd/reasonix-studio-host` strips authentication out of the config it hands the
 hub for exactly that reason, and a test pins it.
 
+The hub's auth-disabled mode still holds mutations to a launch token; a request
+this gate admitted counts as holding it.
+
 ## 3. One transport
 
 Ordinary business runs over HTTP and SSE, the same surface a browser gets. No

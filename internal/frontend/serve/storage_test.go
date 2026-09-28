@@ -51,7 +51,7 @@ func storageRootsOf(t *testing.T, body map[string]any) map[string]map[string]any
 // arrive — including the ones it may only show and never offer to move.
 func TestStorageListsEveryRootWithItsRelocationFacts(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	roots := storageRootsOf(t, readStorage(t, srv.URL))
@@ -74,7 +74,7 @@ func TestStorageListsEveryRootWithItsRelocationFacts(t *testing.T) {
 func TestStoragePlanReportsCostAndRefusalsWithoutMoving(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	before := config.RootDir(config.RootState)
@@ -104,7 +104,7 @@ func TestStoragePlanReportsCostAndRefusalsWithoutMoving(t *testing.T) {
 // is the one thing a server reachable over a network must not let a client do.
 func TestStorageMoveIsRefusedUntilTheHostGrantsIt(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/storage/move", `{"root":"state","dir":"`+storagePathLiteral(testenv.TempDir(t))+`"}`)
@@ -119,7 +119,7 @@ func TestStorageMoveIsRefusedUntilTheHostGrantsIt(t *testing.T) {
 func TestStorageMoveRunsAndReportsThroughTheListing(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	home := config.RootDir(config.RootState)

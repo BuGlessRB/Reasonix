@@ -8,11 +8,8 @@ import (
 	"reasonix/internal/platform/gitcmd"
 )
 
-func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
-	cmd := gitcmd.Command(ctx, "", args...)
-	if cwd != "" {
-		cmd.Dir = cwd
-	}
+func runGit(ctx context.Context, repo gitcmd.Repo, args ...string) (string, error) {
+	cmd := repo.Command(ctx, args...)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err

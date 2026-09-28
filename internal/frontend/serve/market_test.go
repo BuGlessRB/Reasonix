@@ -16,9 +16,13 @@ type fakeRegistry struct {
 	page   market.Page
 	detail market.Detail
 	err    error
+	asked  market.Query
 }
 
-func (f *fakeRegistry) List(context.Context, market.Query) (market.Page, error) { return f.page, f.err }
+func (f *fakeRegistry) List(_ context.Context, q market.Query) (market.Page, error) {
+	f.asked = q
+	return f.page, f.err
+}
 func (f *fakeRegistry) Detail(context.Context, string) (market.Detail, error) {
 	return f.detail, f.err
 }
@@ -148,5 +152,44 @@ func TestMarketLedgerNeverCountsWithoutFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "market")); !os.IsNotExist(err) {
 		t.Fatal("reading the ledger created it")
+	}
+}
+
+// The filter is the registry's to apply, and a registry that cannot is its own
+// code rather than a listing quietly missing rows.
+func TestMarketListPassesTheInstallableFilterThrough(t *testing.T) {
+	_, _, base := pluginHome(t)
+	yes := true
+	reg := &fakeRegistry{page: market.Page{Packages: []market.Package{{Slug: "a/kit", Status: "active", Pinned: &yes}}}}
+	withRegistry(t, reg)
+	resp, err := http.Get(base + "/market/packages?pinned=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Packages []struct {
+			Slug   string `json:"slug"`
+			Pinned *bool  `json:"pinned"`
+		} `json:"packages"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&out)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reg.asked.Pinned || len(out.Packages) != 1 || out.Packages[0].Pinned == nil || !*out.Packages[0].Pinned {
+		t.Fatalf("asked = %+v, out = %+v", reg.asked, out)
+	}
+
+	withRegistry(t, &fakeRegistry{err: market.ErrFilterUnsupported})
+	resp, err = http.Get(base + "/market/packages?pinned=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("status = %d", resp.StatusCode)
+	}
+	if code := marketCode(t, resp); code != "market.filter_unsupported" {
+		t.Errorf("code = %q", code)
 	}
 }

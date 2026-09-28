@@ -24,6 +24,7 @@ import (
 	"reasonix/internal/ext/plugin"
 	"reasonix/internal/ext/pluginspec"
 	"reasonix/internal/platform/browser"
+	"reasonix/internal/platform/gitcmd"
 	"reasonix/internal/platform/lsp"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/delegation"
@@ -43,6 +44,7 @@ type builder struct {
 	fileWriteReceipt func(path string, hadPrior bool, prior []byte)
 	stderr           io.Writer
 	root             string
+	repo             gitcmd.Repo // root's git identity, settled in load
 	roots            config.Roots
 	cfg              *config.Config
 	sink             event.Sink
@@ -136,6 +138,7 @@ func (b *builder) load() error {
 		b.stderr = os.Stderr
 	}
 	b.root, b.roots = resolveWorkspaceRoot(opts.WorkspaceRoot), opts.roots()
+	b.repo = workspaceRepo(b.ctx, opts.WorkspaceRepo, b.root)
 	var err error
 	if b.additionalDirs, err = normalizeAdditionalDirs(b.root, opts.AdditionalDirs); err != nil {
 		return err
@@ -436,6 +439,7 @@ func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, 
 		},
 		CapabilityRuntime:      t.caps.runtime,
 		WorkspaceRoot:          root,
+		WorkspaceRepo:          b.repo,
 		ExternalFolderToolRefs: t.env.readPaths,
 		ResponseLanguage:       cfg.ResponseLanguage(),
 		ReasoningLanguage:      cfg.ReasoningLanguage(),

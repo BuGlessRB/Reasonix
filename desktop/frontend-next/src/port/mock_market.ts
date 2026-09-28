@@ -61,7 +61,7 @@ export class MockMarket extends MockLook {
 
   async marketList(q: MarketQuery): Promise<MarketList> {
     const needle = (q.q ?? "").trim().toLowerCase();
-    const rows = PACKAGES.filter((p) => (!q.kind || p.kind === q.kind) &&
+    const rows = PACKAGES.filter((p) => (!q.kind || p.kind === q.kind) && (!q.pinned || p.pinned) &&
       (!needle || `${p.name} ${p.summary} ${p.tags.join(" ")}`.toLowerCase().includes(needle)));
     return { packages: rows.map((p) => this.view(p)), limit: 24, offset: 0 };
   }
@@ -141,7 +141,7 @@ export class MockMarket extends MockLook {
   }
 
   private view(p: (typeof PACKAGES)[number]): MarketPackage {
-    const { source: _source, pinned: _pinned, ...rest } = p;
+    const { source: _source, ...rest } = p;
     const installed = this.marketInstalled.has(p.slug) ? { version: p.latestVersion, contentHash: DIGEST } : undefined;
     return { ...rest, installed };
   }

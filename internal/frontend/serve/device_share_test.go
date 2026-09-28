@@ -87,7 +87,7 @@ func newShareRig(t *testing.T) *shareRig {
 	h := NewHub(HubOptions{Page: page, Share: share, Grant: func(s *Server) { s.AllowProviderEdit() }})
 	hubRuntime(t, h, testenv.TempDir(t))
 	share.Attach(h.Handler())
-	window := httptest.NewServer(h.Handler())
+	window := httptest.NewServer(operatorHandler(h))
 	t.Cleanup(func() {
 		window.Close()
 		share.Close()

@@ -30,7 +30,7 @@ func TestSubmitBindsWriteAuthorityToAFreshlyMintedSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewServer(operatorHandler(srv))
 	defer ts.Close()
 	resp, err := http.Post(ts.URL+"/submit", "application/json", strings.NewReader(`{"input":"今日热点"}`))
 	if err != nil {

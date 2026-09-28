@@ -119,7 +119,7 @@ func TestHubRefusesToLocateInARemoteWorkspace(t *testing.T) {
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{})
 	rt := remotePane(t, h, rk.Listener.Addr().String())
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	for _, path := range []string{"/workspace/locate", "/workspace/locate?path=out", "//workspace/./locate", "/workspace/locate/"} {

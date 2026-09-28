@@ -26,7 +26,9 @@ func TestServeConfigWithCommandDefaults(t *testing.T) {
 		{name: "web overrides configured none by default", command: "web", configured: "none", want: "token"},
 		{name: "web explicit auth wins", command: "web", authExplicit: true, configured: "none", want: "none"},
 		{name: "serve stays config driven", command: "serve", configured: "password", want: "password"},
-		{name: "serve empty stays backward compatible", command: "serve", want: ""},
+		{name: "serve generates a launch token by default", command: "serve", want: "token"},
+		{name: "serve configured none is an explicit opt-out", command: "serve", configured: "none", want: "none"},
+		{name: "serve explicit auth wins", command: "serve", authExplicit: true, configured: "none", want: "none"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

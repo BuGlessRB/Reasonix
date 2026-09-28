@@ -55,7 +55,7 @@ func newContinuationServer(t *testing.T) *httptest.Server {
 	})
 	s := New(ctrl, bc, config.ServeConfig{})
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	t.Cleanup(srv.Close)
 	return srv
 }

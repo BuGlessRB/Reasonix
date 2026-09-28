@@ -18,7 +18,7 @@ import (
 
 func fetchSlash(t *testing.T, ctrl *control.Controller) []slashEntry {
 	t.Helper()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/slash")
@@ -77,7 +77,7 @@ func TestSlashCommandShadowsSameNamedSkill(t *testing.T) {
 func TestMcpWithoutHostReturnsEmptyList(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/mcp")
@@ -110,7 +110,7 @@ func TestSkillsListsWhatSlashCannotShow(t *testing.T) {
 		},
 	})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	var got struct {
@@ -155,7 +155,7 @@ func TestSkillEnabledPersists(t *testing.T) {
 		Skills: []skill.Skill{{Name: "audit", Scope: skill.ScopeBuiltin}},
 	})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/skills/enabled", "application/json",
@@ -186,7 +186,7 @@ func TestSkillSwitchIsScopedToItsProject(t *testing.T) {
 	theirs := control.New(control.Options{Skills: skills, WorkspaceRoot: there})
 	defer theirs.Close()
 
-	srv := httptest.NewServer(New(mine, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(mine, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/skills/enabled", "application/json",
@@ -209,7 +209,7 @@ func TestSkillSwitchIsScopedToItsProject(t *testing.T) {
 func TestMcpAdminRejectsUnknownServer(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	for _, tc := range []struct {
@@ -239,7 +239,7 @@ func TestMcpAdminRejectsUnknownServer(t *testing.T) {
 func TestMcpParsePreviewsWithoutInstalling(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/mcp/parse", "application/json",
@@ -285,7 +285,7 @@ func TestMcpParsePreviewsWithoutInstalling(t *testing.T) {
 func TestMcpInstallRejectsDuplicateName(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	// A command that cannot connect still exercises the pre-flight checks, and
@@ -343,7 +343,7 @@ func TestCapabilitySwitchReachesAnotherProject(t *testing.T) {
 		WorkspaceRoot: here,
 	})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/skills/enabled", "application/json",
@@ -379,7 +379,7 @@ func TestCapabilitySwitchRefusesAnUnknownProject(t *testing.T) {
 		WorkspaceRoot: testenv.TempDir(t),
 	})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/skills/enabled", "application/json",
@@ -494,7 +494,7 @@ func TestMcpLoadWritesTheUserConfig(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	ctrl := control.New(control.Options{})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	for _, tc := range []struct {

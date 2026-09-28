@@ -21,7 +21,7 @@ func TestServeIndexPageAndSessionDeepLink(t *testing.T) {
 	// with the same shell and keep the path, so the page can read it.
 	for _, path := range []string{"/", "/sessions/reserved-session"} {
 		rec := httptest.NewRecorder()
-		server.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		operatorHandler(server).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<title>studio</title>") {
 			t.Errorf("GET %s = %d %q, want the page shell", path, rec.Code, rec.Body.String())
 		}
@@ -35,7 +35,7 @@ func TestRootHandsTheVisitorToTheBuiltPage(t *testing.T) {
 	srv := New(control.New(control.Options{Sink: bc}), bc, config.ServeConfig{})
 	srv.page = fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<title>studio</title>")}}
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	operatorHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<title>studio</title>") {
 		t.Fatalf("GET / = %d %q, want the page shell", rec.Code, rec.Body.String())
 	}
@@ -47,7 +47,7 @@ func TestRootSaysSoWhenNoPageIsBuilt(t *testing.T) {
 	bc := NewBroadcaster()
 	srv := New(control.New(control.Options{Sink: bc}), bc, config.ServeConfig{})
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	operatorHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET / with no page = %d, want 404", rec.Code)
 	}

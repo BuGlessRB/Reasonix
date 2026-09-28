@@ -40,6 +40,10 @@ func (c *capability) tryDelta(ctx context.Context, install update.Install, targe
 	if !ok || !update.TreeHandoffSupported() || install.Layout.Root == "" || c.opts.Application.PID <= 0 {
 		return false
 	}
+	if err := update.CheckTreeSwap(install.Layout.Root, filepath.Join(cacheDir, "delta")); err != nil {
+		slog.Warn("appupdate: this install cannot take a chunked update, downloading the full package", "target", target, "err", err)
+		return false
+	}
 	h, err := c.stageDelta(ctx, install, target, cacheDir, d)
 	if err == nil {
 		var self string
