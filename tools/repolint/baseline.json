@@ -5,16 +5,16 @@
     "claude-dialect": 1,
     "codeowners": 0,
     "commented-code": 0,
-    "complexity": 848,
+    "complexity": 849,
     "doc-language": 0,
     "doc-owner": 42,
-    "doc-prose": 2292,
+    "doc-prose": 2291,
     "error-text": 9,
     "essay": 2770,
-    "file-size": 21445,
+    "file-size": 21463,
     "flat-view": 0,
     "frontend-parity": 28,
-    "function-size": 3218,
+    "function-size": 3227,
     "layer-order": 0,
     "layering": 0,
     "marker": 0,
@@ -291,7 +291,7 @@
     },
     "internal/contract/config/config.go": {
       "essay": 46,
-      "file-size": 1106
+      "file-size": 1115
     },
     "internal/contract/config/credentials.go": {
       "essay": 1,
@@ -358,10 +358,10 @@
       "file-size": 219
     },
     "internal/contract/config/render.go": {
-      "complexity": 183,
+      "complexity": 184,
       "essay": 2,
-      "file-size": 546,
-      "function-size": 671
+      "file-size": 555,
+      "function-size": 680
     },
     "internal/contract/config/vision.go": {
       "essay": 1,
@@ -1600,9 +1600,6 @@
     "release-notes/studio/2.2.0.md": {
       "doc-prose": 1,
       "release-note": 26
-    },
-    "release-notes/studio/2.21.0.md": {
-      "doc-prose": 1
     },
     "release-notes/studio/2.3.0.md": {
       "doc-prose": 2,
