@@ -681,6 +681,10 @@ export const EN: Record<string, string> = {
   "本轮有改动无法还原": "Some of this turn's changes cannot be restored",
   "部分改动不在快照内": "Some of the changes are outside the snapshot",
   "已还原 {n} 个文件": "{n} files restored",
+  "代码和对话": "Code and conversation",
+  "只还原代码": "Code only",
+  "只回退对话": "Conversation only",
+  "bash 命令所作的修改没有快照": "Changes made by bash commands have no snapshot",
 
   // ── 开场 ─────────────────────────────────────────────────────────
   "欢迎使用 Reasonix。": "Welcome to Reasonix.",
