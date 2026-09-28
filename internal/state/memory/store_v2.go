@@ -60,6 +60,12 @@ func (s Store) MigrateV2() (MigrationReport, error) {
 		if err != nil {
 			return report, err
 		}
+		// A migration rewrites facts and then the index. An unreadable index would
+		// leave those facts out of it permanently, because the next run skips facts
+		// that already carry an id.
+		if _, err := readIndexIn(dir); err != nil {
+			return report, err
+		}
 		for _, entry := range entries {
 			if entry.IsDir() || entry.Name() == indexFile || !strings.HasSuffix(entry.Name(), ".md") {
 				continue

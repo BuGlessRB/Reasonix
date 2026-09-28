@@ -112,6 +112,30 @@ func TestStoreV2LegacyMemoryGetsDeterministicIdentity(t *testing.T) {
 	}
 }
 
+// A migration rewrites a fact and then the index. An unreadable index must stop
+// the fact from being rewritten: the next run skips facts that already carry an
+// id, so the entry would stay out of the index for good.
+func TestStoreV2MigrationLeavesFactsAloneWhenTheIndexIsUnreadable(t *testing.T) {
+	dir := testenv.TempDir(t)
+	path := filepath.Join(dir, "legacy-fact.md")
+	legacy := "---\nname: legacy-fact\ndescription: old file\nmetadata:\n  type: project\n  scope: project\n---\n\nlegacy body\n"
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A directory where the index file belongs: present, unreadable, portable.
+	if err := os.Mkdir(filepath.Join(dir, indexFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	store := Store{Dir: dir}
+	if _, err := store.MigrateV2(); err == nil {
+		t.Fatal("migration must refuse while the index is unreadable")
+	}
+	if got := mustReadString(t, path); got != legacy {
+		t.Fatalf("migration rewrote the fact while the index was unreadable:\n%s", got)
+	}
+}
+
 func TestStoreV2MigrationPersistsLegacyIdentity(t *testing.T) {
 	dir := testenv.TempDir(t)
 	path := filepath.Join(dir, "legacy-fact.md")
