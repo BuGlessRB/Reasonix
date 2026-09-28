@@ -2318,11 +2318,6 @@
     .composeguide { flex-wrap: wrap; gap-block: 5px }
     .composehint { order: 2; width: 100%; margin-left: 0 }
     .fcount { margin-left: auto }
-    .compose .row { align-items: stretch }
-    .turntools { flex-basis: 100%; flex-wrap: nowrap }
-    .turntools > .picker:first-of-type { flex: 1 }
-    .turntools .mode .nm { max-width: 100% }
-    .compose .row .go { width: 100%; justify-content: flex-end; margin-left: 0 }
     .call:not([data-k="me"], [data-k="say"], [data-k="ask"]) > .c > .hl { flex-wrap: wrap }
     .call:not([data-k="me"], [data-k="say"], [data-k="ask"]) > .c > .hl .arg { order: 5; flex: 1 0 100% }
     .call:not([data-k="me"], [data-k="say"], [data-k="ask"]) > .c > .hl .cost { margin-left: 0 }

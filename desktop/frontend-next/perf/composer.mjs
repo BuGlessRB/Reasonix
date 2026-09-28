@@ -98,6 +98,54 @@ await page.waitForSelector(".slashmenu", { state: "detached" });
 await page.waitForSelector('.studio-model-control > button[aria-expanded="true"]');
 check("补全与模型菜单互斥", await page.locator(".menu:not([hidden])").count() === 1);
 
+// The toolbar shares its line with the send cluster, whose width depends on
+// whether a turn runs. Every column width has to hold both: controls inside the
+// composer, none under another, and the model name still readable.
+const LONG_MODEL = "mimo-v2.6-pro-reasoning-preview";
+const toolbar = () => page.evaluate((name) => {
+  const nm = document.querySelector(".studio-model-control .nm");
+  if (nm) nm.textContent = name;
+  const edge = document.querySelector(".compose").getBoundingClientRect();
+  const shown = [...document.querySelectorAll(".compose .row button")]
+    .filter((el) => el.getClientRects().length && el.checkVisibility({ visibilityProperty: true }));
+  const id = (el) => el.getAttribute("data-action") || el.getAttribute("aria-label") || el.className.toString();
+  const boxes = shown.map((el) => ({ el, id: id(el), r: el.getBoundingClientRect() }));
+  const outside = boxes.filter(({ r }) => r.left < edge.left - 0.5 || r.right > edge.right + 0.5 || r.bottom > edge.bottom + 0.5).map((b) => b.id);
+  const overlaps = [];
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i], b = boxes[j];
+    if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
+    if (a.r.left < b.r.right - 1 && a.r.right > b.r.left + 1 && a.r.top < b.r.bottom - 1 && a.r.bottom > b.r.top + 1) overlaps.push(`${a.id} × ${b.id}`);
+  }
+  return {
+    pane: Math.round(document.querySelector(".pane").getBoundingClientRect().width),
+    outside, overlaps, name: nm ? Math.round(nm.getBoundingClientRect().width) : 0,
+  };
+}, LONG_MODEL);
+
+const swept = new Set();
+for (const state of ["idle", "running"]) {
+  await page.setViewportSize({ width: 1010, height: 800 });
+  await page.goto(PAGE, { waitUntil: "networkidle" });
+  await page.waitForSelector(".compose");
+  if (state === "running") {
+    await page.evaluate(() => window.__feed({ kind: "turn_started" }));
+    await page.waitForSelector('[data-action="session.stop"]');
+  }
+  const bad = [];
+  for (let width = 340; width <= 760; width += 10) {
+    await page.setViewportSize({ width, height: 800 });
+    await frame();
+    const g = await toolbar();
+    swept.add(g.pane);
+    if (g.outside.length) bad.push(`${g.pane}px 越界: ${g.outside.join(" / ")}`);
+    if (g.overlaps.length) bad.push(`${g.pane}px 重叠: ${g.overlaps.join(" / ")}`);
+    if (g.name < 40) bad.push(`${g.pane}px 模型名只剩 ${g.name}px`);
+  }
+  check(`${state}：各宽度下控件都在编辑器内、互不覆盖、模型名可读`, bad.length === 0, bad.slice(0, 4).join("；"));
+}
+check("扫到的对话列覆盖 360–700px", [...swept].some((w) => w <= 360) && [...swept].some((w) => w >= 700), [...swept].sort((a, b) => a - b).slice(0, 1).concat([...swept].sort((a, b) => b - a).slice(0, 1)).join("–"));
+
 await browser.close();
 if (fails.length) {
   console.error(`\n${fails.length} 项不合格：\n  ` + fails.join("\n  "));
