@@ -15,6 +15,10 @@ theme = "auto"   # auto|dark|light; controls CLI colors only; REASONIX_THEME can
 # commandmode = "vi"   # ""|vi; "vi" gives the CLI prompt a vi command mode (Esc enters command mode, ^C interrupts a stream, ^D exits)
 show_turn_usage = true   # CLI/TUI: show per-request token and cost receipts in transcript scrollback
 
+[cli]   # user/global only; ./reasonix.toml cannot override
+# diff_fences = true   # render a fenced ```diff/```patch block through the colourised diff renderer instead of the plain code rail; default false
+# diff_formatter = "delta --color-only --paging=never"   # optional external argv (no shell) that formats a fenced ```diff/```patch block and a writer tool's diff card; the diff is piped on stdin and its stdout is re-emitted with non-SGR escapes stripped
+
 [desktop]
 # language = "auto"   # auto|en|zh; auto follows the browser/OS locale
 # currency = "auto"   # legacy display currency; prefer [billing].display_currency

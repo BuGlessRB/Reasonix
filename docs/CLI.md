@@ -58,6 +58,29 @@ notice. Legacy `[cli].update_channel` values are ignored and removed the next
 time Reasonix saves the configuration. The `reasonix update` alias behaves the
 same way.
 
+`[cli].diff_fences = true` renders a fenced ` ```diff ` / ` ```patch ` block
+through the colourised diff renderer (add/remove backgrounds, `+`/`-` gutter,
+line numbers) instead of the plain code rail. It is **off by default**: a model
+writes headerless diff fences often, and the plain rail is the lossless default.
+A fence section with no `--- `/`+++ ` file header falls back to the plain rail so
+no line is dropped. Like `[cli].diff_formatter` it is user/global only — a
+project-local `reasonix.toml` cannot set it.
+
+`[cli].diff_formatter` names an optional external command that formats a diff
+before the CLI/TUI emits it — a fenced ` ```diff ` / ` ```patch ` block, a writer
+tool's diff card, and a shell result whose whole output is a diff (see
+`[agent].embedded_diff_detection` below).
+
+It is an argv line run without a shell, e.g. `delta --color-only --paging=never`.
+
+The whole diff is written to the command's stdin; its stdout is re-emitted with
+non-SGR control sequences stripped, so the formatter's colours survive but a
+cursor or clipboard escape cannot.
+
+On any failure, timeout, or empty output the built-in renderer is used. Like
+`[cli].update_channel` it is user/global only — a project-local `reasonix.toml`
+cannot set it.
+
 ## Configure providers
 
 ```sh

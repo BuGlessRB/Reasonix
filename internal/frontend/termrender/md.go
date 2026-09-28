@@ -14,6 +14,7 @@ import (
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 
+	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
 )
 
@@ -344,6 +345,12 @@ func (r *MarkdownRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []
 // startup from [cli].diff_fences.
 var activeDiffFences bool
 
+// configureDiffFences resolves [cli].diff_fences into activeDiffFences. It is
+// user-global only, mirroring [cli].diff_formatter.
+func configureDiffFences(cfg *config.Config) {
+	activeDiffFences = cfg != nil && cfg.CLI.DiffFences
+}
+
 // isDiffFence reports whether a fence's info string asks for a unified diff.
 // Copy mode keeps the plain rail path so the copied text stays byte-identical
 // to the fence source (the diff rows carry render-only gutter/line numbers).
@@ -362,6 +369,20 @@ func (r *MarkdownRenderer) renderDiffFence(buf *strings.Builder, fc *ast.FencedC
 	prefix := strings.Repeat(" ", indent)
 	width := max(r.width-indent, 8)
 	text := diffFenceText(fc, src)
+	// Only run the external formatter once the source actually closed the
+	// fence. While the fence is still streaming in, every delta changes the
+	// body, so each redraw would spawn a fresh subprocess that can never hit
+	// the memo; the built-in rows are drawn until the closing fence arrives.
+	if fenceClosed(fc, src) {
+		if out, ok := formatDiffCached(text, width); ok {
+			buf.WriteString(out)
+			if !strings.HasSuffix(out, "\n") {
+				buf.WriteString("\n")
+			}
+			buf.WriteString("\n")
+			return
+		}
+	}
 	// A fence that already carries ANSI (e.g. pasted delta output) is shown
 	// verbatim — splitting/counting it would mis-read the SGR-prefixed lines.
 	if hasSGR(text) {
@@ -387,6 +408,19 @@ func (r *MarkdownRenderer) renderDiffFence(buf *strings.Builder, fc *ast.FencedC
 		}
 	}
 	buf.WriteString("\n")
+}
+
+// fenceClosed reports whether src actually carried the closing fence line for
+// fc. goldmark still builds a FencedCodeBlock for a fence left open at EOF, so
+// its Lines() run to the end of the source; a closed fence's last body line
+// stops before its closing line. A block with no body lines (an empty or
+// still-open fence) reads as open, which keeps the external formatter off it.
+func fenceClosed(fc *ast.FencedCodeBlock, src []byte) bool {
+	lines := fc.Lines()
+	if lines.Len() == 0 {
+		return false
+	}
+	return lines.At(lines.Len()-1).Stop < len(src)
 }
 
 func diffFenceText(fc *ast.FencedCodeBlock, src []byte) string {

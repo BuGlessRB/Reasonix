@@ -64,6 +64,9 @@ func diffPath(args string) string {
 
 // DiffBlock renders a writer call as a header line ("✎ name path  +A -B") plus
 // the highlighted, folded diff body. Returns nil when there's no textual diff.
+// A configured [cli].diff_formatter (e.g. delta) takes the whole diff on stdin
+// and its stdout is re-emitted under the header with non-SGR escapes stripped,
+// mirroring the fenced-diff path — the built-in body (and its fold) is the fallback.
 func DiffBlock(name, args string, d event.FileDiff, width, maxLines int) []string {
 	if d.Diff == "" {
 		return nil
@@ -73,7 +76,22 @@ func DiffBlock(name, args string, d event.FileDiff, width, maxLines int) []strin
 	if stat := DiffStat(d); stat != "" {
 		header += "  " + stat
 	}
+	if rows, ok := formatToolDiff(dropFileHeaderPair(d.Diff), width); ok {
+		return append([]string{header}, rows...)
+	}
 	return append([]string{header}, diffBody(d, path, width, maxLines)...)
+}
+
+// dropFileHeaderPair removes a leading "--- "/"+++ " pair, the same pair the
+// built-in body drops positionally. The external formatter would otherwise
+// re-emit that raw header — including an absolute host path in the label — which
+// the card header already names.
+func dropFileHeaderPair(diff string) string {
+	lines := strings.SplitN(diff, "\n", 3)
+	if len(lines) == 3 && strings.HasPrefix(lines[0], "--- ") && strings.HasPrefix(lines[1], "+++ ") {
+		return lines[2]
+	}
+	return diff
 }
 
 // diffBody renders the hunks with a line-number gutter, dropping the file and

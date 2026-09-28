@@ -55,6 +55,13 @@ func Run(ctx context.Context, opts Options) error {
 	if clusters, ok := clustersEmoji(); ok && clusters {
 		go p.Send(clusterReport)
 	}
+	// Full screen repaints every frame, so the diff formatter runs off the render
+	// path: built-in rows now, formatted ones when the run lands. Inline writes to
+	// the scrollback, where a row cannot be repainted, so it stays inline.
+	if !opts.Inline {
+		termrender.SetDiffFormatNotify(func() { p.Send(diffFormattedMsg{}) })
+		defer termrender.SetDiffFormatNotify(nil)
+	}
 	_, err := p.Run()
 	return err
 }
@@ -139,6 +146,10 @@ type (
 		reprint bool
 	}
 	statusTickMsg struct{}
+	// diffFormattedMsg is the diff formatter's background run reporting a
+	// result; the model repaints on it so the formatted rows replace the
+	// built-in ones drawn while the run was in flight.
+	diffFormattedMsg struct{}
 )
 
 func newModel(ctx context.Context, opts Options) *model {
@@ -283,6 +294,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.onSpin()
 	case statusTickMsg:
 		return m, tea.Batch(m.fetchStatus(), tickStatus())
+	case diffFormattedMsg:
+		return m, m.commit()
 	case actionMsg:
 		if msg.err != nil {
 			m.tr.AddNotice("error", msg.what+": "+msg.err.Error())
