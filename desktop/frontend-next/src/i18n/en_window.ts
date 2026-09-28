@@ -34,7 +34,6 @@ export const EN_WINDOW: Record<string, string> = {
   "前进": "Forward",
   "重新加载": "Reload",
   "网址": "Address",
-  "页面被遮住时暂停显示": "The page is hidden while something covers it",
   "搜索会话 / 项目": "Search sessions or projects",
   "没有匹配的会话": "Nothing matches",
   "清空": "Clear",

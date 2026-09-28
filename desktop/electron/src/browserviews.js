@@ -29,6 +29,9 @@ class BrowserViews {
     // for this run only: a restart, or a different certificate, asks again.
     this.trusted = new Set();
     this.shown = "";
+    // Moves with every show and hide, so a freeze that finishes after one does
+    // not put away a page shown since.
+    this.placed = 0;
     win.on("resize", () => {
       for (const [id, entry] of this.entries) if (id !== this.shown) this.putAway(entry.view);
     });
@@ -142,6 +145,7 @@ class BrowserViews {
     // re-adding the view and setting the bounds it already has is work for
     // every one of those.
     if (this.shown === targetId && sameRect(entry.at, at)) return;
+    this.placed++;
     for (const [id, other] of this.entries) {
       if (id !== targetId) this.putAway(other.view, other);
     }
@@ -160,7 +164,31 @@ class BrowserViews {
     }
   }
 
+  // freeze answers with a picture of the page on screen, taken before it is put
+  // away, for the window to draw in its place while something of its own is
+  // over it. Only the page already shown to the person is ever taken, and the
+  // picture goes to this window's page and nowhere else.
+  async freeze() {
+    const id = this.shown;
+    const entry = this.entries.get(id);
+    if (!entry || entry.view.webContents.isDestroyed()) {
+      this.hide();
+      return "";
+    }
+    const turn = this.placed;
+    let picture = "";
+    try {
+      const image = await entry.view.webContents.capturePage();
+      if (!image.isEmpty()) picture = "data:image/jpeg;base64," + image.toJPEG(85).toString("base64");
+    } catch {
+      picture = "";
+    }
+    if (this.placed === turn && this.shown === id) this.hide();
+    return picture;
+  }
+
   hide() {
+    this.placed++;
     this.shown = "";
     for (const entry of this.entries.values()) this.putAway(entry.view, entry);
   }
