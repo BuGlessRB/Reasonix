@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -366,9 +367,7 @@ func TestStoreV2RestoreArchivedRejectsSubjectConflict(t *testing.T) {
 	}
 }
 
-// The validator recovery now runs also caps pinned guidance, so recovery cannot
-// put a second pinned body into the prefix when the configured budget only has
-// room for one.
+// Recovery is capped by the pinned budget like any save.
 func TestStoreV2RestoreArchivedRejectsPinnedBudgetOverflow(t *testing.T) {
 	body := strings.Repeat("x", 200)
 	store := Store{Dir: testenv.TempDir(t), PinnedBudgetChars: 250}
@@ -391,8 +390,9 @@ func TestStoreV2RestoreArchivedRejectsPinnedBudgetOverflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := store.RestoreArchived(archivePath); err == nil {
-		t.Fatal("recovering a pinned fact put the pinned prefix over the configured budget")
+	_, err = store.RestoreArchived(archivePath)
+	if !errors.Is(err, ErrPinnedBudget) {
+		t.Fatalf("want the pinned-budget identity, got %v", err)
 	}
 	if active, ok := store.Read("other-rule"); !ok || active.Body != body {
 		t.Fatalf("failed restore disturbed the current pinned fact: %+v, ok=%v", active, ok)
