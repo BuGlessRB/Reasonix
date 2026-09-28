@@ -32,7 +32,7 @@ func refineServer(t *testing.T, refiner *promptrefine.Refiner) *httptest.Server 
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, PromptRefiner: refiner})
 	t.Cleanup(func() { ctrl.Close() })
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	t.Cleanup(srv.Close)
 	return srv
 }

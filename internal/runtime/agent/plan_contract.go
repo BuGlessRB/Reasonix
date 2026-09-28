@@ -126,7 +126,7 @@ func (a *Agent) outstandingPlanCriteria() []string {
 	if a == nil || plan == nil || a.task.ledger == nil {
 		return nil
 	}
-	at, changed := a.task.ledger.LatestSuccessfulMutationIndex()
+	at, changed := a.task.ledger.LatestProvenMutationIndex()
 	if !changed {
 		at = -1
 	}
@@ -149,6 +149,27 @@ func (a *Agent) outstandingPlanCriteria() []string {
 		}
 	}
 	return out
+}
+
+// appendPlanDeliverableGap holds a turn whose plan names files to change and
+// which changed nothing, unless it concluded blocked or is waiting on the user:
+// either is a legitimate end that no change could follow. carried is a change
+// a restart brought in, which the ledger of this run cannot see.
+func (a *Agent) appendPlanDeliverableGap(out *finalReadinessCheck, missing []string, carried bool) []string {
+	ledger := a.task.ledger
+	if carried || !planChangesOf(a.PlanContract()) {
+		return missing
+	}
+	if _, changed := ledger.LatestSuccessfulMutationIndex(); changed || ledger.HasBlockedConclusionAfter(-1) {
+		return missing
+	}
+	if _, gated := ledger.UserGateThisTurn(); gated {
+		return missing
+	}
+	out.applies = true
+	out.missingAcceptanceCriteria++
+	return append(missing, "the approved plan names files to change and nothing has changed: make the planned change, "+
+		"or call conclude_blocked with what stops it, or await_user if it waits on them")
 }
 
 // mutationEscapesPlan reports whether a pending write touches a path the

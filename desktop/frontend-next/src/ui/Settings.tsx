@@ -15,6 +15,7 @@ import type { HubPort } from "../port/hub";
 import type { RemoteHost } from "../port/remote";
 import { AddPlugin } from "./AddPlugin";
 import { Packages } from "./Packages";
+import { ExtTabs, MarketGroup } from "./Market";
 import { Switch } from "./Switch";
 import { ServerRow } from "./ServerRow";
 import { SkillRow } from "./SkillRow";
@@ -27,6 +28,7 @@ import { Compaction } from "./Compaction";
 import { Sandbox } from "./Sandbox";
 import { BrowserTools } from "./BrowserTools";
 import { Account } from "./Account";
+import { Backup } from "./Backup";
 import { Providers } from "./Providers";
 import { activeKind, groupVendors } from "./Models";
 import { ModelUsage } from "./ModelUsage";
@@ -114,6 +116,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
   const [remoteBook, setRemoteBook] = useState<RemoteHost[] | null>(null);
   const [packages, setPackages] = useState<PluginPackage[]>([]);
   const [addingPkg, setAddingPkg] = useState(false);
+  const [extTab, setExtTab] = useState<"installed" | "market">(openedAnchor === "market" ? "market" : "installed");
   const [updatingPkg, setUpdatingPkg] = useState("");
   const [hookCount, setHookCount] = useState(0);
   const [netMode, setNetMode] = useState("");
@@ -309,6 +312,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
     setAt(section);
     setQuery("");
     setLanded(anchor);
+    if (section === "ext") setExtTab(anchor === "market" ? "market" : "installed");
   };
   useEffect(() => {
     if (!landed) return;
@@ -613,90 +617,96 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
 
           {at === "ext" && (
             <>
-              {scope && <ScopeBar scope={scope} scopes={scopes} onPick={setScopeAt} />}
-              {/* 装完、改完、删完都要过这一步才算数——把它放在包列表上面，
-                  因为它管的是整个运行时，不是某一个包。 */}
-              <Group id="ext-runtime"
-                title={t("运行时")}
-                hint={t("修改扩展代码，或安装、删除、启用或停用插件包之后，用它使改动生效。当前这一轮不受影响，下一轮开始使用新的配置。")}
-                action={reload.action}
-              >
-                {reload.note}
-              </Group>
-              <Group id="plugins"
-                title={t("插件包")}
-                now={packages.length ? t("{n} 个", { n: packages.length }) : undefined}
-                hint={t("一个包可以同时提供技能、命令、自动化钩子和外部服务。安装与导入是同一个操作：提供一个仓库地址，或本机的一个文件夹。")}
-                action={
-                  addingPkg ? undefined : (
-                    <button className="act" data-action="extensions.add" onClick={() => setAddingPkg(true)}>
-                      {t("添加")}
-                    </button>
-                  )
-                }
-              >
-                {addingPkg && (
-                  <AddPlugin port={port} onClose={() => setAddingPkg(false)} onInstalled={afterExtChange} />
-                )}
-                {updatingPkg && (
-                  <AddPlugin
+              <ExtTabs at={extTab} onPick={setExtTab} />
+              {extTab === "market" && <MarketGroup port={port} onInstalled={afterExtChange} account={acct} onSignIn={() => go("account", "account")} />}
+              {extTab === "installed" && (
+              <>
+                {scope && <ScopeBar scope={scope} scopes={scopes} onPick={setScopeAt} />}
+                {/* 装完、改完、删完都要过这一步才算数——把它放在包列表上面，
+                    因为它管的是整个运行时，不是某一个包。 */}
+                <Group id="ext-runtime"
+                  title={t("运行时")}
+                  hint={t("修改扩展代码，或安装、删除、启用或停用插件包之后，用它使改动生效。当前这一轮不受影响，下一轮开始使用新的配置。")}
+                  action={reload.action}
+                >
+                  {reload.note}
+                </Group>
+                <Group id="plugins"
+                  title={t("插件包")}
+                  now={packages.length ? t("{n} 个", { n: packages.length }) : undefined}
+                  hint={t("一个包可以同时提供技能、命令、自动化钩子和外部服务。安装与导入是同一个操作：提供一个仓库地址，或本机的一个文件夹。")}
+                  action={
+                    addingPkg ? undefined : (
+                      <button className="act" data-action="extensions.add" onClick={() => setAddingPkg(true)}>
+                        {t("添加")}
+                      </button>
+                    )
+                  }
+                >
+                  {addingPkg && (
+                    <AddPlugin port={port} onClose={() => setAddingPkg(false)} onInstalled={afterExtChange} />
+                  )}
+                  {updatingPkg && (
+                    <AddPlugin
+                      port={port}
+                      updating={packages.find((p) => p.name === updatingPkg)}
+                      onClose={() => setUpdatingPkg("")}
+                      onInstalled={afterExtChange}
+                    />
+                  )}
+                  <Packages
                     port={port}
-                    updating={packages.find((p) => p.name === updatingPkg)}
-                    onClose={() => setUpdatingPkg("")}
-                    onInstalled={afterExtChange}
+                    packages={packages}
+                    onChanged={afterExtChange}
+                    updating={updatingPkg}
+                    onUpdate={setUpdatingPkg}
                   />
-                )}
-                <Packages
-                  port={port}
-                  packages={packages}
-                  onChanged={afterExtChange}
-                  updating={updatingPkg}
-                  onUpdate={setUpdatingPkg}
-                />
-                {packages.length === 0 && !addingPkg && <div className="empty">{t("尚未安装插件包。")}</div>}
-              </Group>
-              {/* Below the packages: what was added by hand. A server the user
-                  typed in themselves is not part of anyone's package, and
-                  filing it under one would misname where it came from. */}
-              <Group id="mcp"
-                title={t("外部工具")}
-                now={looseMcp.length ? t("{n} 个服务", { n: looseMcp.length }) : undefined}
-                hint={t("已接入的 MCP 服务。其提供的能力与内置工具等同，列出的每一项均可访问文件与数据。关闭后立即从本轮工具列表中移除，重启后保持关闭。")}
-                action={
-                  adding || !live ? undefined : (
-                    <button className="act" onClick={() => setAdding(true)}>
-                      {t("接入服务")}
-                    </button>
-                  )
-                }
-              >
-                {adding && live && (
-                  <AddServer
-                    port={port}
-                    canProject={!!status?.workspaceRoot}
-                    onClose={() => setAdding(false)}
-                    onInstalled={afterExtChange}
-                  />
-                )}
-                {looseMcp.map((m) => (
-                  <ServerRow key={m.name} m={m} port={port} onDone={afterExtChange} root={scopeAt} live={live} />
-                ))}
-                {looseMcp.length === 0 && !adding && <div className="empty">{t("尚未接入外部服务。")}</div>}
-              </Group>
-              <Group id="skills"
-                title={t("技能")}
-                now={looseSkills.length ? t("{on}/{all} 已启用", { on: looseOn, all: looseSkills.length }) : undefined}
-                hint={t(
-                  implicit
-                    ? "工作目录与「我的」中的技能。带 / 的可以由你直接调用，其余的由模型根据任务判断是否使用。关掉一个立刻生效：从你的下一条消息起模型不再拿到它，直接点名也调不动，不用新建会话。"
-                    : "模型自动发现已关闭：仅显式指定的技能会运行。开关立即生效，自下一条消息起，无需新建会话。",
-                )}
-              >
-                {looseSkills.map((sk) => (
-                  <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} root={scopeAt} onFailed={setFailed} />
-                ))}
-                {looseSkills.length === 0 && <div className="empty">{t("当前工作目录下没有技能。")}</div>}
-              </Group>
+                  {packages.length === 0 && !addingPkg && <div className="empty">{t("尚未安装插件包。")}</div>}
+                </Group>
+                {/* Below the packages: what was added by hand. A server the user
+                    typed in themselves is not part of anyone's package, and
+                    filing it under one would misname where it came from. */}
+                <Group id="mcp"
+                  title={t("外部工具")}
+                  now={looseMcp.length ? t("{n} 个服务", { n: looseMcp.length }) : undefined}
+                  hint={t("已接入的 MCP 服务。其提供的能力与内置工具等同，列出的每一项均可访问文件与数据。关闭后立即从本轮工具列表中移除，重启后保持关闭。")}
+                  action={
+                    adding || !live ? undefined : (
+                      <button className="act" onClick={() => setAdding(true)}>
+                        {t("接入服务")}
+                      </button>
+                    )
+                  }
+                >
+                  {adding && live && (
+                    <AddServer
+                      port={port}
+                      canProject={!!status?.workspaceRoot}
+                      onClose={() => setAdding(false)}
+                      onInstalled={afterExtChange}
+                    />
+                  )}
+                  {looseMcp.map((m) => (
+                    <ServerRow key={m.name} m={m} port={port} onDone={afterExtChange} root={scopeAt} live={live} />
+                  ))}
+                  {looseMcp.length === 0 && !adding && <div className="empty">{t("尚未接入外部服务。")}</div>}
+                </Group>
+                <Group id="skills"
+                  title={t("技能")}
+                  now={looseSkills.length ? t("{on}/{all} 已启用", { on: looseOn, all: looseSkills.length }) : undefined}
+                  hint={t(
+                    implicit
+                      ? "工作目录与「我的」中的技能。带 / 的可以由你直接调用，其余的由模型根据任务判断是否使用。关掉一个立刻生效：从你的下一条消息起模型不再拿到它，直接点名也调不动，不用新建会话。"
+                      : "模型自动发现已关闭：仅显式指定的技能会运行。开关立即生效，自下一条消息起，无需新建会话。",
+                  )}
+                >
+                  {looseSkills.map((sk) => (
+                    <SkillRow key={sk.name} sk={sk} implicit={implicit} port={port} onDone={afterExtChange} root={scopeAt} onFailed={setFailed} />
+                  ))}
+                  {looseSkills.length === 0 && <div className="empty">{t("当前工作目录下没有技能。")}</div>}
+                </Group>
+              </>
+              )}
             </>
           )}
 
@@ -725,6 +735,11 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
               hint={t("Reasonix 本身不需要账号，仅在需要联网的功能中使用：社区发帖、崩溃问题跟进，以及后续的技能发布。")}
             >
               <Account port={port} state={acct} unread={accountUnread} reload={reloadAccount} />
+            </Group>
+          )}
+          {at === "account" && acct?.signedIn && acct.user && (
+            <Group id="backup" title={t("云备份")} hint={t("把本机的模型、扩展、记忆等配置加密保存到账号，换机器或重装后按项恢复。")}>
+              <Backup port={port} />
             </Group>
           )}
 

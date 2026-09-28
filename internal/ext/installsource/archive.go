@@ -97,7 +97,7 @@ func unpackPluginZip(path string) (string, func(), error) {
 // planZipPlugin plans from the archive's unpacked contents while keeping the
 // archive itself as the action's source, so apply unpacks the same file the
 // user approved rather than a temporary directory that is already gone.
-func (t *installSourceTool) planZipPlugin(req request, path string) ([]action, []string, error) {
+func (t *Tool) planZipPlugin(req request, path string) ([]action, []string, error) {
 	if req.Kind != "auto" && req.Kind != "plugin" {
 		return nil, nil, newErr(ErrUnsupportedKind, "%s is a plugin package archive, not a %s source", filepath.Base(path), req.Kind)
 	}
@@ -114,7 +114,7 @@ func (t *installSourceTool) planZipPlugin(req request, path string) ([]action, [
 	return []action{act}, warnings, nil
 }
 
-func (t *installSourceTool) preparePluginZip(path, mode string) (string, string, func(), error) {
+func (t *Tool) preparePluginZip(path, mode string) (string, string, func(), error) {
 	// A link is a live pointer at a directory the author keeps editing. An
 	// archive has no such directory — linking one would point at a temporary
 	// copy this call is about to delete.

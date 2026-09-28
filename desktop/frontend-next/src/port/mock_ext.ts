@@ -1,12 +1,12 @@
 import { download } from "./download";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, ScopeLayer, SkillCatalog, SkillEntry } from "./port";
-import { MockLook } from "./mock_look";
+import { MockMarket } from "./mock_market";
 
 // The extension half of the fixture: skills, and the packages that bring them.
 // MockPort extends this rather than holding one, so the class still satisfies
 // AgentPort in a single declaration and the settings pane's whole extension
 // tab can be developed with no Go process at all.
-export class MockExtensions extends MockLook {
+export class MockExtensions extends MockMarket {
   private skillList: SkillEntry[] = [
     {
       name: "review", slashName: "review", description: "复核这一轮改动，给出严重度分级",

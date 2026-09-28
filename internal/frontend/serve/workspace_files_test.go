@@ -22,7 +22,7 @@ func TestWorkspaceFileEditRequiresTheRevisionItRead(t *testing.T) {
 	}
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/workspace/file?path=note.txt")
@@ -61,7 +61,7 @@ func TestWorkspaceFileRefusesPathsOutsideTheRoot(t *testing.T) {
 	dir := testenv.TempDir(t)
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 	resp, err := http.Get(srv.URL + "/workspace/file?path=../secret.txt")
 	if err != nil {

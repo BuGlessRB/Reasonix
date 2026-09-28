@@ -304,7 +304,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	mergeRunInto(ex, runEx)
 	ex.DurationMs = time.Since(start).Milliseconds()
 	return tool.DetailedResult{
-		Output:    appendSessionDataHint(appendSessionDataHint(appendSessionDataHint(out, b.egressNote(prepared.EgressToken)), b.guard.CommandHint(b.workDir, p.Command)), nul.note()),
+		Output:    appendSessionDataHint(appendSessionDataHint(b.confinementNotes(out, wrapped, prepared.EgressToken), b.guard.CommandHint(b.workDir, p.Command)), nul.note()),
 		Execution: ex,
 	}, err
 }
@@ -423,6 +423,9 @@ func (b bash) prepareLaunch(ctx context.Context, sh sandbox.Shell, p bashParams,
 		prepared.Wrapped = false
 		prepared.LinuxSandboxed = false
 		prepared.EnvOverrides = sandbox.SessionTempEnv(sessionDir, false)
+	}
+	if err := refuseLinkedGitMetadata(prepared.Wrapped, spec, lease); err != nil {
+		return sandbox.Prepared{}, probe, nil, err
 	}
 	b.routeEgress(ctx, &prepared)
 	return prepared, probe, lease, nil

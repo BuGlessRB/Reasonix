@@ -28,7 +28,7 @@ func savedProvider(t *testing.T, name string) *config.ProviderEntry {
 func TestAddingASecondDoorReusesTheHostsKey(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	first := postProvider(t, srv.URL, "/providers", `{
@@ -64,7 +64,7 @@ func TestAddingASecondDoorReusesTheHostsKey(t *testing.T) {
 func TestAddingASecondAccountAtOneHostKeepsItsOwnKey(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	postProvider(t, srv.URL, "/providers", `{
@@ -89,7 +89,7 @@ func TestAddingASecondAccountAtOneHostKeepsItsOwnKey(t *testing.T) {
 func TestFirstSourceAtAHostGetsItsOwnKeySlot(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	postProvider(t, srv.URL, "/providers", `{
@@ -111,7 +111,7 @@ func TestANewSourceNeverWritesAnotherProvidersKeySlot(t *testing.T) {
 	if _, err := config.SetCredential("EXISTING_API_KEY", "sk-existing"); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers", `{
@@ -140,7 +140,7 @@ func TestAKeylessSourceElsewhereDoesNotBorrowAFoldedSlot(t *testing.T) {
 	if _, err := config.SetCredential("EXISTING_API_KEY", "sk-existing"); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers", `{
@@ -173,7 +173,7 @@ func TestAddingUnderAnExistingNameIsRefused(t *testing.T) {
 	if _, err := config.SetCredential("EXISTING_API_KEY", "sk-existing"); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers", `{
@@ -194,7 +194,7 @@ func TestAddingUnderAnExistingNameIsRefused(t *testing.T) {
 func TestAKeylessSourceDoesNotInheritARemovedProvidersKey(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	postProvider(t, srv.URL, "/providers", `{
@@ -220,7 +220,7 @@ func TestAKeylessSourceDoesNotInheritARemovedProvidersKey(t *testing.T) {
 func TestReplacingAnEntryKeepsItsSlotOnlyAtItsHost(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/providers", `{

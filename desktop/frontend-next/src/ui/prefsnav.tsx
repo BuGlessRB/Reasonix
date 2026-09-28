@@ -224,7 +224,8 @@ export const SETTINGS: SettingEntry[] = [
   { section: "hooks", anchor: "hooks", title: "自动化", scope: "chosen", apply: "immediate", keywords: ["钩子", "hook", "触发"] },
 
   { section: "ext", anchor: "ext-runtime", title: "运行时", scope: "session", apply: "immediate", keywords: ["扩展", "沙盒"] },
-  { section: "ext", anchor: "plugins", title: "插件包", scope: "machine", apply: "immediate", keywords: ["安装", "市场"] },
+  { section: "ext", anchor: "market", title: "社区市场", scope: "machine", apply: "immediate", keywords: ["市场", "market", "社区", "发现", "下载", "发布", "publish", "主题"] },
+  { section: "ext", anchor: "plugins", title: "插件包", scope: "machine", apply: "immediate", keywords: ["安装"] },
   { section: "ext", anchor: "mcp", title: "外部工具", scope: "chosen", apply: "immediate", keywords: ["mcp", "服务器", "连接外部"] },
   { section: "ext", anchor: "skills", title: "技能", scope: "chosen", apply: "immediate", keywords: ["skill", "技能包"] },
 
@@ -235,6 +236,8 @@ export const SETTINGS: SettingEntry[] = [
   // the window either.
   { section: "remote", anchor: "phone", title: "手机访问", scope: "machine", apply: "immediate", keywords: ["手机", "扫码", "二维码", "局域网", "配对", "phone", "mobile", "qr"] },
   { section: "account", anchor: "account", title: "账号", scope: "account", apply: "immediate", keywords: ["登录", "社区"] },
+  // Shown only while signed in; restoring writes through the ordinary config paths and reloads the runtime.
+  { section: "account", anchor: "backup", title: "云备份", scope: "account", apply: "immediate", keywords: ["备份", "恢复", "换机", "同步", "导出"] },
   { section: "versions", anchor: "versions", title: "版本", scope: "machine", apply: "immediate", keywords: ["更新", "升级"] },
   { section: "memory", anchor: "memory", title: "记忆", scope: "chosen", apply: "immediate", keywords: ["记住", "忘记", "事实"] },
   { section: "usage", anchor: "usage", title: "用量与成本", scope: "machine", apply: "none", keywords: ["token", "花费", "缓存命中"] },

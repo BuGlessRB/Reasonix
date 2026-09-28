@@ -1309,6 +1309,10 @@ func TestPlanGitHubRepoDiscoversMultipleSkills(t *testing.T) {
 	if resp.Actions[0].Name != "gsap-core" || resp.Actions[1].Name != "gsap-timeline" {
 		t.Fatalf("actions = %+v", resp.Actions)
 	}
+	// One address expanding into several skills has to reach a person listed.
+	if !strings.HasPrefix(resp.PlanID, "high:") {
+		t.Fatalf("planId = %q, want a multi-skill expansion graded high", resp.PlanID)
+	}
 	for _, action := range resp.Actions {
 		wantSuffix := filepath.Join(action.Name, skill.SkillFile)
 		if action.Layout != "canonical_dir" || !strings.HasSuffix(action.CanonicalPath, wantSuffix) {
@@ -1323,7 +1327,7 @@ func TestFetchTextAppliesTimeoutAndUA(t *testing.T) {
 	// that a cancelled context propagates as ErrSourceUnreadable.
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)
-	tl := NewTool(Options{ProjectRoot: project, HomeDir: home}).(*installSourceTool)
+	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := tl.fetchText(ctx, "http://example.invalid")
@@ -1342,7 +1346,7 @@ func TestGlobalSkillInstallRootUsesReasonixHome(t *testing.T) {
 	userHomeDir = func() (string, error) { return home, nil }
 	t.Cleanup(func() { userHomeDir = oldUserHomeDir })
 
-	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t)}).(*installSourceTool)
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t)})
 	root, err := tl.skillInstallRoot("global")
 	if err != nil {
 		t.Fatalf("skillInstallRoot: %v", err)
@@ -1360,7 +1364,7 @@ func TestFetchTextAuthMapsToErrAuthRequired(t *testing.T) {
 	defer srv.Close()
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)
-	tl := NewTool(Options{ProjectRoot: project, HomeDir: home, HTTPClient: srv.Client()}).(*installSourceTool)
+	tl := NewTool(Options{ProjectRoot: project, HomeDir: home, HTTPClient: srv.Client()})
 	_, err := tl.fetchText(context.Background(), srv.URL)
 	if !errors.Is(err, ErrAuthRequired) {
 		t.Errorf("expected ErrAuthRequired, got %v", err)
@@ -1371,7 +1375,7 @@ func TestFetchTextRefusesInternalAddress(t *testing.T) {
 	// SSRF guard: an install source pointed at cloud-metadata / internal IPs must
 	// be refused at dial time, not fetched. These are IP literals so no real
 	// network or DNS is involved — the guard blocks before connecting.
-	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)}).(*installSourceTool)
+	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
 	for _, target := range []string{
 		"http://169.254.169.254/latest/meta-data/", // cloud metadata
 		"http://10.0.0.1/",                         // RFC1918 internal
@@ -1885,7 +1889,7 @@ func TestGitHubPluginPlanMatchesApply(t *testing.T) {
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return src, "cafe0001", func() {}, nil
 	}
@@ -1940,7 +1944,7 @@ func TestGitHubClaudeMarketplacePlansAndAppliesRelativePlugins(t *testing.T) {
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	cloneCalls := 0
 	cleanupCalls := 0
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
@@ -2003,7 +2007,7 @@ func TestGitHubClaudeMarketplaceNameSelectsOnePlugin(t *testing.T) {
 	}
 
 	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
 	}
@@ -2025,7 +2029,7 @@ func TestGitHubClaudeMarketplaceRejectsEscapingRelativeSource(t *testing.T) {
 }`)
 
 	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
 	}
@@ -2056,7 +2060,7 @@ func TestGitHubClaudeMarketplaceCleansCloneWhenApprovalIsDenied(t *testing.T) {
 			return errors.New("not approved")
 		},
 	})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() { cleanupCalls++ }, nil
 	}
@@ -2086,7 +2090,7 @@ func TestGitHubClaudeMarketplaceCleansPreparedPinnedEntryWhenLaterEntryFails(t *
 
 	mainCleanup, pinnedCleanup := 0, 0
 	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(_ context.Context, source, _ string) (string, string, func(), error) {
 		if strings.Contains(source, "acme/external") {
 			return externalRoot, pinnedSHA, func() { pinnedCleanup++ }, nil
@@ -2127,7 +2131,7 @@ func TestGitHubClaudeMarketplaceAcceptsBarePathsAndSkipsUnsupported(t *testing.T
 	writeFile(t, filepath.Join(marketplaceRoot, "plugins", "beta", "skills", "beta-legal", "SKILL.md"), "---\nname: beta-legal\ndescription: Plugin context\n---\nPlugin context")
 
 	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
 	}
@@ -2172,7 +2176,7 @@ func TestGitHubClaudeMarketplaceSelectedUnsupportedSourceFails(t *testing.T) {
 	writeFile(t, filepath.Join(marketplaceRoot, "alpha", ".claude-plugin", "plugin.json"), `{"name":"alpha-legal"}`)
 
 	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
 	}
@@ -2200,7 +2204,7 @@ func TestGitHubClaudeMarketplaceAcceptsPinnedGitHubURLObject(t *testing.T) {
 
 	cleanupCalls := 0
 	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: testenv.TempDir(t)})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(_ context.Context, source, _ string) (string, string, func(), error) {
 		if source == "https://github.com/acme/critter-marketplace" {
 			return marketplaceRoot, "parent", func() {}, nil
@@ -2240,7 +2244,7 @@ func TestGitHubClaudeMarketplacePlanIDStableAcrossPlanAndApply(t *testing.T) {
 
 	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: testenv.TempDir(t), HomeDir: home})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return marketplaceRoot, "cafe0001", func() {}, nil
 	}
@@ -2286,7 +2290,7 @@ func TestGitHubPluginApplyRefusesUnpinnableDrift(t *testing.T) {
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	calls := 0
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		calls++
@@ -2330,7 +2334,7 @@ func TestCopyMaterializesInRootSymlinkedCommands(t *testing.T) {
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return src, "cafe0001", func() {}, nil
 	}
@@ -2373,7 +2377,7 @@ func TestCopyRefusesUnmaterializableSymlinkCommands(t *testing.T) {
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return src, "cafe0001", func() {}, nil
 	}
@@ -2418,7 +2422,7 @@ func TestFailedReplaceKeepsExistingPluginInstall(t *testing.T) {
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	current, commit := v1, "cafe0001"
 	tool.preparePlugin = func(ctx context.Context, source, mode string) (string, string, func(), error) {
 		return current, commit, func() {}, nil
@@ -2490,7 +2494,7 @@ func TestBackupPathCannotCollideWithSiblingPlugin(t *testing.T) {
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
-	tool := tl.(*installSourceTool)
+	tool := tl
 	sources := map[string]string{
 		"https://github.com/acme/foo":     fooV1,
 		"https://github.com/acme/sibling": sibling,

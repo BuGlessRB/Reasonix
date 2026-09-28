@@ -45,7 +45,7 @@ func TestSessionsListReadsSidecarsNotTranscripts(t *testing.T) {
 
 	ctrl := control.New(control.Options{SessionDir: dir})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/sessions")

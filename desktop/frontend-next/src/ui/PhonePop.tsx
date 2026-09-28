@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import type { HubPort } from "../port/hub";
-import type { PairedDevice } from "../port/share";
+import type { CloudDevice, PairedDevice } from "../port/share";
 import { copyText } from "./CopyButton";
 import { useDismiss } from "./dismiss";
 import { clock, deviceLabel, type Share, useShare } from "./PhoneAccess";
@@ -21,10 +21,12 @@ export function PhonePop({ hub }: { hub: HubPort }) {
   // A failure in the card is said in the card, next to what failed.
   const [failure, setFailure] = useState("");
   const share = useShare(hub, useCallback((e: unknown) => setFailure(reason(e)), []));
-  const { refresh, newCode } = share;
+  const { refresh, newCode, newCloudCode } = share;
   const shareOpen = share.st?.open ?? false;
   const offerHeld = useRef(false);
   offerHeld.current = share.offer !== null;
+  const cloudOfferHeld = useRef(false);
+  cloudOfferHeld.current = share.cloudOffer !== null;
 
   // Opening the card is asking for a code, once per opening: after a phone
   // spends it, the next one is asked for by hand. Another surface may have shut
@@ -39,20 +41,25 @@ export function PhonePop({ hub }: { hub: HubPort }) {
     let live = true;
     refresh()
       .then((now) => {
-        if (!live || minted.current || !now?.open || (offerHeld.current && now.offerExpires)) return;
+        if (!live || minted.current) return;
         minted.current = true;
-        void newCode();
+        if (now?.cloudRemote?.online && !cloudOfferHeld.current) {
+          void newCloudCode();
+        } else if (now?.open && !(offerHeld.current && now.offerExpires)) {
+          void newCode();
+        }
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [open, refresh, newCode]);
+  }, [open, refresh, newCode, newCloudCode]);
 
-  const note = usePresenceNote(share.st?.devices, open);
+  const localNote = usePresenceNote(share.st?.devices, open);
+  const cloudNote = useCloudPresenceNote(share.st?.cloudDevices, open);
 
   if (!share.st) return null;
-  const online = share.st.devices.filter((d) => d.online).length;
+  const online = share.st.devices.filter((d) => d.online).length + share.st.cloudDevices.length;
   return (
     <div className="phonepop" ref={box}>
       <button
@@ -61,8 +68,8 @@ export function PhonePop({ hub }: { hub: HubPort }) {
         data-live={shareOpen ? "" : undefined}
         data-online={online > 0 ? "" : undefined}
         aria-expanded={open}
-        aria-label={t("手机扫码访问")}
-        title={shareOpen ? t("手机访问已开启 · {n} 台在线", { n: online }) : t("手机扫码访问")}
+        aria-label={t("设备访问")}
+        title={online > 0 ? t("设备访问 · {n} 台在线", { n: online }) : t("设备访问")}
         onClick={() => setOpen((v) => !v)}
       >
         <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -74,7 +81,7 @@ export function PhonePop({ hub }: { hub: HubPort }) {
         {online > 0 && <b className="pc-count">{online}</b>}
       </button>
       {open && <PhoneCard share={share} failure={failure} />}
-      {note && <div className="pc-note-pop" role="status">{note}</div>}
+      {(cloudNote || localNote) && <div className="pc-note-pop" role="status">{cloudNote || localNote}</div>}
     </div>
   );
 }
@@ -93,6 +100,13 @@ export function presenceNote(prev: PairedDevice[], next: PairedDevice[]): string
     if (!next.some((d) => d.id === p.id)) said = t("设备 {n} 已断开", { n: i + 1 });
   });
   return said;
+}
+
+export function cloudPresenceNote(prev: CloudDevice[], next: CloudDevice[]): string {
+  const connected = next.find((device) => !prev.some((was) => was.id === device.id));
+  if (connected) return t("Web Studio 已连接");
+  const disconnected = prev.find((device) => !next.some((now) => now.id === device.id));
+  return disconnected ? t("Web Studio 已断开") : "";
 }
 
 /** A line under the button when a phone comes or goes, for as long as it takes
@@ -116,11 +130,29 @@ function usePresenceNote(devices: PairedDevice[] | undefined, open: boolean): st
   return open ? "" : note;
 }
 
-/** The card's own arrangement of the share: the switch in the header, the code
- *  as the one large thing, everything else a line. The settings block keeps
- *  the long form, where there is room to explain. */
+function useCloudPresenceNote(devices: CloudDevice[] | undefined, open: boolean): string {
+  const [note, setNote] = useState("");
+  const before = useRef<CloudDevice[] | null>(null);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
+  useEffect(() => {
+    if (!devices) return;
+    const prev = before.current;
+    before.current = devices;
+    if (!prev || open) return;
+    const said = cloudPresenceNote(prev, devices);
+    if (!said) return;
+    setNote(said);
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setNote(""), 3200);
+  }, [devices, open]);
+  return open ? "" : note;
+}
+
+/** The card leads with the account-gated Internet route, then keeps the LAN
+ *  listener as the faster, explicitly enabled alternative. */
 function PhoneCard({ share, failure }: { share: Share; failure: string }) {
-  const { st, ip, pick, offer, busy, newCode, toggle, revoke } = share;
+  const { st, ip, pick, offer, cloudOffer, busy, newCode, newCloudCode, toggle, revoke } = share;
   const [copied, setCopied] = useState(false);
   const [arming, setArming] = useState("");
   const arm = useRef<number | null>(null);
@@ -151,35 +183,88 @@ function PhoneCard({ share, failure }: { share: Share; failure: string }) {
   };
 
   return (
-    <div className="phonecard" role="dialog" aria-label={t("手机扫码访问")}>
+    <div className="phonecard" role="dialog" aria-label={t("设备访问")}>
       <header>
         <span>
-          <b>{t("手机访问")}</b>
-          <small>{noNetwork ? t("这台电脑现在没有局域网地址") : t("同一网络里的手机扫码即可操作这里的会话")}</small>
+          <b>{t("设备访问")}</b>
+          <small>{t("手机扫码即可进入这台电脑的 Studio")}</small>
         </span>
-        <Switch data-action="share.toggle" on={st.open} busy={busy || noNetwork} label={t("允许手机访问")} onClick={() => void toggle()} />
       </header>
 
       {failure && <p className="pc-err" role="alert">{failure}</p>}
 
-      {st.open && (
-        <div className="pc-code">
-          {offer ? (
+      {st.cloudRemote?.online && (
+        <div className="pc-code" data-cloud="">
+          {cloudOffer ? (
             <>
-              <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(offer.qr)}`} alt={t("配对二维码")} width={148} height={148} />
-              <span className="pc-when">{t("扫码配对 · {time} 前有效", { time: clock(offer.expires) })}</span>
+              <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(cloudOffer.qr)}`} alt={t("互联网连接二维码")} width={148} height={148} />
+              <span className="pc-when">{t("手机扫码 · 不在同一网络也能连接")}</span>
               <span className="pc-acts">
-                <button data-action="share.copy" onClick={() => void copy(offer.url)}>{copied ? t("已复制") : t("复制链接")}</button>
+                <button data-action="share.cloud-copy" onClick={() => void copy(cloudOffer.url)}>{copied ? t("已复制") : t("复制链接")}</button>
                 <i aria-hidden="true" />
-                <button data-action="share.offer" disabled={busy} onClick={() => void newCode()}>{t("换一个")}</button>
+                <button data-action="share.cloud-offer" disabled={busy} onClick={() => void newCloudCode()}>{t("刷新二维码")}</button>
               </span>
             </>
           ) : (
-            <button className="pc-mint" data-action="share.offer" disabled={busy} onClick={() => void newCode()}>
-              {t("显示配对二维码")}
+            <button className="pc-mint" data-action="share.cloud-offer" disabled={busy} onClick={() => void newCloudCode()}>
+              {busy ? t("正在生成二维码…") : t("显示互联网连接二维码")}
             </button>
           )}
         </div>
+      )}
+
+      <section>
+        <div className="pc-hd">
+          <span>
+            <b>{t("同一网络直连")}</b>
+            <small>{t("速度更快，不经过中转")}</small>
+          </span>
+          <Switch data-action="share.toggle" on={st.open} busy={busy || noNetwork} label={t("允许局域网访问")} onClick={() => void toggle()} />
+        </div>
+
+        {st.open && (
+          <div className="pc-code">
+            {offer ? (
+              <>
+                <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(offer.qr)}`} alt={t("配对二维码")} width={148} height={148} />
+                <span className="pc-when">{t("局域网配对 · {time} 前有效", { time: clock(offer.expires) })}</span>
+                <span className="pc-acts">
+                  <button data-action="share.copy" onClick={() => void copy(offer.url)}>{copied ? t("已复制") : t("复制链接")}</button>
+                  <i aria-hidden="true" />
+                  <button data-action="share.offer" disabled={busy} onClick={() => void newCode()}>{t("换一个")}</button>
+                </span>
+              </>
+            ) : (
+              <button className="pc-mint" data-action="share.offer" disabled={busy} onClick={() => void newCode()}>
+                {t("显示局域网二维码")}
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+
+      {st.cloudDevices.length > 0 && (
+        <section>
+          <div className="pc-hd">
+            <b>{t("互联网远程")}</b>
+            <small>{st.cloudDevices.length}</small>
+          </div>
+          {st.cloudDevices.map((device) => (
+            <div className="pc-dev" key={device.id} data-online="">
+              <i aria-hidden="true" />
+              <span>{t("设备 {n}", { n: device.ordinal })}</span>
+              <small>{device.name} · {t("在线")}</small>
+              <button
+                data-action={arming === device.id ? "share.revoke" : "share.ask-revoke"}
+                data-target={device.id}
+                data-armed={arming === device.id ? "" : undefined}
+                onClick={() => disconnect(device.id)}
+              >
+                {arming === device.id ? t("确认断开") : t("断开")}
+              </button>
+            </div>
+          ))}
+        </section>
       )}
 
       {st.addresses.length > 1 && (
@@ -220,7 +305,11 @@ function PhoneCard({ share, failure }: { share: Share; failure: string }) {
         </section>
       )}
 
-      <p className="pc-note">{t("局域网明文连接，只在可信的网络中开启")}</p>
+      <p className="pc-note">
+        {st.cloudRemote?.online
+          ? t("互联网连接需要登录同一账号，内容端到端加密；局域网直连只在可信网络中开启。")
+          : t("登录 Reasonix 账号后，可生成在外网也能使用的连接二维码。")}
+      </p>
     </div>
   );
 }

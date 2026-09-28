@@ -90,3 +90,20 @@ jobs:
 		}
 	}
 }
+
+func TestFingerprintMustPinTheScriptsItRuns(t *testing.T) {
+	contract, err := loadAndValidate("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var without []string
+	for _, name := range contract.FingerprintFiles {
+		if name != "scripts/windows-signing-lib.ps1" {
+			without = append(without, name)
+		}
+	}
+	contract.FingerprintFiles = without
+	if err := validateContract("../..", contract); err == nil {
+		t.Fatal("a dot-sourced signing script left out of fingerprint_files passed validation")
+	}
+}

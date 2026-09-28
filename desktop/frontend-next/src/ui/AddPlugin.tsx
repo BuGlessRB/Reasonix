@@ -17,7 +17,7 @@ const RISK_TITLE: Record<string, string> = {
   low: "以下项目仅添加文件",
 };
 
-const ORDER = ["high", "medium", "low"];
+export const ORDER = ["high", "medium", "low"];
 
 interface Props {
   port: AgentPort;
@@ -27,12 +27,14 @@ interface Props {
   // already known, so the box is skipped and the plan is read against what is
   // installed — a new version's new hook is the thing worth seeing.
   updating?: PluginPackage;
+  // A source someone already chose, such as a plugin named in a restored backup.
+  source?: string;
 }
 
-export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
+export function AddPlugin({ port, onClose, onInstalled, updating, source }: Props) {
   // Mounted only while open, so this component is the layer Escape closes.
   useEscape(true, onClose);
-  const [text, setText] = useState(updating?.source ?? "");
+  const [text, setText] = useState(updating?.source ?? source ?? "");
   const [plan, setPlan] = useState<PluginPlan | null>(null);
   const [done, setDone] = useState<PluginPlan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -230,7 +232,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating }: Props) {
 // JSON. What the user needs is the same facts as rows they can scan, so the
 // structured counts are rendered here and the kernel's wording stays behind a
 // fold — where a reason this UI does not know about yet is still readable.
-function Candidate({ a }: { a: PluginAction }) {
+export function Candidate({ a }: { a: PluginAction }) {
   const meta = [a.version, a.manifestKind, a.transport].filter(Boolean).join(" · ");
   const runs = executes(a);
   const adds = contributes(a);
@@ -347,7 +349,7 @@ function contributes(a: PluginAction): string[] {
 // "Written" and "running" are different outcomes: a reload refused mid-turn
 // leaves the package on disk and out of this session, and saying so is the
 // difference between waiting and re-installing.
-function Outcome({ plan }: { plan: PluginPlan }) {
+export function Outcome({ plan }: { plan: PluginPlan }) {
   const state = plan.reloadError ? "action_required" : plan.ok ? "ready" : "issue";
   return (
     <div className="outcome" data-state={state}>

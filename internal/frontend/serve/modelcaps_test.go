@@ -59,7 +59,7 @@ func modelsByRef(t *testing.T, cfgBody string) map[string]modelEntry {
 	ctrl := control.New(control.Options{
 		Sink: bc, Label: "text-only", ModelRef: "mixed/text-only", SessionDir: testenv.TempDir(t),
 	})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/models")

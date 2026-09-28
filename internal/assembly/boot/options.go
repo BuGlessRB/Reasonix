@@ -7,6 +7,7 @@ import (
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/platform/browser"
+	"reasonix/internal/platform/gitcmd"
 
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/event"
@@ -127,6 +128,9 @@ type Options struct {
 	SandboxNetworkOverride *bool
 	SandboxBashOverride    string
 	WorkspaceOnly          bool
+	// WorkspaceRepo is the git identity the session opened with; a rebuild of
+	// the same workspace passes it on rather than resolving it again.
+	WorkspaceRepo gitcmd.Repo
 	// SessionTemp is the session-private temp manager; Rebuild reuses old's.
 	SessionTemp *sessiontemp.Manager
 	// BrowserSession is the agent's browser and the tabs it has open; Rebuild

@@ -44,3 +44,33 @@ function literalCut(link: Node): number {
   if (!text || !link.url || (link.url !== text && !link.url.endsWith(text))) return -1;
   return link.url.search(CJK_PUNCT);
 }
+
+// remarkCodeSpanLink makes a code span a link when its whole content is one web
+// address. mdast keeps a span (inlineCode) apart from a fenced block (code), so
+// a listing never turns into a link; a span already inside a link stays as is.
+export function remarkCodeSpanLink() {
+  return (tree: Node) => linkSpans(tree);
+}
+
+function linkSpans(node: Node) {
+  const kids = node.children;
+  if (!kids || node.type === "link") return;
+  for (let i = 0; i < kids.length; i++) {
+    const n = kids[i];
+    if (n.type === "inlineCode" && n.value && isWebAddress(n.value)) {
+      kids[i] = { type: "link", url: n.value, children: [n] };
+      continue;
+    }
+    linkSpans(n);
+  }
+}
+
+function isWebAddress(s: string): boolean {
+  if (/\s/.test(s)) return false;
+  try {
+    const u = new URL(s);
+    return (u.protocol === "http:" || u.protocol === "https:") && u.host !== "";
+  } catch {
+    return false;
+  }
+}

@@ -63,7 +63,7 @@ func (h *Hub) CloudDesktop(ctx context.Context, input remotecloud.DesktopRequest
 	if len(input.Body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req = req.WithContext(withDeviceReach(req.Context(), deviceID, 0))
+	req = req.WithContext(withDeviceReach(req.Context(), deviceID, input.Ordinal))
 	recorder := &cloudDesktopRecorder{header: make(http.Header)}
 	h.Handler().ServeHTTP(recorder, req)
 	if recorder.tooLarge {

@@ -146,14 +146,15 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const closeMeter = useCallback(() => setMeterOpen(false), []);
   useDismiss(meterOpen, meterRef, closeMeter);
   const flow = useRef<HTMLDivElement>(null);
+  const running = s.running || !!status?.running; // A paired device can join after turn_started.
   // Elapsed is a clock reading and belongs on the tick. Throughput is not: it
   // follows the deltas themselves, and expires rather than being re-derived.
-  const tps = useRate(s.outWindow, s.running);
-  const live = useLiveWork(s.items, s.running);
+  const tps = useRate(s.outWindow, running);
+  const live = useLiveWork(s.items, running);
   // The shape of the last minute, kept while a turn runs. A number alone says
   // how fast it is now; the line says whether it is climbing, stalling or
   // arriving in bursts, which is the question someone watching a run has.
-  const trail = useTrail(tps, s.running);
+  const trail = useTrail(tps, running);
   // What this turn has actually put on the wire: input counted whether or not
   // the prefix cache took it, and output as it comes back.
   const sent = s.metrics.hit + s.metrics.miss;
@@ -202,17 +203,17 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           // fallback for changes that arrive without an event.
           if (ev.kind === "mcp_surface_ready" || ev.kind === "extension_status") reloadMcp();
           if (ev.kind === "todo_progress") void refreshTodos(port, dispatch);
-          // A prompt opening or closing changes who the turn is waiting on, and
-          // the kernel answers that in /status rather than in the frame. Same
-          // shape the queue uses: the event says something moved, the read says
-          // what is true. Without it the run keeps glowing until the next poll.
-          if (ev.kind === "approval_request" || ev.kind === "ask_request") refreshStatus();
+          // A turn or prompt moving changes /status. Re-read even for hidden
+          // panes: a client may have missed turn_started, and a stale running
+          // snapshot otherwise keeps the sidebar live after turn_done.
+          if (ev.kind === "turn_started" || ev.kind === "turn_done" || ev.kind === "approval_request" || ev.kind === "ask_request") refreshStatus();
           // Settling one is the other half of the same move, and the receipt
           // rides as a field rather than a kind of its own.
           else if ("decisionReceipt" in ev && ev.decisionReceipt) refreshStatus();
         },
         () => {
           rebuild();
+          refreshStatus();
         },
       ),
     [port, reloadMcp, rebuild, refreshStatus],
@@ -264,11 +265,11 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   }, [port]);
 
   useEffect(() => {
-    if (!s.running) {
+    if (!running) {
       refreshWallet();
       void refreshTodos(port, dispatch);
     }
-  }, [s.running, refreshWallet, port]);
+  }, [running, refreshWallet, port]);
 
   useEffect(() => {
     if (pulse) refreshStatus();
@@ -323,11 +324,13 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const counts = useMemo(() => {
     let steps = 0;
     let steer = 0;
+    let wrote = 0;
     for (const i of s.items) {
+      if (i.t === "tool" && !i.running && !i.tool.readOnly) wrote++;
       if (i.t === "tool") steps++;
       else if (i.t === "user" && i.pending) steer++;
     }
-    return { steps, steer };
+    return { steps, steer, wrote };
   }, [s.revision]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
@@ -337,8 +340,9 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     reloadMcp();
     // A finished turn is exactly when the kernel has one more checkpoint.
     port.checkpoints().then(setCheckpoints).catch(() => {});
-    port.changes().then(setTree).catch(() => setTree(null));
-  }, [reloadMcp, port, status?.sessionPath, s.running]);
+  }, [reloadMcp, port, status?.sessionPath, running]);
+  // A call that may write can have moved the tree before the turn ends.
+  useEffect(() => void port.changes().then(setTree).catch(() => setTree(null)), [port, status?.sessionPath, running, counts.wrote]);
 
   // One turn can be dozens of model round trips — the session this was measured
   // on ran thirty, from 9k tokens to 57k. Reading the gauge only at the turn
@@ -353,7 +357,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   const roundTrips = s.metrics.hit + s.metrics.miss;
   useEffect(() => {
     port.context().then(setCtx).catch(() => setCtx(null));
-  }, [port, roundTrips, folds, status?.sessionPath, s.running]);
+  }, [port, roundTrips, folds, status?.sessionPath, running]);
 
   // The sidebar has to hear about this pane's session twice: when the first
   // turn mints the file (before that there is no row to show) and when the turn
@@ -361,17 +365,17 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // brand-new conversation only appeared in the tree once its pane was closed.
   useEffect(() => {
     onSessionChanged();
-  }, [status?.sessionPath, s.running, onSessionChanged]);
+  }, [status?.sessionPath, running, onSessionChanged]);
 
   // /status is the only source for background jobs and for settings the run does
   // not echo, so a live turn has to re-read it rather than infer from events.
   useEffect(() => {
-    if (!s.running || !visible) return;
+    if (!running || !visible) return;
     const tick = () => refreshStatus();
     tick();
     const t = setInterval(tick, 250);
     return () => clearInterval(t);
-  }, [s.running, visible, refreshStatus]);
+  }, [running, visible, refreshStatus]);
 
   useEffect(() => {
     void port.surfaceSlots().then(setSlots).catch(() => setSlots({}));
@@ -407,7 +411,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // happened, and the composer was emptied on the way in.
   const submit = useCallback(
     async (text: string) => {
-      const steering = s.running;
+      const steering = running;
       const id = localId();
       dispatch({ kind: "__user", text, pending: steering, id } as never);
       trajDispatch({ kind: "__user", text });
@@ -427,7 +431,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         return false;
       }
     },
-    [port, s.running, refreshStatus, fail],
+    [port, running, refreshStatus, fail],
   );
 
   const { queue, onQueueEdit, onQueueMove, onQueueRetry, onQueueRefresh, onQueuePause, onQueueRead, onQueueSendNow, onQueueCancel } = useQueueActions({
@@ -486,7 +490,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   );
   const find = useFind(s.items, findPulse, active, useCallback(() => showView("flow"), [showView]));
 
-  const { quote, reply, onResend } = useReplyActions({ port, items: s.items, checkpoints, running: s.running, model: status?.label, submit, onSettings, onRunDetail: () => showView("analysis"), onError: fail });
+  const { quote, reply, onResend } = useReplyActions({ port, items: s.items, checkpoints, running, model: status?.label, submit, onSettings, onRunDetail: () => showView("analysis"), onError: fail });
 
   // Where the bottom is moves as blocks mount under it, so this only asks the
   // transcript to follow again and lets it scroll itself into place.
@@ -497,7 +501,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // Chinese literals that the reducer had written — a translation key deciding
   // whether the run reads as moving.
   const blocked = hasPendingDecision(status);
-  const run = runState({ blocked, running: s.running, hasItems: s.items.length > 0, terminal: s.terminal });
+  const run = runState({ blocked, running, hasItems: s.items.length > 0, terminal: s.terminal });
   const cost = money(s.metrics.cost, s.metrics.currency);
   const cacheTokens = s.metrics.hit + s.metrics.miss;
   const cacheRate = cacheTokens > 0 ? Math.round((s.metrics.hit / cacheTokens) * 100) : null;
@@ -512,14 +516,14 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
       title,
       steer: counts.steer,
       run,
-      live: s.running || blocked,
+      live: running || blocked,
       cost,
       contextPercent,
       context: ctx,
       mcp,
       wallet: walletDisplay,
     });
-  }, [rt.id, onReport, status, title, counts.steer, run, s.running, blocked, cost, contextPercent, ctx, mcp, walletDisplay]);
+  }, [rt.id, onReport, status, title, counts.steer, run, running, blocked, cost, contextPercent, ctx, mcp, walletDisplay]);
 
   return (
     <section
@@ -610,7 +614,8 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             onSurfaces={setSurfaces}
             scheme={theme === "light" ? "light" : "dark"}
             changes={tree?.changes ?? []}
-            running={s.running}
+            running={running}
+            wrote={counts.wrote}
             remote={!!rt.host}
             onCloseManual={() => onManualBrowser?.(false)}
             onExternal={(url) => void port.openExternal(url).catch(fail)}
@@ -656,7 +661,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             role="status"
             aria-live="polite"
             data-waiting={blocked ? "" : undefined}
-            data-idle={s.running || blocked ? undefined : ""}
+            data-idle={running || blocked ? undefined : ""}
           >
             <RMark />
             <span>{t(s.doing || "运行中")}</span>
@@ -666,7 +671,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         <div className="composeaux">
           <Queue
             queue={queue}
-            running={s.running}
+            running={running}
             onRead={onQueueRead}
             onSendNow={onQueueSendNow}
             onEdit={onQueueEdit}
@@ -694,7 +699,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           )}
         </div>
         {alert && <div className="cmpalert">{alert}</div>}
-        <Composer port={port} status={status} running={s.running} quote={quote} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} pulse={pulse} />
+        <Composer port={port} status={status} running={running} quote={quote} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} pulse={pulse} />
         <div className="studio-meterrail" ref={meterRef} aria-label={t("运行统计")}>
           <div className="studio-speed-anchor">
             <button
@@ -705,10 +710,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             >
               <StudioIcon name="gauge" />
               <Spark points={trail} w={44} h={13} />
-              <b>{tps > 0 ? tps.toFixed(1) : "—"}</b><span>tok/s</span><i data-live={s.running ? "" : undefined} aria-hidden="true" />
+              <b>{tps > 0 ? tps.toFixed(1) : "—"}</b><span>tok/s</span><i data-live={running ? "" : undefined} aria-hidden="true" />
             </button>
             <div className="studio-speed-detail" id="studio-speed-detail" role="tooltip">
-              <header><b>{t("生成速度")}</b><small>{s.running ? t("实时更新") : t("最近一轮")}</small></header>
+              <header><b>{t("生成速度")}</b><small>{running ? t("实时更新") : t("最近一轮")}</small></header>
               <dl>
                 <div><dt>{t("当前速度")}</dt><dd>{tps > 0 ? `${tps.toFixed(1)} tok/s` : "—"}</dd></div>
                 <div><dt>{t("整轮平均")}</dt><dd>{speed.average > 0 ? `${speed.average.toFixed(1)} tok/s` : "—"}</dd></div>
@@ -768,7 +773,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             jobs={status?.jobs ?? NO_JOBS}
             mcp={mcp}
             rate={tps}
-            done={!s.running}
+            done={!running}
             posture={posture(run, blocked)}
             plan={s.plan}
             wallet={wallet}

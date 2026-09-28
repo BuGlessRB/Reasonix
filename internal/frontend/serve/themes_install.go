@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 
 	"reasonix/internal/ext/theme"
@@ -84,18 +85,31 @@ func (s *Server) openThemeFolder(w http.ResponseWriter, _ *http.Request) {
 // revealFolder starts the platform's file manager and does not wait for it:
 // explorer.exe exits non-zero even when the window opened.
 var revealFolder = func(dir string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("explorer.exe", dir)
-	case "darwin":
-		cmd = exec.Command("open", dir)
-	default:
-		cmd = exec.Command("xdg-open", dir)
-	}
+	cmd := folderCommand(dir)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 	go func() { _ = cmd.Wait() }()
 	return nil
+}
+
+// folderCommand names explorer.exe by its %SystemRoot% path: a launch
+// environment can hand Studio a PATH without that directory.
+func folderCommand(dir string) *exec.Cmd {
+	switch runtime.GOOS {
+	case "windows":
+		explorer := "explorer.exe"
+		root := os.Getenv("SystemRoot")
+		if root == "" {
+			root = os.Getenv("windir")
+		}
+		if root != "" {
+			explorer = filepath.Join(root, "explorer.exe")
+		}
+		return exec.Command(explorer, dir)
+	case "darwin":
+		return exec.Command("open", dir)
+	default:
+		return exec.Command("xdg-open", dir)
+	}
 }

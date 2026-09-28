@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -134,6 +135,7 @@ func bwrapBaseArgs(spec Spec) []string {
 			args = append(args, "--bind", root, root)
 		}
 	}
+	args = append(args, bwrapGitMetadataArgs(spec)...)
 	args = append(args, bwrapForbidReadArgs(spec.ForbidReadRoots)...)
 	// Masks last so no later mount re-exposes an endpoint. A pathname socket
 	// lives in the mount namespace, so --unshare-net misses it and
@@ -142,6 +144,43 @@ func bwrapBaseArgs(spec Spec) []string {
 		args = append(args, "--ro-bind", "/dev/null", p)
 	}
 	return args
+}
+
+// bwrapGitMetadataArgs pins existing protected directories as mount points, which
+// rename and rmdir refuse, and binds protected files and trees read-only; paths
+// beneath a tree are left to it, so an over-budget group costs one mount. A dir
+// holding a writable root is skipped (rebinding hides the mounts beneath), and
+// only existing non-symlinks are mount targets: binding a link exposes its target.
+func bwrapGitMetadataArgs(spec Spec) []string {
+	meta := gitMetadataForSpec(spec)
+	paths := meta.Paths
+	for _, common := range meta.Commons {
+		paths = append(paths, gitGroupPaths(common, gitGroupMaxMounts)...)
+	}
+	var trees []string
+	for _, p := range paths {
+		if p.Tree {
+			trees = append(trees, p.Path)
+		}
+	}
+	writable := writableDirsForSpec(spec)
+	var out []string
+	for _, p := range paths {
+		if slices.ContainsFunc(trees, func(t string) bool { return strings.HasPrefix(p.Path, t+string(filepath.Separator)) }) {
+			continue
+		}
+		info, err := os.Lstat(p.Path)
+		if err != nil {
+			continue
+		}
+		switch {
+		case (p.Tree && info.IsDir()) || (!p.Tree && !p.Pin && info.Mode().IsRegular()):
+			out = append(out, "--ro-bind", p.Path, p.Path)
+		case p.Pin && info.IsDir() && !slices.ContainsFunc(writable, func(w string) bool { return pathWithin(p.Path, w) }):
+			out = append(out, "--bind", p.Path, p.Path)
+		}
+	}
+	return out
 }
 
 func bwrapTmpMountArgs(spec Spec) []string {

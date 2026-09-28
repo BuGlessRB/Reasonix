@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/platform/gitcmd"
 	"reasonix/internal/platform/worktree"
 )
 
@@ -45,14 +46,15 @@ type Entry struct {
 type Store struct {
 	managedRoot string
 	workspace   string
+	repo        gitcmd.Repo
 	mu          sync.Mutex
 	entries     map[string]*Entry
 }
 
 // NewStore keeps worktrees under managedRoot and answers for results taken
-// from workspaceRoot.
-func NewStore(managedRoot, workspaceRoot string) *Store {
-	return &Store{managedRoot: managedRoot, workspace: workspaceRoot, entries: map[string]*Entry{}}
+// from workspaceRoot, whose git identity repo was resolved when it opened.
+func NewStore(managedRoot, workspaceRoot string, repo gitcmd.Repo) *Store {
+	return &Store{managedRoot: managedRoot, workspace: workspaceRoot, repo: repo, entries: map[string]*Entry{}}
 }
 
 // Begin checks the workspace out into a fresh worktree. A workspace git cannot
@@ -61,7 +63,7 @@ func (s *Store) Begin(ctx context.Context, workspaceRoot string) (*Entry, error)
 	if s == nil {
 		return nil, errUnavailable
 	}
-	snap, err := worktree.TakeSnapshot(ctx, workspaceRoot)
+	snap, err := worktree.TakeSnapshot(ctx, s.repo)
 	if err != nil {
 		return nil, tool.Refusal{Code: CodeNotGit, Message: "worktree isolation needs a Git workspace with a commit: " + err.Error()}
 	}

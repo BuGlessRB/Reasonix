@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/platform/gitcmd"
 	"reasonix/internal/runtime/isolation"
 )
 
@@ -30,7 +31,7 @@ func TestTaskSchemaOffersIsolationOnlyWhenSet(t *testing.T) {
 	if schemaOffersIsolation(t, tt) {
 		t.Fatal("isolation offered without a runner")
 	}
-	tt.SetIsolation(isolation.NewStore(testenv.TempDir(t), testenv.TempDir(t)), testenv.TempDir(t), func(context.Context, isolation.Run) (isolation.Outcome, error) {
+	tt.SetIsolation(isolation.NewStore(testenv.TempDir(t), testenv.TempDir(t), gitcmd.Repo{}), testenv.TempDir(t), func(context.Context, isolation.Run) (isolation.Outcome, error) {
 		return isolation.Outcome{}, nil
 	})
 	if !schemaOffersIsolation(t, tt) {
@@ -59,7 +60,7 @@ func TestIsolatedTaskRefusals(t *testing.T) {
 		t.Fatalf("no isolation: err = %v", err)
 	}
 	ran := false
-	tt.SetIsolation(isolation.NewStore(testenv.TempDir(t), testenv.TempDir(t)), testenv.TempDir(t), func(context.Context, isolation.Run) (isolation.Outcome, error) {
+	tt.SetIsolation(isolation.NewStore(testenv.TempDir(t), testenv.TempDir(t), gitcmd.Repo{}), testenv.TempDir(t), func(context.Context, isolation.Run) (isolation.Outcome, error) {
 		ran = true
 		return isolation.Outcome{}, nil
 	})

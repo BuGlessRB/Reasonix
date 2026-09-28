@@ -58,7 +58,7 @@ func TestHubPanesShareOneWalletRead(t *testing.T) {
 
 	h := NewHub(HubOptions{})
 	defer h.Shutdown()
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 
 	// Three panes, the way switching between conversations opens them.

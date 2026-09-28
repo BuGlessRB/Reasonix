@@ -32,7 +32,7 @@ func readShell(t *testing.T, base string) control.ShellSettings {
 // client nothing it could not learn from the next command's own card.
 func TestShellSettingsReportsTheRunningInterpreter(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	got := readShell(t, srv.URL)
@@ -48,7 +48,7 @@ func TestShellSettingsReportsTheRunningInterpreter(t *testing.T) {
 // machine, so it rides the same grant as the other config-editing routes.
 func TestSaveShellRefusedWithoutGrant(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/shell", `{"prefer":"bash"}`)
@@ -61,7 +61,7 @@ func TestSaveShellRefusedWithoutGrant(t *testing.T) {
 func TestSaveShellPersistsTheChoice(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/shell", `{"prefer":"bash"}`)
@@ -87,7 +87,7 @@ func TestSaveShellPersistsTheChoice(t *testing.T) {
 func TestSaveShellRejectsUnusablePath(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/shell", `{"prefer":"bash","path":"/definitely/not/a/shell"}`)

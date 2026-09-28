@@ -1,7 +1,7 @@
 import { PLAN_ACTIONS, type PlanAction } from "./session";
 import type { AccountState, AgentPort, Appearance, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, NotifyPrefs, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceFile, type WorkspaceFiles, type WorkspaceChanges } from "./port";
-import { SseTheme } from "./sse_theme";
+import { SseBackup } from "./sse_backup";
 import type { StoragePlan, StorageState } from "./storage";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import { host } from "./host";
@@ -15,7 +15,7 @@ import { current } from "../i18n";
 // a load. The read is one small JSON body and answers from memory.
 const UPDATE_POLL_MS = 500;
 
-export class SsePort extends SseTheme implements AgentPort {
+export class SsePort extends SseBackup implements AgentPort {
   status() {
     return this.get<SessionStatus>("/status");
   }

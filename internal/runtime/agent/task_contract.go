@@ -32,7 +32,7 @@ func (a *Agent) settleContract(ctx context.Context, seal *EvidenceSeal) contract
 	if err != nil {
 		return contractState{Failure: trustedstate.FailureCode(err)}
 	}
-	derived := contract.Derive(contract.Sources{Checks: a.task.checkpoint.BaselineChecks, Tests: a.baselineTestIdentities(), PlanChecks: a.planChecks()})
+	derived := contract.Derive(contract.Sources{Checks: a.task.checkpoint.BaselineChecks, Tests: a.baselineTestIdentities(), PlanChecks: a.planChecks(), PlanChanges: planChangesOf(a.PlanContract())})
 	next, decision := contract.Accept(cur, record, derived, a.contractID())
 	if decision == contract.RelaxationRefused && a.userApprovedPlanDrops(cur, derived) {
 		next, decision = contract.AcceptRelaxation(*cur, record, derived, userPlanApproval), contract.UserRelaxed
@@ -97,7 +97,7 @@ func (a *Agent) frozenResults(criteria []contract.Criterion) []verdict.Frozen {
 		return nil
 	}
 	ledger := a.task.ledger
-	at, changed := ledger.LatestSuccessfulMutationIndex()
+	at, changed := ledger.LatestProvenMutationIndex()
 	owedTests := map[string]bool{}
 	for _, o := range evidence.BaselineTestObligations(a.baselineFacts(), a.mutationEpoch()) {
 		owedTests[o.ID] = true
@@ -112,6 +112,8 @@ func (a *Agent) frozenResults(criteria []contract.Criterion) []verdict.Frozen {
 		switch c.Verifier.Kind {
 		case contract.VerifierCommand:
 			f.Satisfied = !changed || ledger.HasSuccessfulCommandAfter(c.Verifier.Identity, at)
+		case contract.VerifierChange:
+			f.Satisfied = changed
 		case contract.VerifierTest:
 			f.Unverifiable = !known[c.Verifier.Identity]
 			f.Satisfied = !f.Unverifiable && !owedTests["baseline_test@"+c.Verifier.Identity]
@@ -202,6 +204,19 @@ func (a *Agent) PlanDropsAcceptedChecks(plan plancontract.Plan) bool {
 	}
 	kept := planChecksOf(&plan)
 	return slices.ContainsFunc(a.task.contract.Criteria, func(c contract.Criterion) bool {
-		return c.Source == contract.SourcePlan && !slices.Contains(kept, c.Verifier.Identity)
+		if c.Source != contract.SourcePlan {
+			return false
+		}
+		if c.Verifier.Kind == contract.VerifierChange {
+			return !planChangesOf(&plan)
+		}
+		return !slices.Contains(kept, c.Verifier.Identity)
 	})
+}
+
+// planChangesOf reports a plan that names files its steps are expected to
+// touch. Candidate files are the planner's inference of where the work lands;
+// files it only read say nothing about a change, so they do not count.
+func planChangesOf(plan *plancontract.Plan) bool {
+	return plan != nil && slices.ContainsFunc(plan.Steps, func(s plancontract.Step) bool { return len(s.CandidateFiles) > 0 })
 }

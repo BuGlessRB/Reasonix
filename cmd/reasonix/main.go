@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 
 	"reasonix/internal/contract/config"
+	"reasonix/internal/contract/provider"
 	"reasonix/internal/frontend/cli"
 	"reasonix/internal/platform/crashreport"
 
@@ -36,6 +37,7 @@ var runCLI = func(args []string, buildVersion string) int {
 }
 
 func main() {
+	provider.SetClientVersion(version)
 	os.Exit(runWithCrashCapture(os.Args[1:], version))
 }
 

@@ -280,6 +280,18 @@ func resolveDocumentImports(body, sourcePath string, boundaries []string, depth 
 	return strings.Join(lines, "\n")
 }
 
+// ImportTargets lists the import lines of a document body, in order, exactly as
+// the resolver would read them.
+func ImportTargets(body string) []string {
+	var out []string
+	for line := range strings.SplitSeq(body, "\n") {
+		if target, ok := parseImportTarget(line); ok {
+			out = append(out, target)
+		}
+	}
+	return out
+}
+
 func parseImportTarget(line string) (string, bool) {
 	t := strings.TrimSpace(line)
 	if !strings.HasPrefix(t, "@") || len(t) == 1 || strings.ContainsAny(t, " \t") {

@@ -29,6 +29,9 @@ type request struct {
 	// PlanID is echoed back on a confirm-apply call so the host can refuse
 	// to apply a plan that does not match the one it approved.
 	PlanID string `json:"planId"`
+	// ExpectDigest pins the plan to reviewed content: a plan whose
+	// contentDigest differs is refused before anything is written.
+	ExpectDigest string `json:"expectDigest"`
 
 	scopeExplicit bool
 }
@@ -55,6 +58,10 @@ type response struct {
 	Warnings []string  `json:"warnings,omitempty"`
 	Error    string    `json:"error,omitempty"`
 	Next     string    `json:"next,omitempty"`
+
+	// ContentDigest is what a reviewer records to pin this exact material;
+	// empty when the plan's material cannot be pinned.
+	ContentDigest string `json:"contentDigest,omitempty"`
 }
 
 // kindTally reports per-kind counts. It is a struct (not a map) so the JSON

@@ -38,6 +38,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
+        env:
+          VITE_REMOTE_HOME: https://reasonix.io/remote/
         run: pnpm build
 
       - name: Deploy

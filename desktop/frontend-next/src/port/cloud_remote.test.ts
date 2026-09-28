@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { remoteCodec } from "./cloud_remote";
+// @vitest-environment jsdom
+import { describe, expect, it, vi } from "vitest";
+import { onRemoteConnectionEnded, RemoteEventSource, remoteCodec, remoteConnectionEnded } from "./cloud_remote";
 
 describe("remote Studio binary framing", () => {
   it("round-trips binary bodies and joins response chunks in index order", () => {
@@ -11,5 +12,72 @@ describe("remote Studio binary framing", () => {
       [0, remoteCodec.bytesToBase64(source.subarray(0, 4))],
     ]));
     expect(joined).toEqual(source);
+  });
+
+  it("allows a slow mobile handshake and closes a socket that times out", async () => {
+    vi.useFakeTimers();
+    const socket = new EventTarget() as EventTarget & { close: ReturnType<typeof vi.fn> };
+    socket.close = vi.fn();
+    const pending = remoteCodec.waitForSocketOpen(socket as unknown as WebSocket, remoteCodec.handshakeTimeoutMS)
+      .catch((error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(socket.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(await pending).toBeInstanceOf(Error);
+    expect(socket.close).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it("stops the handshake timer once the relay opens", async () => {
+    vi.useFakeTimers();
+    const socket = new EventTarget() as EventTarget & { close: ReturnType<typeof vi.fn> };
+    socket.close = vi.fn();
+    const pending = remoteCodec.waitForSocketOpen(socket as unknown as WebSocket);
+    socket.dispatchEvent(new Event("open"));
+
+    await expect(pending).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(remoteCodec.handshakeTimeoutMS);
+    expect(socket.close).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("announces a relay disconnect to the Web Studio shell", () => {
+    let reason = "";
+    const stop = onRemoteConnectionEnded((value) => { reason = value; });
+    remoteCodec.announceClosed("Disconnected by device");
+    stop();
+    expect(reason).toBe("Disconnected by device");
+    expect(remoteConnectionEnded()).toBe(true);
+  });
+
+  it("starts polling after the host watermark instead of replaying restored history", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        frames: [{ kind: "message", seq: 7, text: "already in history" }],
+        complete: true,
+        watermark: 7,
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        frames: [{ kind: "message", seq: 8, text: "new reply" }],
+        complete: true,
+        watermark: 8,
+      }), { status: 200 }));
+    const seen: Array<Record<string, unknown>> = [];
+    const source = new RemoteEventSource("/rt/one/events");
+    source.onmessage = (event) => seen.push(JSON.parse(event.data) as Record<string, unknown>);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(seen).toEqual([]);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("lastEventId=0");
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(seen).toEqual([{ kind: "message", seq: 8, text: "new reply" }]);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("lastEventId=7");
+
+    source.close();
+    fetchMock.mockRestore();
+    vi.useRealTimers();
   });
 });

@@ -30,7 +30,7 @@ func postGoalLifecycle(t *testing.T, url string) goalLifecycleResult {
 func TestServeGoalPauseAndResumeKeepTheObjective(t *testing.T) {
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Sink: bc})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	if got := postGoalLifecycle(t, srv.URL+"/goal/resume"); got.Changed {

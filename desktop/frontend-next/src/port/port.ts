@@ -5,6 +5,8 @@ export type { Attachment, DroppedRef };
 
 import type { AccountState, AccountUser, DeviceGrant } from "./account";
 import type { Adjudications } from "./adjudication";
+import type { BackupApplyResult, BackupCatalog, BackupCreated, BackupCreateRequest, BackupPlan } from "./backup";
+export type * from "./backup";
 export type { AdjudicationEntry, AdjudicationState, Adjudications } from "./adjudication";
 import type { HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource } from "./hook";
 import type { CapabilityScope, McpCatalog, McpDraft, McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpLoad, McpRisk, McpTool, ScopeLayer } from "./mcp";
@@ -34,6 +36,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
 
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
+import type { MarketDetail, MarketList, MarketOwnRequest, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission } from "./market";
 import type { Appearance, ThemeImport, ThemePack } from "./look";
 import type { BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
@@ -41,6 +44,7 @@ export type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntr
 import type { StoragePlan, StorageState } from "./storage";
 
 export type * from "./plugin";
+export type * from "./market";
 
 // GET /mcp. One external tool provider. state is ready | connecting | failed |
 // disabled | idle: disabled is switched off and stays off across restarts, idle
@@ -164,6 +168,21 @@ export interface AgentPort {
   // it on the way. Installing is the same door: a folder, a link, or this
   // archive unpacked — there is no separate import.
   exportPlugin(name: string): Promise<PluginExport>;
+  // The community market: a source like a pasted address, not a trust root.
+  // Install is the same plan-then-apply pair, pinned to the reviewed digest.
+  marketList(q: MarketQuery): Promise<MarketList>;
+  marketDetail(slug: string): Promise<MarketDetail>;
+  planMarket(req: MarketRequest): Promise<MarketPlan>;
+  installMarket(req: MarketRequest): Promise<MarketPlan>;
+  // Publishing spends the account session; both refuse when signed out.
+  publishMarket(sub: MarketSubmission): Promise<MarketPublished>;
+  myMarket(): Promise<MarketPackage[]>;
+  // The account's own package in any state, installed against the digest its
+  // own preview showed; the kernel reads the package from the registry as the
+  // account, never from what the window sends.
+  planOwnMarket(req: MarketOwnRequest): Promise<MarketPlan>;
+  installOwnMarket(req: MarketOwnRequest): Promise<MarketPlan>;
+  submitMarket(slug: string): Promise<MarketPackage>;
   // Text the window assembled, put on disk. Returns where it went, or null when
   // the host handled it without a path to report (a browser download).
   saveText(name: string, content: string): Promise<string | null>;
@@ -297,6 +316,12 @@ export interface AgentPort {
   accountLogin(): Promise<DeviceGrant>;
   accountPoll(deviceCode: string): Promise<{ status: "pending" | "complete"; slowDown?: boolean }>;
   accountLogout(): Promise<void>;
+  // Backups exist only for a signed-in account; every call refuses otherwise.
+  backups(): Promise<BackupCatalog>;
+  createBackup(req: BackupCreateRequest): Promise<BackupCreated>;
+  deleteBackup(id: string): Promise<void>;
+  previewBackup(id: string, passphrase: string): Promise<BackupPlan>;
+  applyBackup(planId: string, items: string[], consented: string[]): Promise<BackupApplyResult>;
   workspaces(): Promise<WorkspaceInfo>;
   // Rebuilds the whole runtime against another folder. The conversation does
   // not come along, so the caller has to reload the transcript afterwards.

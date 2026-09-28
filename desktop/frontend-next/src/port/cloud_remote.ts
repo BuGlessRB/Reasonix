@@ -1,9 +1,24 @@
 import type { HubPort } from "./hub";
 import { SseHub } from "./hub";
+import { t } from "../i18n";
 
 const ACCOUNT = (import.meta.env.VITE_ACCOUNTS_API || "https://id.reasonix.io").replace(/\/$/, "");
 const RELAY = (import.meta.env.VITE_REMOTE_GATEWAY || "wss://remote.reasonix.io").replace(/\/$/, "");
+const HANDSHAKE_TIMEOUT_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 30_000;
+let connectionEnded = false;
+const connectionEndedListeners = new Set<(reason: string) => void>();
+
+function announceClosed(reason = "") {
+  connectionEnded = true;
+  for (const listener of connectionEndedListeners) listener(reason);
+}
+
+export const remoteConnectionEnded = () => connectionEnded;
+export const onRemoteConnectionEnded = (listener: (reason: string) => void) => {
+  connectionEndedListeners.add(listener);
+  return () => { connectionEndedListeners.delete(listener); };
+};
 
 interface RemoteDevice {
   id: string;
@@ -86,11 +101,11 @@ async function encryptedChannel(device: RemoteDevice, socket: WebSocket) {
   };
 }
 
-function nextMessage(socket: WebSocket, timeout = 10_000): Promise<string> {
+function nextMessage(socket: WebSocket, timeout = HANDSHAKE_TIMEOUT_MS): Promise<string> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       cleanup();
-      reject(new Error("Studio did not respond."));
+      reject(new Error(t("远程 Studio 暂无响应，请检查电脑是否在线后重试。")));
     }, timeout);
     const cleanup = () => {
       clearTimeout(timer);
@@ -98,9 +113,31 @@ function nextMessage(socket: WebSocket, timeout = 10_000): Promise<string> {
       socket.removeEventListener("close", closed);
     };
     const receive = (event: MessageEvent) => { cleanup(); resolve(String(event.data)); };
-    const closed = () => { cleanup(); reject(new Error("The remote connection closed.")); };
+    const closed = () => { cleanup(); reject(new Error(t("远程连接已断开，请重新连接。"))); };
     socket.addEventListener("message", receive);
     socket.addEventListener("close", closed);
+  });
+}
+
+function waitForSocketOpen(socket: WebSocket, timeout = HANDSHAKE_TIMEOUT_MS): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      socket.removeEventListener("open", opened);
+      socket.removeEventListener("error", failed);
+    };
+    const opened = () => { cleanup(); resolve(); };
+    const failed = () => {
+      cleanup();
+      reject(new Error(t("远程中转服务暂时不可用，请稍后重试。")));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      try { socket.close(); } catch { /* The browser may reject closing a socket that never left CONNECTING. */ }
+      reject(new Error(t("连接远程 Studio 超时，请检查电脑是否在线。")));
+    }, timeout);
+    socket.addEventListener("open", opened);
+    socket.addEventListener("error", failed);
   });
 }
 
@@ -112,23 +149,36 @@ class RemoteTransport {
     private readonly channel: Awaited<ReturnType<typeof encryptedChannel>>,
   ) {
     socket.addEventListener("message", (event) => void this.receive(String(event.data)));
-    socket.addEventListener("close", () => this.failAll(new Error("The remote connection closed.")));
+    socket.addEventListener("close", (event) => {
+      this.failAll(new Error(t("远程连接已断开，请重新连接。")));
+      announceClosed(event.reason);
+    });
   }
 
   async fetch(request: Request): Promise<Response> {
+    if (this.socket.readyState !== WebSocket.OPEN) throw new Error(t("远程连接已断开，请重新连接。"));
     const id = crypto.randomUUID();
     const body = new Uint8Array(await request.arrayBuffer());
     const response = new Promise<Response>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error("Studio did not answer the request."));
+        reject(new Error(t("远程 Studio 暂无响应，请检查电脑是否在线后重试。")));
       }, REQUEST_TIMEOUT_MS);
       this.pending.set(id, { chunks: new Map(), resolve, reject, timer });
     });
-    this.socket.send(await this.channel.seal({
+    const payload = await this.channel.seal({
       v: 1, type: "desktop.request", id, method: request.method,
       path: request.url.slice(location.origin.length), body: bytesToBase64(body),
-    }));
+    });
+    if (this.socket.readyState !== WebSocket.OPEN) {
+      const pending = this.pending.get(id);
+      if (pending) {
+        clearTimeout(pending.timer);
+        this.pending.delete(id);
+      }
+      throw new Error(t("远程连接已断开，请重新连接。"));
+    }
+    this.socket.send(payload);
     return response;
   }
 
@@ -145,7 +195,7 @@ class RemoteTransport {
     if (message.type === "error") {
       clearTimeout(pending.timer);
       this.pending.delete(id);
-      pending.reject(new Error(typeof message.error === "string" ? message.error : "Studio refused the request."));
+      pending.reject(new Error(typeof message.error === "string" ? message.error : t("远程 Studio 拒绝了这次请求。")));
       return;
     }
     if (message.type !== "desktop.response" || typeof message.index !== "number" || typeof message.body !== "string") return;
@@ -173,10 +223,10 @@ class RemoteTransport {
   }
 }
 
-class RemoteEventSource {
+export class RemoteEventSource {
   onmessage: ((event: MessageEvent<string>) => void) | null = null;
   private closed = false;
-  private after = 0;
+  private after: number | null = null;
 
   constructor(private readonly path: string) {
     queueMicrotask(() => void this.poll());
@@ -190,15 +240,23 @@ class RemoteEventSource {
     while (!this.closed) {
       let active = false;
       try {
-        const path = this.path.replace(/\/events$/, `/events/replay?lastEventId=${this.after}`);
+        const path = this.path.replace(/\/events$/, `/events/replay?lastEventId=${this.after ?? 0}`);
         const response = await fetch(path, { credentials: "same-origin" });
         if (response.ok) {
-          const body = await response.json() as { frames?: Array<Record<string, unknown>> };
+          const body = await response.json() as { frames?: Array<Record<string, unknown>>; watermark?: number };
           active = Boolean(body.frames?.length);
-          for (const frame of body.frames ?? []) {
-            const seq = typeof frame.seq === "number" ? frame.seq : 0;
-            if (seq > this.after) this.after = seq;
-            this.onmessage?.(new MessageEvent("message", { data: JSON.stringify(frame) }));
+          if (this.after === null) {
+            const frameWatermark = (body.frames ?? []).reduce(
+              (latest, frame) => typeof frame.seq === "number" ? Math.max(latest, frame.seq) : latest,
+              0,
+            );
+            this.after = typeof body.watermark === "number" ? body.watermark : frameWatermark;
+          } else {
+            for (const frame of body.frames ?? []) {
+              const seq = typeof frame.seq === "number" ? frame.seq : 0;
+              if (seq > this.after) this.after = seq;
+              this.onmessage?.(new MessageEvent("message", { data: JSON.stringify(frame) }));
+            }
           }
         }
       } catch {
@@ -209,33 +267,31 @@ class RemoteEventSource {
   }
 }
 
-async function device(deviceId: string, nativeFetch: typeof fetch): Promise<RemoteDevice> {
-  const response = await nativeFetch(`${ACCOUNT}/me/devices`, { credentials: "include" });
-  if (!response.ok) throw new Error("Sign in to Reasonix before opening Web Studio.");
-  const body = await response.json() as { devices?: RemoteDevice[] };
-  const found = body.devices?.find((item) => item.id === deviceId && !item.revokedAt);
-  if (!found || !found.capabilities.includes("desktop")) throw new Error("Update Studio on this computer before connecting.");
-  return found;
-}
-
 async function connect(deviceId: string, nativeFetch: typeof fetch) {
-  const target = await device(deviceId, nativeFetch);
-  const issued = await nativeFetch(`${ACCOUNT}/me/remote-grants`, {
+  const bootstrap = (globalThis as typeof globalThis & {
+    __rxRemoteBootstrap?: Promise<Response> | null;
+  }).__rxRemoteBootstrap;
+  if (!bootstrap) performance.mark("reasonix:remote:start");
+  const issued = await (bootstrap ?? nativeFetch(`${ACCOUNT}/me/remote-grants`, {
     method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ targetDeviceId: target.id, scopes: ["desktop"] }),
-  });
-  if (!issued.ok) throw new Error("Could not authorize Web Studio.");
-  const grant = await issued.json() as { grant: { ticket: string } };
-  const socket = new WebSocket(`${RELAY}/v1/sessions/connect`, ["reasonix.remote.v1", `reasonix.auth.${grant.grant.ticket}`]);
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("The remote connection timed out.")), 10_000);
-    socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
-    socket.addEventListener("error", () => { clearTimeout(timer); reject(new Error("The remote relay is unavailable.")); }, { once: true });
-  });
+    body: JSON.stringify({ targetDeviceId: deviceId, scopes: ["desktop"] }),
+  }));
+  if (!issued.ok) throw new Error(t("无法授权 Web Studio，请重新登录后再试。"));
+  const { grant, device: target } = await issued.json() as { grant: { ticket: string }; device?: RemoteDevice };
+  if (!target || target.id !== deviceId || target.revokedAt || !target.capabilities.includes("desktop")) {
+    throw new Error(t("请先更新这台电脑上的 Studio，再连接。"));
+  }
+  performance.mark("reasonix:remote:authorized");
+  const socket = new WebSocket(`${RELAY}/v1/sessions/connect`, ["reasonix.remote.v1", `reasonix.auth.${grant.ticket}`]);
+  await waitForSocketOpen(socket);
   const readyWire = nextMessage(socket);
   const channel = await encryptedChannel(target, socket);
   const ready = await channel.open(await readyWire);
-  if (ready.type !== "ready" || ready.deviceId !== target.id) throw new Error("Studio identity did not match.");
+  if (ready.type !== "ready" || ready.deviceId !== target.id) throw new Error(t("远程 Studio 身份校验失败，请停止连接并检查设备。"));
+  performance.mark("reasonix:remote:ready");
+  performance.measure("reasonix:remote:authorize", "reasonix:remote:start", "reasonix:remote:authorized");
+  performance.measure("reasonix:remote:handshake", "reasonix:remote:authorized", "reasonix:remote:ready");
+  performance.measure("reasonix:remote:connect", "reasonix:remote:start", "reasonix:remote:ready");
   return new RemoteTransport(socket, channel);
 }
 
@@ -250,4 +306,7 @@ export async function remoteHub(deviceId: string): Promise<HubPort> {
   return new SseHub();
 }
 
-export const remoteCodec = { bytesToBase64, base64ToBytes, concatChunks };
+export const remoteCodec = {
+  bytesToBase64, base64ToBytes, concatChunks, announceClosed,
+  waitForSocketOpen, handshakeTimeoutMS: HANDSHAKE_TIMEOUT_MS,
+};

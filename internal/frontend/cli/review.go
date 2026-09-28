@@ -13,6 +13,7 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/skill"
+	"reasonix/internal/platform/gitcmd"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/safety/sandbox"
 	"reasonix/internal/tools/builtin"
@@ -176,20 +177,30 @@ func buildReviewSubagentRegistry(reviewSk skill.Skill, cfg *config.Config, root 
 func getReviewDiff(base, commit string) (string, error) {
 	cwd, _ := os.Getwd()
 	ctx := context.Background()
+	// Resolved before the review agent runs, and only once.
+	repo, err := gitcmd.Open(ctx, cwd)
+	if err != nil {
+		return "", err
+	}
 	switch {
 	case commit != "":
-		return runGit(ctx, cwd, "diff", commit+"^.."+commit)
+		out, err := runGit(ctx, repo, "diff", commit+"^.."+commit)
+		if err != nil && repo.ObjectsMissing(ctx, commit, commit+"^") {
+			// A partial clone's unfetched objects; host git does not fetch them.
+			return "", fmt.Errorf("commit %s: %w", commit, gitcmd.ErrObjectNotLocal)
+		}
+		return out, err
 	case base != "":
-		return runGit(ctx, cwd, "diff", base+"...HEAD")
+		return runGit(ctx, repo, "diff", base+"...HEAD")
 	default:
 		// Working tree changes: staged + unstaged.
-		out, err := runGit(ctx, cwd, "diff", "HEAD")
+		out, err := runGit(ctx, repo, "diff", "HEAD")
 		if err != nil {
 			return "", err
 		}
 		if out == "" {
 			// No working-tree changes; check for staged-only.
-			out, err = runGit(ctx, cwd, "diff", "--cached")
+			out, err = runGit(ctx, repo, "diff", "--cached")
 		}
 		return out, err
 	}

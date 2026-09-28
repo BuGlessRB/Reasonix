@@ -17,6 +17,7 @@ import (
 
 	"reasonix/internal/base/secrets"
 	"reasonix/internal/ext/mcplaunch"
+	"reasonix/internal/platform/gitcmd"
 )
 
 type launcherLocator struct {
@@ -34,7 +35,10 @@ var (
 	// refs, never a verified commit: they must resolve through git ls-remote.
 	// Mutable launcher locks require a complete immutable commit predicate.
 	fullGitCommit = regexp.MustCompile(`^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`)
-	pypiBaseURL   = "https://pypi.org/pypi"
+	// A launcher git remote must name a network transport, never a local path
+	// or an option: the value reaches ls-remote as an operand.
+	gitRemoteScheme = regexp.MustCompile(`(?i)^(?:https|ssh|git)://`)
+	pypiBaseURL     = "https://pypi.org/pypi"
 )
 
 // exactPEP440Version accepts only a single pinned version. `==2.4.*` is a
@@ -335,8 +339,22 @@ func resolveGitLocator(ctx context.Context, spec Spec, locator string) (string, 
 		return "", "", fmt.Errorf("git is required to resolve %q", locator)
 	}
 	remote := strings.TrimPrefix(repo, "git+")
-	cmd := exec.CommandContext(ctx, git, "ls-remote", remote, ref)
-	cmd.Env = env
+	// The remote and ref are attacker-controlled; require a network scheme so a
+	// leading-dash value cannot be one, and pass them past -- so git reads them
+	// as operands, never options.
+	if !gitRemoteScheme.MatchString(remote) {
+		return "", "", fmt.Errorf("git launcher locator %q must name an https://, ssh:// or git:// remote; http:// and local paths are refused", locator)
+	}
+	cmd := exec.CommandContext(ctx, git, gitcmd.Args("", nil, "ls-remote", "--", remote, ref)...)
+	// The launcher's own environment may carry GIT_* settings that name a
+	// program; ls-remote takes gitcmd's environment and only PATH from it.
+	path, _ := envValue(env, "PATH")
+	cmd.Env = setEnvValue(gitcmd.Env(), "PATH", path)
+	cleanup, err := gitcmd.Detached(cmd)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve git ref %q: %w", locator, err)
+	}
+	defer cleanup()
 	out, err := cmd.Output()
 	if err != nil {
 		return "", "", fmt.Errorf("resolve git ref %q: %w", locator, err)

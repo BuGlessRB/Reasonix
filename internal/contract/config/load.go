@@ -127,7 +127,7 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	globalCLI := cfg.CLI
 	globalSecrets := cfg.Secrets
 	globalSandbox := holdUserSandbox(cfg.Sandbox)
-	globalRemote, globalStorage := cfg.Remote.Clone(), maps.Clone(cfg.Storage)
+	globalRemote, globalStorage, globalServe := cfg.Remote.Clone(), maps.Clone(cfg.Storage), cfg.Serve
 	globalDesktopLanguage := cfg.Desktop.Language
 	globalPricingCurrency := cfg.Desktop.Currency
 	globalBillingDisplayCurrency := cfg.Billing.DisplayCurrency
@@ -157,10 +157,10 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.Secrets = globalSecrets
 	// Sandbox grants are the same kind of control (see heldSandbox).
 	globalSandbox.restore(&cfg.Sandbox)
-	// Remote SSH hosts and storage locations are equally user-global: a cloned
-	// repo must not inject hosts, jump chains, or port forwards, nor redirect
-	// where this machine keeps its transcripts, catalogs, and checkouts.
-	cfg.Remote, cfg.Storage = globalRemote, globalStorage
+	// Remote hosts, storage locations and serve authentication are user-global:
+	// a repo must not inject hosts or forwards, redirect where transcripts live,
+	// or choose serve's launch token, auth mode, or trust in forwarded headers.
+	cfg.Remote, cfg.Storage, cfg.Serve = globalRemote, globalStorage, globalServe
 	// Desktop language and pricing currency are user-level regional preferences.
 	// A repository must not be able to alter how the user's spend is shown.
 	cfg.Desktop.Language = globalDesktopLanguage

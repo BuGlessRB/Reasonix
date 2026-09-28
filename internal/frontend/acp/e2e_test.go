@@ -80,6 +80,7 @@ type e2eFactory struct {
 	tool       tool.Tool
 	policy     permission.Policy
 	sessionDir string
+	window     int
 }
 
 func (f *e2eFactory) SessionDir() string { return f.sessionDir }
@@ -88,7 +89,7 @@ func (f *e2eFactory) NewSession(_ context.Context, p SessionParams) (*control.Co
 	reg := tool.NewRegistry()
 	reg.Add(f.tool)
 	executor := agent.New(f.prov, reg, sessionstore.NewSession("you are a test agent"),
-		agent.Options{MaxSteps: 5}, p.Sink)
+		agent.Options{MaxSteps: 5, ContextWindow: f.window}, p.Sink)
 	return control.New(control.Options{
 		Runner:     executor,
 		Executor:   executor,

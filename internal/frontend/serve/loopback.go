@@ -78,7 +78,7 @@ func NewLoopbackGate(next http.Handler, opts LoopbackGateOptions) http.Handler {
 		// w passes through undecorated: /events asserts http.Flusher on it, and
 		// a wrapper that did not forward Flush would turn every stream into a
 		// response the page only sees once the turn is over.
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, withHostGated(r))
 	})
 }
 
