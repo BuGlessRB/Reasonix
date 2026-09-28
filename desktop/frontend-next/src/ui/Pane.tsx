@@ -203,17 +203,17 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           // fallback for changes that arrive without an event.
           if (ev.kind === "mcp_surface_ready" || ev.kind === "extension_status") reloadMcp();
           if (ev.kind === "todo_progress") void refreshTodos(port, dispatch);
-          // A prompt opening or closing changes who the turn is waiting on, and
-          // the kernel answers that in /status rather than in the frame. Same
-          // shape the queue uses: the event says something moved, the read says
-          // what is true. Without it the run keeps glowing until the next poll.
-          if (ev.kind === "approval_request" || ev.kind === "ask_request") refreshStatus();
+          // A turn or prompt moving changes /status. Re-read even for hidden
+          // panes: a client may have missed turn_started, and a stale running
+          // snapshot otherwise keeps the sidebar live after turn_done.
+          if (ev.kind === "turn_started" || ev.kind === "turn_done" || ev.kind === "approval_request" || ev.kind === "ask_request") refreshStatus();
           // Settling one is the other half of the same move, and the receipt
           // rides as a field rather than a kind of its own.
           else if ("decisionReceipt" in ev && ev.decisionReceipt) refreshStatus();
         },
         () => {
           rebuild();
+          refreshStatus();
         },
       ),
     [port, reloadMcp, rebuild, refreshStatus],
