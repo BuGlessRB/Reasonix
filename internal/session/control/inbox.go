@@ -751,7 +751,12 @@ func (c *Controller) onInboxSteerConsumed(itemID string) {
 }
 
 // TryEnqueueAndSteer is a convenience for frontends: durable steer then TrySteer.
+// A steer is read as guidance and carries no invocation, so a line holding one
+// queues as the turn it asks for.
 func (c *Controller) TryEnqueueAndSteer(req InboxRequest) (sessioninbox.InboxReceipt, error) {
+	if len(req.Invocations) > 0 {
+		return c.TryEnqueueFollowup(req)
+	}
 	req.Intent = sessioninbox.IntentSteer
 	rec, err := c.EnqueueInbox(req)
 	if err != nil {

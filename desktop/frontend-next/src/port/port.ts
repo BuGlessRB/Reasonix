@@ -62,6 +62,19 @@ export type * from "./boundary";
 
 export type * from "./provider";
 
+/** A skill chip as the kernel takes it; offset only orders chips in a line. */
+export interface InvocationRequest {
+  name: string;
+  kind: "skill" | "subagent";
+  offset: number;
+}
+
+/** A line holding chips: submit is what the model reads, chips taken out. */
+export interface ChipCall {
+  submit: string;
+  invocations: InvocationRequest[];
+}
+
 /** What the kernel answers when a line is queued — mid-turn guidance or a whole
  *  turn waiting its go. itemId is the durable entry, and it is the whole reason
  *  the line can be taken back: without it the row on screen has no name to
@@ -414,7 +427,9 @@ export interface AgentPort {
   // of their watermarks, because a duplicate folds and a gap does not.
   subscribe(onEvent: (ev: WireEvent) => void, onGap?: () => void, bootstrap?: () => Promise<number>): () => void;
 
-  submit(text: string): Promise<void>;
+  // chips carries skill chips beside the line; without it the line is parsed
+  // as typed, so a kernel that predates chips still runs a leading one.
+  submit(text: string, chips?: ChipCall): Promise<void>;
   // /submit 409s once a turn holds the session. Mid-turn input is durable and
   // goes through the inbox, which delivers it at the next tool boundary. The
   // receipt is what makes it cancellable while it waits there.
@@ -422,7 +437,7 @@ export interface AgentPort {
   // A whole turn, queued because one is already running. The kernel
   // refuses /submit with a code rather than a sentence, so this is what
   // the client does about it instead of showing anyone the refusal.
-  queueFollowup(text: string): Promise<Queued>;
+  queueFollowup(text: string, chips?: ChipCall): Promise<Queued>;
   // Takes a queued line back before the turn reads it, and refuses once it has.
   cancelQueued(itemId: string): Promise<void>;
   // The queue as the kernel holds it. Read on every inbox_changed frame: the

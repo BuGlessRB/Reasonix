@@ -519,10 +519,10 @@ func (s *Server) logoWordmark(w http.ResponseWriter, _ *http.Request) {
 // on this turn (text.format on the wire).
 func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Input  string `json:"input"`
+		chipLine
 		Format string `json:"format"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Input == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || (body.Input == "" && len(body.Invocations) == 0) {
 		missingField(w, "input")
 		return
 	}
@@ -532,6 +532,10 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		// Supported: empty = default text output, json_object = structured.
 	default:
 		badValue(w, "format", "json_object")
+		return
+	}
+	if len(body.Invocations) > 0 {
+		s.submitChips(w, r, body.chipLine, body.Format)
 		return
 	}
 	trimmed := strings.TrimSpace(body.Input)

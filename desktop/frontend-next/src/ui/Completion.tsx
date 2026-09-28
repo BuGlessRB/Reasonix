@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { AgentPort, Completion, CompletionItem } from "../port/port";
+import { chipKind } from "./skillchips";
 
 const EMPTY: Completion = { kind: "", from: 0, to: 0, items: [] };
 
@@ -32,6 +33,34 @@ function mightComplete(text: string): boolean {
   return text.startsWith("/") || text.includes("@");
 }
 
+// A "/" opening a word past the start of the line can only become a chip. The
+// kernel reads a slash at the start alone, so the word is asked about as if it
+// opened the line, and only what a sentence can hold comes back.
+function midSlash(text: string, caret: number): { from: number; to: number; token: string } | null {
+  const from = text.slice(0, caret).search(/\/\S*$/);
+  if (from <= 0 || !/\s/.test(text[from - 1])) return null;
+  const rest = text.slice(from).search(/\s/);
+  return { from, to: rest < 0 ? text.length : from + rest, token: text.slice(from, caret) };
+}
+
+// The chips a menu pick can become, and whether the caret rests on one: a chip
+// is finished, so the letters it is spelled with are not a word to complete.
+interface ChipHost {
+  place: (text: string, c: Completion, item: CompletionItem) => { text: string; caret: number } | null;
+  touches: (caret: number) => boolean;
+}
+
+function ask(port: AgentPort, text: string, caret: number, mid: ReturnType<typeof midSlash>): Promise<Completion> {
+  if (!mid) return port.complete(text, caret);
+  return port.complete(mid.token, mid.token.length).then((r) => ({
+    kind: "slash",
+    from: mid.from,
+    to: mid.to,
+    query: r.query,
+    items: (r.items ?? []).filter((it) => chipKind(it) !== null),
+  }));
+}
+
 interface State {
   completion: Completion;
   active: number;
@@ -59,6 +88,7 @@ export function useCompletion(
   text: string,
   caret: number,
   apply: (text: string, caret: number) => void,
+  chips?: ChipHost,
 ): State {
   const [completion, setCompletion] = useState<Completion>(EMPTY);
   const [loading, setLoading] = useState(false);
@@ -76,22 +106,24 @@ export function useCompletion(
 
   useEffect(() => {
     const id = ++asked.current;
-    if (!mightComplete(text)) {
+    const onChip = chips?.touches(caret) ?? false;
+    const mid = onChip ? null : midSlash(text, caret);
+    if (onChip || (!mid && !mightComplete(text))) {
       setCompletion(EMPTY);
       setLoading(false);
       return;
     }
     const previous = currentCompletion.current;
-    const compatible = text.startsWith("/")
+    const slashy = mid !== null || text.startsWith("/");
+    const compatible = slashy
       ? previous.kind === "slash" || previous.kind === "slash-arg"
       : previous.kind === "ref";
     if (!compatible) setCompletion(EMPTY);
     setLoading(false);
-    const timer = text.startsWith("/") && !compatible
+    const timer = slashy && !compatible
       ? window.setTimeout(() => { if (id === asked.current) setLoading(true); }, 180)
       : undefined;
-    port
-      .complete(text, caret)
+    ask(port, text, caret, mid)
       .then((r) => {
         if (id === asked.current) {
           window.clearTimeout(timer);
@@ -125,10 +157,12 @@ export function useCompletion(
     (item?: CompletionItem) => {
       const pick = item ?? items[Math.min(active, items.length - 1)];
       if (!pick) return;
+      const placed = chips?.place(text, completion, pick);
+      if (placed) return apply(placed.text, placed.caret);
       const next = text.slice(0, completion.from) + pick.insert + text.slice(completion.to);
       apply(next, completion.from + pick.insert.length);
     },
-    [items, active, text, completion, apply],
+    [items, active, text, completion, apply, chips],
   );
 
   return {

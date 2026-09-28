@@ -1,5 +1,5 @@
 import { PLAN_ACTIONS, type PlanAction } from "./session";
-import type { AccountState, AgentPort, Appearance, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, NotifyPrefs, TrayPrefs, WorkspaceInfo } from "./port";
+import type { AccountState, AgentPort, Appearance, ChipCall, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, NotifyPrefs, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceFile, type WorkspaceFiles, type WorkspaceChanges } from "./port";
 import { SseBackup } from "./sse_backup";
 import type { StoragePlan, StorageState } from "./storage";
@@ -626,14 +626,14 @@ export class SsePort extends SseBackup implements AgentPort {
     };
   }
 
-  submit(text: string) {
-    return this.post("/submit", { input: text });
+  submit(text: string, chips?: ChipCall) {
+    return this.post("/submit", { input: text, ...chips });
   }
   steer(text: string) {
     return this.post0<Queued>("/inbox/items", { input: text, intent: "steer" });
   }
-  queueFollowup(text: string) {
-    return this.post0<Queued>("/inbox/items", { input: text, intent: "followup" });
+  queueFollowup(text: string, chips?: ChipCall) {
+    return this.post0<Queued>("/inbox/items", { input: text, intent: "followup", ...chips });
   }
   async cancelQueued(itemId: string) {
     await this.del("/inbox/items/" + encodeURIComponent(itemId));

@@ -30,6 +30,15 @@ func TestEffectInlineSkillInvocationReachesProviderPinned(t *testing.T) {
 		{"chip with task", func(c *control.Controller) {
 			c.SubmitInvocationDisplay("/probe tidy the notes", "tidy the notes", []control.InvocationRequest{{Name: "probe", Kind: "skill"}})
 		}, "PROBE BODY\nthen run /other\n\nArguments: tidy the notes\n</skill-pin>", "tidy the notes", false},
+		{"chip mid-line, queued", func(c *control.Controller) {
+			c.EnsureSessionPath()
+			if _, err := c.TryEnqueueFollowup(control.InboxRequest{
+				Display: "tidy /probe the notes", Submit: "tidy the notes", Raw: "tidy the notes",
+				Invocations: []control.InvocationRequest{{Name: "probe", Kind: "skill", Offset: 5}},
+			}); err != nil {
+				panic(err)
+			}
+		}, "PROBE BODY\nthen run /other\n\nArguments: tidy the notes\n</skill-pin>", "tidy the notes", false},
 		{"two chips bare", func(c *control.Controller) {
 			c.SubmitInvocationDisplay("/probe /other", "", []control.InvocationRequest{{Name: "probe", Kind: "skill"}, {Name: "other", Kind: "skill"}})
 		}, "PROBE BODY\nthen run /other\n</skill-pin>", "", true},
