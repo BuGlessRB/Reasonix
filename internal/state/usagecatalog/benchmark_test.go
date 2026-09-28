@@ -34,7 +34,7 @@ func BenchmarkWarmQueryTenYears(b *testing.B) {
 	}
 	b.ResetTimer()
 	for range b.N {
-		if _, err := catalog.Query(context.Background(), "2016-01-01", "2025-12-28", "all"); err != nil {
+		if _, err := catalog.Query(context.Background(), "2016-01-01", "2025-12-28", "all", ""); err != nil {
 			b.Fatal(err)
 		}
 	}

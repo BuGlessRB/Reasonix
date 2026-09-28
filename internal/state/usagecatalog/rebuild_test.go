@@ -41,11 +41,11 @@ func TestRebuildReplacesStaleUsageProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = rebuilt.Close(context.Background()) })
-	stale, err := rebuilt.Query(ctx, "2026-08-09", "2026-08-09", "desktop")
+	stale, err := rebuilt.Query(ctx, "2026-08-09", "2026-08-09", "desktop", "")
 	if err != nil || len(stale) != 0 {
 		t.Fatalf("stale rows=%#v err=%v", stale, err)
 	}
-	current, err := rebuilt.Query(ctx, "2026-08-10", "2026-08-10", "desktop")
+	current, err := rebuilt.Query(ctx, "2026-08-10", "2026-08-10", "desktop", "")
 	if err != nil || len(current) != 1 || current[0].Total != 42 {
 		t.Fatalf("current rows=%#v err=%v", current, err)
 	}

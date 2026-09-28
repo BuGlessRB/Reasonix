@@ -101,3 +101,54 @@ func TestUnparseableAmountIsSkipped(t *testing.T) {
 		t.Fatalf("cost = %+v, want only the parseable row", got.Cost)
 	}
 }
+
+func queryIn(t *testing.T, dir, currency string) RangeStats {
+	t.Helper()
+	from, _ := time.Parse(dayLayout, "2026-08-01")
+	to, _ := time.Parse(dayLayout, "2026-08-31")
+	got, err := NewWriter(dir).Query(SourceFilter{From: from, To: to, Currency: currency})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+// A display currency reads each turn at the amount the vendor's own table in
+// that currency quoted when it happened. A turn no such table priced keeps the
+// currency it was billed in: converting it would invent a rate.
+func TestCostReadsInTheDisplayCurrencyWhereAVendorTableQuotedIt(t *testing.T) {
+	dir := testenv.TempDir(t)
+	writeDay(t, dir, "2026-08-10",
+		map[string]any{"ts": "2026-08-10T01:00:00Z", "model": "deepseek-flash/deepseek-flash", "source": "desktop", "total": 100,
+			"cost_amount": "0.5", "cost_currency": "USD", "valuation_usd": "0.5", "valuation_cny": "3.5"},
+		map[string]any{"ts": "2026-08-10T02:00:00Z", "model": "relay/x", "source": "desktop", "total": 100,
+			"cost_amount": "0.25", "cost_currency": "USD", "valuation_usd": "0.25"},
+		map[string]any{"ts": "2026-08-10T03:00:00Z", "model": "deepseek-flash/deepseek-flash", "source": "desktop", "total": 100,
+			"cost_amount": "1", "cost_currency": "CNY", "valuation_cny": "1", "valuation_usd": "0.14"},
+	)
+	got := queryIn(t, dir, "CNY")
+	if len(got.Cost) != 2 || got.Cost[0].Currency != "CNY" || got.Cost[0].Amount != "4.5" ||
+		got.Cost[1].Currency != "USD" || got.Cost[1].Amount != "0.25" {
+		t.Fatalf("CNY view = %+v, want CNY 4.5 plus the unquoted USD 0.25", got.Cost)
+	}
+	day := got.Daily[9]
+	if day.Day != "2026-08-10" || len(day.Cost) != 2 || day.Cost[0].Amount != "4.5" {
+		t.Fatalf("daily CNY view = %+v", day)
+	}
+	if got := queryIn(t, dir, ""); len(got.Cost) != 2 || got.Cost[0].Amount != "1" || got.Cost[1].Amount != "0.75" {
+		t.Fatalf("no display currency = %+v, want each turn in its billed currency", got.Cost)
+	}
+}
+
+// The live projection is the path a running Studio reads its own turns
+// through, so it carries the same cost a reindex from the file would.
+func TestLiveUsageEntryCarriesItsCost(t *testing.T) {
+	entry := usageEntry("2026-08-10", record{ModelRef: "deepseek-flash/deepseek-flash", Total: 10,
+		CostAmount: "0.5", CostCurrency: "USD", ValuationCNY: "3.5", ValuationUSD: "0.5", CostEstimated: true})
+	if entry.CostCurrency != "USD" || entry.Cost == 0 || !entry.CostEstimated {
+		t.Fatalf("entry = %+v, want the quoted USD cost", entry)
+	}
+	if entry.Valuations["CNY"] == 0 || entry.Valuations["USD"] != entry.Cost {
+		t.Fatalf("valuations = %+v", entry.Valuations)
+	}
+}
