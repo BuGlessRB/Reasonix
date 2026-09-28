@@ -220,7 +220,7 @@ func (p *scriptedReasoningProvider) Stream(ctx context.Context, _ provider.Reque
 
 func TestDefaultReasoningLimitLetsLongThinkingFinish(t *testing.T) {
 	sink := &recordSink{}
-	reasoning := strings.Repeat("abcd", 128*1024/4+1)
+	reasoning := nonRepeatingText(128 * 1024)
 	prov := testutil.NewMock("m", testutil.Turn{Reasoning: reasoning, Text: "svg done"})
 	sess := sessionstore.NewSession("")
 	a := New(prov, tool.NewRegistry(), sess, Options{}, sink)
