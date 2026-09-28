@@ -137,7 +137,11 @@ func renderTool(it *Item, width int) string {
 			lines = append(lines, termrender.Dim(connector+oneLine(last, avail)))
 		}
 	default:
-		lines = append(lines, outputSummary(t.Name, t.Output, avail, it.Fold)...)
+		if t.OutputDiff {
+			lines = append(lines, diffRows(t.Output, width, it.Fold)...)
+		} else {
+			lines = append(lines, outputSummary(t.Name, t.Output, avail, it.Fold)...)
+		}
 	}
 	if n := len(it.Children); n > 0 {
 		lines = append(lines, termrender.Dim(connector+fmt.Sprintf("%d sub-agent call(s)", n)))
@@ -178,6 +182,16 @@ func outputSummary(name, out string, width int, f outputFold) []string {
 		lines = append(lines, termrender.Dim(strings.Repeat(" ", len([]rune(connector)))+fmt.Sprintf("… %d more lines", extra)+hint))
 	}
 	return lines
+}
+
+// diffRows renders a marked whole-diff shell result as diff rows, opening the
+// fold to show more of it.
+func diffRows(out string, width int, f outputFold) []string {
+	maxLines := diffPreviewLines
+	if f == foldOpen {
+		maxLines = shellExpandLines
+	}
+	return termrender.DiffText(out, width, maxLines)
 }
 
 // renderUsage is what one model request cost, under a quiet rule: history,

@@ -58,6 +58,17 @@ notice. Legacy `[cli].update_channel` values are ignored and removed the next
 time Reasonix saves the configuration. The `reasonix update` alias behaves the
 same way.
 
+`[cli].diff_formatter` names an optional external command that formats a diff
+before the CLI/TUI emits it: both a fenced ` ```diff ` / ` ```patch ` block in
+the answer stream and a writer tool's diff card in the transcript, e.g.
+`delta --color-only --paging=never`. It is an argv line run without a shell: the
+whole diff is written to the command's stdin and its stdout is re-emitted
+verbatim — no gutter, no width clamp, and no escape filtering, so the
+formatter's own colours and control sequences reach the terminal intact. On any
+failure, timeout, or empty output the built-in renderer is used. Like
+`[cli].update_channel` it is user/global only — a project-local `reasonix.toml`
+cannot set it.
+
 ## Configure providers
 
 ```sh

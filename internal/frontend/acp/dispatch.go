@@ -200,7 +200,7 @@ func (s *updateSink) Emit(e event.Event) {
 			SessionUpdate: "tool_call_update",
 			ToolCallID:    e.Tool.ID,
 			Status:        status,
-			Content:       []toolContent{{Type: "content", Content: textBlock(clip(text))}},
+			Content:       []toolContent{{Type: "content", Content: textBlock(toolResultText(text, e.Tool.OutputDiff))}},
 		})
 
 	case event.Notice:
@@ -604,6 +604,17 @@ func rawJSON(args string) json.RawMessage {
 		return nil
 	}
 	return json.RawMessage(args)
+}
+
+// toolResultText clips a tool result for display and, when the host marked the
+// output as a whole unified diff, wraps it in a ```diff fence so the client
+// colours +/- lines instead of showing flat prose.
+func toolResultText(text string, isDiff bool) string {
+	display := clip(text)
+	if !isDiff {
+		return display
+	}
+	return "```diff\n" + strings.TrimRight(display, "\n") + "\n```"
 }
 
 // clip truncates text to maxResultChars, appending a note, matching dispatch.ts.

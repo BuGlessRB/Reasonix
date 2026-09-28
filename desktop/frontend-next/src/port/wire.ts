@@ -113,6 +113,9 @@ export interface Tool {
   err?: string;
   // The host's dotted identity for a refusal. err is only its wording.
   refusalCode?: string;
+  // outputDiff marks a shell result whose whole output is a unified diff, so the
+  // transcript renders it as a diff instead of flat text.
+  outputDiff?: boolean;
   readOnly: boolean;
   // truncated is the pre-Bound projection kept for old journals; read bound.
   truncated?: boolean;
