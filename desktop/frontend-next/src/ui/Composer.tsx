@@ -16,6 +16,7 @@ import type { Quote } from "./cards/SayCard";
 import { StudioIcon } from "./StudioIcon";
 import { usePromptRefine } from "./PromptRefine";
 import { useProviderOrder } from "../state/providerorder";
+import { useDraft } from "./useDraft";
 
 interface Props {
   port: AgentPort;
@@ -37,6 +38,7 @@ interface Props {
   changeCount?: number;
   // Bumped when settings change; a source edited there can change the ladder.
   pulse?: number;
+  draftKey?: string;
 }
 
 // What is riding along with this turn. An attachment travels as bytes or a path
@@ -108,7 +110,7 @@ function releaseChip(c: Chip) {
 let chipSeq = 0;
 const chipId = () => `c${++chipSeq}`;
 
-export function Composer({ port, status, running, quote, focus, onSubmit, onChanged, onError, onSettings = () => {}, changeCount = 0, pulse = 0 }: Props) {
+export function Composer({ port, status, running, quote, focus, onSubmit, onChanged, onError, onSettings = () => {}, changeCount = 0, pulse = 0, draftKey = "" }: Props) {
   const providerOrder = useProviderOrder();
   const [branch, setBranch] = useState("");
   useEffect(() => {
@@ -118,12 +120,12 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
       .catch(() => alive && setBranch(""));
     return () => { alive = false; };
   }, [port, status?.workspaceRoot]);
-  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const { text, setText, beginSubmit, finishSubmit } = useDraft(draftKey, submitting);
   // The caret decides which token is being completed, so it is state here
   // rather than something read off the element when a menu happens to open.
   const [caret, setCaret] = useState(0);
   const [shots, setShots] = useState<Chip[]>([]);
-  const [submitting, setSubmitting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const submittingRef = useRef(false);
   const stoppingRef = useRef(false);
@@ -246,6 +248,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
     const line = compose(v);
     const call = chips.call(compose);
     const draft = { text, shots, caret: caretRef.current, chips: chips.held() };
+    beginSubmit(text);
     submittingRef.current = true;
     setSubmitting(true);
     type("", 0);
@@ -253,8 +256,12 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
     void (async () => {
       try {
         const sent = await (call ? onSubmit(line, call) : onSubmit(line));
-        if (sent) draft.shots.forEach(releaseChip);
+        if (sent) {
+          finishSubmit(true);
+          draft.shots.forEach(releaseChip);
+        }
         else {
+          finishSubmit(false);
           pending.current = draft.caret;
           type(draft.text, draft.caret);
           chips.restore(draft.chips);
@@ -262,6 +269,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
           queueMicrotask(() => box.current?.focus());
         }
       } catch (e) {
+        finishSubmit(false);
         pending.current = draft.caret;
         type(draft.text, draft.caret);
         chips.restore(draft.chips);
