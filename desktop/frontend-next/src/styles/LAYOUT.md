@@ -158,10 +158,10 @@ rules are written in.
 
 - A chip is text the textarea holds (`/name`) drawn by `.chipmirror`, a copy of
   the line laid exactly over it. While a chip is present the textarea's glyphs
-  are transparent and the mirror's are the ones read, so caret, selection, IME
-  and undo stay the native control's. The mirror copies the textarea's computed
-  metrics rather than restating them, because the composer's font, zoom and
-  line height are set in several places and one missed rule shifts every chip.
+  are transparent, so caret, selection, IME and undo stay the native control's.
+- The mirror copies the textarea's computed metrics rather than restating them:
+  the composer's font, zoom and line height are set in several places, and one
+  missed rule shifts every chip.
 - The chip's wash is a `box-shadow` spread, not padding: padding changes the
   width of the run and the caret lands a few pixels beside the letter it is on.
   Weight is left alone for the same reason.
