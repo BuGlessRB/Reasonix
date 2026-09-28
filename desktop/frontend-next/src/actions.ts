@@ -406,6 +406,17 @@ export const ACTIONS: UIAction[] = [
   { id: "sandbox.add-write-root", kind: "kernel-mutation", target: "optional", proof: "authority-effect" },
   { id: "sandbox.remove-write-root", kind: "destructive", target: "entity", proof: "authority-effect" },
   { id: "browser-tools.enabled", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  // Read by the running turn at its next round, so no rebuild stands between the
+  // click and the canonical change.
+  { id: "progress-watch.pause", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "progress-watch.rounds", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "progress-watch.token-multiple", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  // The stall strip beside the composer. Stopping is the ordinary interrupt and
+  // continuing is an ordinary message; muting and dismissing touch this window.
+  { id: "stall.stop", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  { id: "stall.continue", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  { id: "stall.mute", kind: "view", target: "none", proof: "interaction" },
+  { id: "stall.dismiss", kind: "view", target: "none", proof: "interaction" },
   { id: "provider.remove", kind: "destructive", target: "entity", proof: "interaction" },
   { id: "provider.protocol", kind: "kernel-mutation", target: "entity", proof: "interaction" },
   { id: "provider.web-search", kind: "kernel-mutation", target: "entity", proof: "interaction" },

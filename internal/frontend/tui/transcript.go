@@ -106,6 +106,8 @@ type Transcript struct {
 	TodosMoved bool
 	// QueueMoved says the durable input queue changed and should be re-read.
 	QueueMoved bool
+	// stallSaid holds that the current stall was already put on screen.
+	stallSaid bool
 	// awaiting are rows this screen sent that no turn has started on yet, in
 	// the order sent. Steered input is not among them: a steer event takes it.
 	awaiting []int
@@ -193,7 +195,7 @@ func (t *Transcript) Apply(ev eventwire.Event) {
 	switch ev.Kind {
 	case "turn_started":
 		t.Running, t.Terminal, t.EndReason = true, TurnOpen, ""
-		t.Phase, t.TurnOut = "", 0
+		t.Phase, t.TurnOut, t.stallSaid = "", 0, false
 		t.nameTurnStart(ev)
 	case "reasoning":
 		t.appendSay(ev.Text, true)
@@ -230,6 +232,8 @@ func (t *Transcript) Apply(ev eventwire.Event) {
 		t.foldSteer(ev)
 	case "todo_progress":
 		t.TodosMoved = true
+	case "progress_watch":
+		t.foldProgressWatch(ev.ProgressWatch)
 	case "inbox_changed":
 		t.QueueMoved = true
 	case "usage":

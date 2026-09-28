@@ -1196,4 +1196,13 @@ export const EN: Record<string, string> = {
     "New tools",
   "agent 可以调用，每次调用照常经过权限确认":
     "The agent can call them; every call still goes through permission checks",
+  "自上次有进展以来已用约 {n} 倍上下文的输入 token": "About {n}× the context window in input tokens since the last progress",
+  "已连续 {n} 轮没有可观察的进展": "No observable progress for {n} rounds",
+  "共 {n} tokens": "{n} tokens in all",
+  "没有文件改动、检查变化或新读取": "No file changed, no check moved, nothing new read",
+  "任务已暂停：{s}": "Task paused: {s}",
+  "继续（计数清零）": "Continue (resets the count)",
+  "不再提示（本会话）": "Don’t show again (this session)",
+  "任务已按设置暂停：自上次有进展以来的输入已达上下文窗口的 {n} 倍": "Paused by your setting: input since the last progress reached {n}× the context window",
+  "任务已按设置暂停：连续 {n} 轮没有可观察的进展": "Paused by your setting: {n} rounds in a row without observable progress",
 };

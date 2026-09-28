@@ -1,4 +1,5 @@
 import type { Adjudications, BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./port";
+import type { ProgressWatchSettings } from "./boundary";
 import { MockShell } from "./mock_shell";
 
 // The boundary half of the fixture: what the agent is refused outright, and how
@@ -95,6 +96,21 @@ export class MockBoundary extends MockShell {
   async saveBrowserTools(enabled: boolean): Promise<BrowserToolsSettings> {
     this.browser = { ...this.browser, enabled, effective: enabled };
     return { ...this.browser };
+  }
+
+  private watch: ProgressWatchSettings = {
+    pause: false, rounds: 20, tokenMultiple: 8, defaultRounds: 20, defaultTokenMultiple: 8,
+    path: "/Users/you/.reasonix/config.toml",
+  };
+
+  async progressWatch(): Promise<ProgressWatchSettings> {
+    return { ...this.watch };
+  }
+
+  async saveProgressWatch(s: Pick<ProgressWatchSettings, "pause" | "rounds" | "tokenMultiple">): Promise<ProgressWatchSettings> {
+    if (s.rounds < 1 || s.rounds > 1000 || s.tokenMultiple < 1 || s.tokenMultiple > 1000) throw new Error("progress watch setting out of range");
+    this.watch = { ...this.watch, ...s };
+    return { ...this.watch };
   }
 
   // The fixture carries the broken file, because a banner nobody can reach is

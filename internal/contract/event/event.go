@@ -150,6 +150,9 @@ const (
 	// switched or navigated a tab. Content-free: a window reads the tabs back,
 	// from the session that owns them.
 	BrowserTabsChanged
+	// ProgressWatchEvent reports whether the run is still producing effects the
+	// host can observe (ProgressWatch). Said to the person, never to the model.
+	ProgressWatchEvent
 	// KindCount is a sentinel one past the last real Kind. New event kinds must
 	// be inserted above it so completeness tests cover them automatically.
 	KindCount
@@ -194,6 +197,9 @@ type StreamAttemptInfo struct {
 }
 
 const TurnOutcomeFinalReadiness = "final_readiness"
+
+// TurnOutcomeNoProgress marks a run the user's progress-watch setting paused.
+const TurnOutcomeNoProgress = "no_progress"
 
 // TurnOutcomeRecoveryPaused marked an Auto recovery retry-budget stop. Nothing
 // emits it any more; sessions recorded before the budgets were removed still
@@ -569,6 +575,7 @@ type Event struct {
 	Compaction      Compaction          // Compaction
 	Maintenance     *ContextMaintenance // ContextMaintenanceEvent
 	TodoProgress    *TodoProgress       // TodoProgressEvent
+	ProgressWatch   *ProgressWatch      // ProgressWatchEvent
 	WorkspaceLease  *WorkspaceLease     // WorkspaceLeaseEvent
 	Guardian        GuardianResult
 	DecisionReceipt *provider.DecisionReceipt // Notice: durable user decision receipt

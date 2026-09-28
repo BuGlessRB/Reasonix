@@ -3734,6 +3734,7 @@
     flex: none; border: 0; background: transparent; cursor: pointer; color: inherit;
     font: var(--w-med) var(--fs-meta) var(--ui); text-decoration: underline; text-underline-offset: 3px;
   }
+  .stallbar .why { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 
   .rc { margin: 4px 0 2px; max-width: var(--doc) }
   .rc-ok {

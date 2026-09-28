@@ -258,6 +258,8 @@ type RuntimeSettings interface {
 	SaveBrowserToolsSettings(enabled bool) error
 	CompactionSettings() CompactionSettings
 	SaveCompactionSettings(softLimitTokens int) error
+	ProgressWatchSettings() ProgressWatchSettings
+	SaveProgressWatchSettings(in ProgressWatchSettings) error
 	ConfigProblem() *ConfigProblem
 	RepairConfigFile() (string, error)
 }

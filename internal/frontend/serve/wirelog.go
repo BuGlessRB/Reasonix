@@ -41,6 +41,9 @@ var wireLogKinds = map[string]bool{
 	// else in the log: the task list rides the tool frames, but the verdict on
 	// what a write did to it does not.
 	"todo_progress": true,
+	// Whether the run stopped producing observable effects is the host's own
+	// reading; nothing else in the log carries the round count it rests on.
+	"progress_watch": true,
 	// What serialising writers across sessions actually cost this one. Nothing
 	// else in the log carries it: the notice only fires past the grace, and it
 	// carries a sentence rather than a number.

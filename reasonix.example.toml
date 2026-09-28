@@ -33,6 +33,13 @@ turn_done = true   # notify when a turn finishes
 approval_request = true   # notify when a tool approval is waiting
 ask_request = true   # notify when a question is waiting
 
+# User config only: a project reasonix.toml cannot set this section. The notice
+# above the composer is always on; only pausing changes what a run does.
+# [progress_watch]
+# pause = false         # end a run that stops producing observable effects; resumable, default off
+# rounds = 20           # tool rounds without a file change, check moving, task step, new read or delegated result
+# token_multiple = 8    # also when input spent since the last observable effect reaches this many context windows
+
 [agent]
 # system_prompt = "You are ..."   # custom persona/prompt; unset or empty = built-in default
 # system_prompt_file = "prompts/system.md"   # project paths stay in <workspace>; user paths may fall back to <reasonix home>

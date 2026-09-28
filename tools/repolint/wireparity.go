@@ -90,6 +90,10 @@ var mirroredWireTypes = []wireMirror{
 	// Plan rewriting and plan advancement are told apart by three counters; a
 	// desktop that can read only some of them reads churn as work.
 	{"internal/contract/eventwire/wire.go", "TodoProgress", tsWireFile, "TodoProgress"},
+	// A stall report a desktop reads only half of says "stalled" without the
+	// count or the cause, and the reader invents one.
+	{"internal/contract/eventwire/progress_watch.go", "ProgressWatch", tsWireFile, "ProgressWatch"},
+	{"internal/session/control/progress_watch_settings.go", "ProgressWatchSettings", tsBoundaryFile, "ProgressWatchSettings"},
 	// RemoteHostEdit is left out on purpose: the kernel still takes the single
 	// `workspace` an old row was saved with, which the page deliberately does
 	// not send. An under-filled request is not a picture that cannot be read.

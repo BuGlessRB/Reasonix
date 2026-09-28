@@ -17,6 +17,10 @@ func PauseClass(err error) string {
 	if errors.As(err, &maxSteps) {
 		return "max_steps"
 	}
+	var stalled *noProgressPause
+	if errors.As(err, &stalled) {
+		return PauseKindNoProgress
+	}
 	var readiness *FinalReadinessError
 	if errors.As(err, &readiness) {
 		return "final_readiness"
@@ -44,6 +48,10 @@ func InspectRunPause(err error) (RunPauseInfo, bool) {
 	var budget *taskBudgetPause
 	if errors.As(err, &budget) {
 		return RunPauseInfo{Kind: "task_budget", Key: budget.axis, HostOwned: true, Reason: budget.detail}, true
+	}
+	var stalled *noProgressPause
+	if errors.As(err, &stalled) {
+		return RunPauseInfo{Kind: PauseKindNoProgress, Limit: stalled.limit, Key: stalled.key, Reason: stalled.detail}, true
 	}
 	return RunPauseInfo{}, false
 }

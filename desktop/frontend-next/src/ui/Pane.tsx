@@ -756,7 +756,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
               <button onClick={() => dispatch({ kind: "__error", text: "" } as never)}>{t("知道了")}</button>
             </div>
           )}
-          <RuntimeBar notices={s.runtime} onSeen={(id) => dispatch({ kind: "__runtime_seen", id } as never)} />
+          <RuntimeBar notices={s.runtime} onSeen={(id) => dispatch({ kind: "__runtime_seen", id } as never)} watch={s} onStall={(a) => a === "stop" ? void port.cancel().catch(fail) : a === "continue" ? void submit(t("继续")) : dispatch({ kind: a === "mute" ? "__stall_mute" : "__stall_dismiss" } as never)} />
         </div>
       </div>
 

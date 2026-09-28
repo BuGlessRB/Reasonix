@@ -18,6 +18,7 @@ import { askFromCall, promptOpen, prompted, sealByReceipt } from "./prompts";
 import { nameTurnStart, othersSteer } from "./turn_start";
 import { appendText, foldMessage, sealSay } from "./say";
 import { nextId } from "./ids";
+import { foldStall } from "./stall";
 import { dropTool, foldLastRead, foldTool, mergeReads } from "./fold";
 export { quoteAmount };
 export { setShowsReceipt, showsReceipt };
@@ -154,7 +155,7 @@ const holdsWait = new Set<string>([
 // bumps it. Wrapping the switch keeps that rule in one place instead of on each
 // of its two dozen returns.
 export function reduce(s: SessionState, ev: SessionEvent): SessionState {
-  const next = apply(s, ev);
+  const next = foldStall(apply(s, ev), ev);
   if (next.items === s.items) return next;
   const streamed = ev.kind === "text" || ev.kind === "reasoning";
   const bumped = streamed ? next : { ...next, revision: next.revision + 1 };
@@ -603,10 +604,10 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
         ...s,
         running: false,
         terminal: turnTerminal(ev),
-        doing: ev.err ? "已中断" : "已完成",
+        doing: ev.outcome === "no_progress" ? "已暂停" : ev.err ? "已中断" : "已完成",
         waiting: {},
         plan: livePlan(s.plan),
-        items: withReceipt(sealTurn(sealSay(s.items, true), ev.err), ev.receipt),
+        items: withReceipt(sealTurn(sealSay(s.items, true), ev.outcome === "no_progress" ? undefined : ev.err), ev.receipt),
       };
 
     default:
@@ -621,6 +622,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
 // the flag is what tells a stop apart from a dropped connection.
 function turnTerminal(ev: WireEvent): TurnTerminal {
   if (ev.cancelled) return { kind: "cancelled" };
+  if (ev.outcome === "no_progress") return { kind: "incomplete", outcome: ev.outcome };
   if (ev.err) return { kind: "failed", err: ev.err };
   if (ev.outcome) return { kind: "incomplete", outcome: ev.outcome };
   return { kind: "completed" };
