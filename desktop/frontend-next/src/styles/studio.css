@@ -2367,7 +2367,7 @@ body { font-size: 14px; line-height: 1.75; }
   .compose .row { position: relative; display: block; }
   .turntools { width: 100%; padding-right: 38px; box-sizing: border-box; flex-wrap: wrap; row-gap: 2px; }
   .turntools-spacer { flex-basis: 12px; }
-  .compose .row .go { position: absolute; right: 0; bottom: 0; margin-left: 0; }
+  .compose .row .go { position: absolute; right: 0; bottom: 0; width: auto; margin-left: 0; }
   .studio-speed-anchor { display: none; }
   .studio-meterrail .studio-context-anchor,
   .studio-meterrail .studio-deck-anchor { position: static; }

@@ -1,6 +1,7 @@
 package market
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -205,35 +206,59 @@ func (c *Client) Detail(ctx context.Context, slug string) (Detail, error) {
 }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, limit int64, into any) error {
-	u := c.base
-	u.Path = path
-	u.RawQuery = query.Encode()
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	resp, body, err := c.send(ctx, http.MethodGet, path, query, "", nil, limit)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrBadResponse, err)
+		return err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "reasonix-market/1.0")
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrUnreachable, err)
-	}
-	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
 		return ErrNotFound
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("%w: HTTP %d", ErrBadResponse, resp.StatusCode)
 	}
+	return decode(body, into)
+}
+
+// send makes one request to the fixed registry host and reads at most limit
+// bytes of the answer. A token, when given, travels only on this request.
+func (c *Client) send(ctx context.Context, method, path string, query url.Values, token string, payload []byte, limit int64) (*http.Response, []byte, error) {
+	u := c.base
+	u.Path = path
+	u.RawQuery = query.Encode()
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	var reader io.Reader
+	if payload != nil {
+		reader = bytes.NewReader(payload)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", ErrBadResponse, err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "reasonix-market/1.0")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", ErrUnreachable, err)
+	}
+	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrUnreachable, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
 	if int64(len(body)) > limit {
-		return fmt.Errorf("%w: body exceeds %d bytes", ErrBadResponse, limit)
+		return nil, nil, fmt.Errorf("%w: body exceeds %d bytes", ErrBadResponse, limit)
 	}
+	return resp, body, nil
+}
+
+func decode(body []byte, into any) error {
 	if err := json.Unmarshal(body, into); err != nil {
 		return fmt.Errorf("%w: %w", ErrBadResponse, err)
 	}

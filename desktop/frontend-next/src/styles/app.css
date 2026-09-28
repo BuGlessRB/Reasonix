@@ -3220,6 +3220,29 @@
   .mkt .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
   .mkt-names { margin: 6px 0 0; padding-left: 18px; font: var(--w-reg) var(--fs-ui)/1.6 var(--mono); color: var(--text) }
   .mkt-seen { display: flex; align-items: center; gap: 7px; margin-top: 8px; font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--text); cursor: pointer }
+  .mkt-views { align-self: flex-start; margin-bottom: 12px }
+  .mkt-signin {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; padding: 8px 10px;
+    border: 1px solid var(--hair); border-radius: var(--r-sm); font: var(--w-reg) var(--fs-ui)/1.5 var(--ui); color: var(--muted);
+  }
+  .mkt-signin span { flex: 1; min-width: 200px }
+  .mkt-row[data-static] { cursor: default }
+  .mkt-row[data-static]:hover { background: transparent }
+  .mkt-badge[data-tone="err"] { border-color: color-mix(in srgb, var(--err) 45%, transparent); color: var(--err) }
+  .mkt-tip { margin: 0; font: var(--w-reg) var(--fs-micro)/1.45 var(--ui); font-style: normal; color: var(--ghost) }
+  .mkt-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+  @media (max-width: 720px) { .mkt-fields { grid-template-columns: minmax(0, 1fr) } }
+  .mkt-fields label { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+  .mkt-fields label.full { grid-column: 1 / -1 }
+  .mkt-fields span { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .mkt-fields input, .mkt-fields textarea {
+    min-width: 0; padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--raised); color: var(--text); font: var(--w-reg) var(--fs-ui)/1.5 var(--ui);
+  }
+  .mkt-fields .mono { font: var(--w-reg) var(--fs-meta)/1.5 var(--mono) }
+  .mkt-fields textarea { resize: vertical }
+  .mkt-fields input:focus, .mkt-fields textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  .mkt-fields input::placeholder { color: var(--ghost) }
 
   .hooks .scope { max-width: 460px; margin-top: 0 }
   .hooks .path { margin: 8px 0 0; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); word-break: break-all }

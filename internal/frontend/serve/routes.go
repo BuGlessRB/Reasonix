@@ -29,6 +29,7 @@ func (s *Server) routes() http.Handler {
 	s.registerPluginRoutes(mux)
 	s.registerBackupRoutes(mux)
 	s.registerMarketRoutes(mux)
+	s.registerMarketPublishRoutes(mux)
 	s.registerThemeRoutes(mux)
 	s.registerAppearanceRoutes(mux)
 	s.registerSurfaceRoutes(mux)

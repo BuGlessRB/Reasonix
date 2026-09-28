@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
-import type { AgentPort, MarketDetail, MarketKind, MarketPackage, MarketPlan } from "../port/port";
+import type { AccountState, AgentPort, MarketDetail, MarketKind, MarketPackage, MarketPlan } from "../port/port";
 import { Candidate, ORDER, Outcome } from "./AddPlugin";
 import { Group } from "./Group";
+import { MyPackages, PublishForm } from "./MarketPublish";
 import { arrowTabs } from "./tablist";
 
-const KINDS: [MarketKind | "", string][] = [["", "全部"], ["skill", "技能"], ["plugin", "插件"], ["mcp", "MCP 服务"]];
+const KINDS: [MarketKind | "", string][] = [["", "全部"], ["skill", "技能"], ["plugin", "插件"], ["mcp", "MCP 服务"], ["theme", "主题"]];
 type Sort = "trending" | "installs" | "new";
 const SORTS: [Sort, string][] = [["trending", "近期热门"], ["installs", "安装最多"], ["new", "最新"]];
-const KIND_NAME: Record<string, string> = { skill: "技能", plugin: "插件", mcp: "MCP 服务" };
+const KIND_NAME: Record<string, string> = { skill: "技能", plugin: "插件", mcp: "MCP 服务", theme: "主题" };
 
 // Titled for what a person has to do with each group, not for what the kernel
 // fears: a high grade here is as often "many skills from one address" as it is
@@ -83,7 +84,7 @@ export function Market({ port, onInstalled }: Props) {
           type="search"
           data-action="market.search"
           value={q}
-          placeholder={t("搜索技能、插件与 MCP 服务")}
+          placeholder={t("搜索技能、插件、MCP 服务与主题")}
           aria-label={t("搜索社区市场")}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -343,13 +344,40 @@ function Entry({ port, slug, onBack, onInstalled }: { port: AgentPort; slug: str
   );
 }
 
+type View = "browse" | "mine" | "publish";
+const VIEWS: [View, string][] = [["browse", "浏览"], ["mine", "我的发布"], ["publish", "发布"]];
+
 // Installed and discover are two views of one subject, so they are tabs of one
 // page rather than two sections: what the market adds shows up on the other tab.
-export function MarketGroup({ port, onInstalled }: Props) {
+// Publishing spends the account session, so it is offered only while signed in.
+export function MarketGroup({ port, onInstalled, account, onSignIn }: Props & { account: AccountState | null; onSignIn: () => void }) {
+  const [view, setView] = useState<View>("browse");
+  const handle = account?.signedIn ? account.user?.handle : undefined;
+  const at = handle ? view : "browse";
   return (
     <Group id="market" title={t("社区市场")}
-      hint={t("社区发布、经过审核的技能、插件与 MCP 服务。只有固定了审核内容的版本才能安装；安装前会列出将写入的全部内容，与粘贴地址安装走同一套确认。")}>
-      <Market port={port} onInstalled={onInstalled} />
+      hint={t("社区发布、经过审核的技能、插件、MCP 服务与主题。只有固定了审核内容的版本才能安装；安装前会列出将写入的全部内容，与粘贴地址安装走同一套确认。")}>
+      {handle ? (
+        <div className="seg mkt-views" data-text role="radiogroup" aria-label={t("社区市场")}>
+          {VIEWS.map(([id, name]) => (
+            <button key={id} role="radio" aria-checked={at === id} data-action="market.view" data-value={id} onClick={() => setView(id)}>
+              {t(name)}
+            </button>
+          ))}
+        </div>
+      ) : (
+        account !== null && (
+          <div className="mkt-signin">
+            <span>{t("登录后可以在这里发布技能、插件、MCP 服务和主题，并查看审核进度。")}</span>
+            <button className="act" data-action="market.signin" onClick={onSignIn}>
+              {t("去登录")}
+            </button>
+          </div>
+        )
+      )}
+      {at === "browse" && <Market port={port} onInstalled={onInstalled} />}
+      {at === "mine" && <MyPackages port={port} />}
+      {at === "publish" && handle && <PublishForm port={port} handle={handle} onMine={() => setView("mine")} />}
     </Group>
   );
 }

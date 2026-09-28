@@ -201,6 +201,13 @@ export const ACTIONS: UIAction[] = [
   { id: "market.inspect", kind: "kernel-mutation", target: "none", proof: "interaction" },
   { id: "market.confirm-many", kind: "view", target: "none", proof: "interaction" },
   { id: "market.install", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  // Publishing: the draft is on screen only, and the submission is the one
+  // write, spending the account session on the registry.
+  { id: "market.view", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.signin", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "market.draft", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.publish", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  { id: "market.publish-again", kind: "view", target: "none", proof: "interaction" },
   // Taking back the innermost open thing: a popover, an inline form. One
   // intent, reached by pressing away and by Escape.
   { id: "layer.dismiss", kind: "navigation", target: "none", proof: "interaction" },
