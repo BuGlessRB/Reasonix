@@ -230,37 +230,6 @@ func target(step Step) string {
 	return "the focused element"
 }
 
-// point is where an input for step lands, in CSS pixels. For a ref it is the
-// middle of the element's visible part, and the element must be what a real
-// pointer there would reach.
-func (s *Session) point(ctx context.Context, t *tab, step Step) (float64, float64, error) {
-	if step.Ref == "" {
-		if step.X == nil || step.Y == nil {
-			return 0, 0, fail(CodeBadStep, "a %s step needs a ref, or x and y from a screenshot", step.Action)
-		}
-		scale := t.screenshotScale()
-		return *step.X * scale, *step.Y * scale, nil
-	}
-	node, err := s.node(ctx, t, step.Ref)
-	if err != nil {
-		return 0, 0, err
-	}
-	if err := t.call(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": node}, nil); err != nil {
-		if isProtocolError(err) {
-			return 0, 0, &Failure{Code: CodeNotVisible, Ref: step.Ref, Detail: fmt.Sprintf("%s has no box on the page (hidden or not rendered)", step.Ref)}
-		}
-		return 0, 0, engineFailure(err)
-	}
-	x, y, err := t.visibleCenter(ctx, node, step.Ref)
-	if err != nil {
-		return 0, 0, err
-	}
-	if err := s.checkHit(ctx, t, node, step.Ref, x, y); err != nil {
-		return 0, 0, err
-	}
-	return x, y, nil
-}
-
 // node resolves a ref on t to a backend node that still exists.
 func (s *Session) node(ctx context.Context, t *tab, ref string) (int64, error) {
 	target, err := s.refs.resolve(ref)
@@ -277,80 +246,6 @@ func (s *Session) node(ctx context.Context, t *tab, ref string) (int64, error) {
 		return 0, engineFailure(err)
 	}
 	return target.node, nil
-}
-
-func (t *tab) visibleCenter(ctx context.Context, node int64, ref string) (float64, float64, error) {
-	var quads struct {
-		Quads [][]float64 `json:"quads"`
-	}
-	if err := t.call(ctx, "DOM.getContentQuads", map[string]any{"backendNodeId": node}, &quads); err != nil && !isProtocolError(err) {
-		return 0, 0, engineFailure(err)
-	}
-	var metrics struct {
-		Viewport struct {
-			Width  float64 `json:"clientWidth"`
-			Height float64 `json:"clientHeight"`
-		} `json:"cssLayoutViewport"`
-	}
-	if err := t.call(ctx, "Page.getLayoutMetrics", nil, &metrics); err != nil {
-		return 0, 0, engineFailure(err)
-	}
-	for _, q := range quads.Quads {
-		if len(q) != 8 {
-			continue
-		}
-		minX, maxX := min(q[0], q[2], q[4], q[6]), max(q[0], q[2], q[4], q[6])
-		minY, maxY := min(q[1], q[3], q[5], q[7]), max(q[1], q[3], q[5], q[7])
-		minX, minY = max(minX, 0), max(minY, 0)
-		maxX, maxY = min(maxX, metrics.Viewport.Width), min(maxY, metrics.Viewport.Height)
-		if maxX-minX >= 1 && maxY-minY >= 1 {
-			return (minX + maxX) / 2, (minY + maxY) / 2, nil
-		}
-	}
-	return 0, 0, &Failure{Code: CodeNotVisible, Ref: ref, Detail: fmt.Sprintf("%s has no visible area in the viewport", ref)}
-}
-
-// checkHit refuses an input whose point would land on another element, such
-// as a banner drawn over the target.
-func (s *Session) checkHit(ctx context.Context, t *tab, node int64, ref string, x, y float64) error {
-	var hit struct {
-		BackendNodeID int64 `json:"backendNodeId"`
-	}
-	if err := t.call(ctx, "DOM.getNodeForLocation", map[string]any{"x": int(x), "y": int(y), "includeUserAgentShadowDOM": false, "ignorePointerEventsNone": true}, &hit); err != nil {
-		if isProtocolError(err) {
-			return nil
-		}
-		return engineFailure(err)
-	}
-	if hit.BackendNodeID == 0 || hit.BackendNodeID == node {
-		return nil
-	}
-	targetObj, err := t.resolveObject(ctx, node)
-	if err != nil {
-		return err
-	}
-	hitObj, err := t.resolveObject(ctx, hit.BackendNodeID)
-	if err != nil {
-		return err
-	}
-	var within struct {
-		Result struct {
-			Value bool `json:"value"`
-		} `json:"result"`
-	}
-	if err := t.call(ctx, "Runtime.callFunctionOn", map[string]any{
-		"objectId":            targetObj,
-		"functionDeclaration": "function(n){for(;n;n=n.parentNode||n.host){if(n===this)return true}return false}",
-		"arguments":           []map[string]any{{"objectId": hitObj}},
-		"returnByValue":       true,
-	}, &within); err != nil {
-		return engineFailure(err)
-	}
-	if within.Result.Value {
-		return nil
-	}
-	cover := s.refs.refFor(t.id, hit.BackendNodeID)
-	return &Failure{Code: CodeCovered, Ref: ref, Detail: fmt.Sprintf("%s is covered by %s %s at that point; deal with that element first", ref, t.describe(ctx, hit.BackendNodeID), cover)}
 }
 
 func (t *tab) resolveObject(ctx context.Context, node int64) (string, error) {
@@ -538,16 +433,11 @@ func (s *Session) scrollPoint(ctx context.Context, t *tab, step Step) (float64, 
 	if step.Ref != "" || (step.X != nil && step.Y != nil) {
 		return s.point(ctx, t, step)
 	}
-	var metrics struct {
-		Viewport struct {
-			Width  float64 `json:"clientWidth"`
-			Height float64 `json:"clientHeight"`
-		} `json:"cssLayoutViewport"`
+	vp, err := t.viewport(ctx)
+	if err != nil {
+		return 0, 0, err
 	}
-	if err := t.call(ctx, "Page.getLayoutMetrics", nil, &metrics); err != nil {
-		return 0, 0, engineFailure(err)
-	}
-	return metrics.Viewport.Width / 2, metrics.Viewport.Height / 2, nil
+	return vp.Width / 2, vp.Height / 2, nil
 }
 
 func (t *tab) waitForText(ctx context.Context, step Step) (string, error) {
