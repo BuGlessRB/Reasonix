@@ -114,6 +114,7 @@ export const EN_KERNEL: Record<string, string> = {
     "{provider} names no reasoning-effort levels. To give it some, set reasoning_protocol or supported_efforts in its config block",
   "{provider} 不提供「{level}」档位，可选值为：{levels}": "{provider} has no \"{level}\" level. Available: {levels}",
   "无法识别当前使用的来源，请先切换一次模型": "Cannot tell which source is in use — switch models once and try again",
+  "当前模型 {model} 不支持「{mode}」模式": "The current model {model} does not support the “{mode}” mode",
   "任务正在运行，请先停止再切换工作区": "A task is running — stop it before changing the workspace",
   "任务正在运行，请先停止再重载扩展": "A task is running — stop it before reloading extensions",
   "该来源正在使用中，请先切换模型再删除": "This source is in use — switch models before deleting it",

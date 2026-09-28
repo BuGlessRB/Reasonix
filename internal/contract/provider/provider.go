@@ -201,6 +201,9 @@ type Request struct {
 	// entirely — the common path must stay byte-stable for prompt caching.
 	ResponseFormat *ResponseFormat `json:"ResponseFormat,omitempty"`
 	EffortOverride string          `json:"EffortOverride,omitempty"` // per-call reasoning-depth override; adapters apply it only when the endpoint's effort vocabulary accepts it
+	// Mode is the session's model mode id. An adapter sends only a mode its
+	// config declared for this endpoint, so an unknown one reaches no wire.
+	Mode string `json:"Mode,omitempty"`
 }
 
 // ResponseFormat asks a provider to constrain its output shape.

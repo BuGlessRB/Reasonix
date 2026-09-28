@@ -741,6 +741,9 @@ export class SsePort extends SseBackup implements AgentPort {
   setEffort(effort: string) {
     return this.post("/effort", { effort });
   }
+  setModelMode(mode: string) {
+    return this.post("/model-mode", { mode });
+  }
   compaction() {
     return this.get<CompactionSettings>("/compaction");
   }

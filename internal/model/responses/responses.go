@@ -48,10 +48,12 @@ func newFromConfig(cfg provider.Config) (provider.Provider, error) {
 	keySource, _ := cfg.Extra["api_key_source"].(string)
 	maxOutputTokens, _ := cfg.Extra["max_output_tokens"].(int)
 	requestURL, _ := cfg.Extra["request_url"].(string)
+	reasoningModes, _ := cfg.Extra["reasoning_modes"].(map[string]string)
 	return New(Config{
 		Name: cfg.Name, APIKey: cfg.APIKey, APIKeyFunc: cfg.APIKeyFunc, BaseURL: cfg.BaseURL, Model: cfg.Model,
 		Effort: effort, Mode: mode, Stateful: stateful, WebSearch: webSearch, Proxy: proxy,
 		KeyEnv: keyEnv, KeySource: keySource, MaxOutputTokens: maxOutputTokens, RequestURL: requestURL,
+		ReasoningModes: reasoningModes,
 		// Extra 原样透传：vision 等能力开关由调用方（boot/CLI）写入
 		// cfg.Extra，factory 若丢弃则 New() 读不到（评审 #7234 第 3 点）。
 		Extra: cfg.Extra,
@@ -72,6 +74,9 @@ type Config struct {
 	Proxy             netclient.ProxySpec
 	KeyEnv, KeySource string
 	RequestURL        string // optional exact Responses request URL; empty derives from BaseURL
+	// ReasoningModes maps a model mode id to the reasoning.mode it sends; a
+	// request naming any other mode sends none.
+	ReasoningModes map[string]string
 	// MaxOutputTokens is the total provider output budget. Zero enables Reasonix's
 	// 32K reasoning safety default on official DeepSeek and otherwise omits the
 	// field; thinking-disabled DeepSeek requests and negative values omit it.
@@ -114,6 +119,7 @@ type client struct {
 	session                            sessionHeaders
 	maxOutputTokens                    int
 	vision                             bool // model accepts image input; embed Images as input_image parts
+	reasoningModes                     map[string]string
 	http                               *http.Client
 	idleTimeout                        time.Duration
 	authed                             atomic.Bool
@@ -172,8 +178,8 @@ func New(cfg Config) provider.Provider {
 		name: cfg.Name, apiKey: cfg.apiKeyResolver(), keyEnv: cfg.KeyEnv, keySource: cfg.KeySource,
 		baseURL: baseURL, requestURL: requestURL, model: cfg.Model, effort: cfg.Effort,
 		vendor: vendor, caps: cap, mode: cfg.mode(), session: sessionHeaders{dashScopeCache: sessionCache, openCode: provider.NewOpenCodeSessionID()}, webSearch: cfg.WebSearch, maxOutputTokens: maxOutputTokens,
-		vision: vision,
-		http:   httpClient, idleTimeout: defaultStreamIdleTimeout,
+		vision: vision, reasoningModes: cfg.ReasoningModes,
+		http: httpClient, idleTimeout: defaultStreamIdleTimeout,
 	}
 }
 
@@ -327,8 +333,15 @@ func (c *client) buildRequestBody(req provider.Request) (map[string]any, bool, [
 	case "disabled", "off":
 		effort = "none"
 	}
+	reasoning := map[string]any{}
 	if effort != "" {
-		body["reasoning"] = map[string]any{"effort": effort}
+		reasoning["effort"] = effort
+	}
+	if mode := c.reasoningModes[req.Mode]; req.Mode != "" && mode != "" {
+		reasoning["mode"] = mode
+	}
+	if len(reasoning) > 0 {
+		body["reasoning"] = reasoning
 	}
 	maxOutputTokens := req.MaxTokens
 	if maxOutputTokens == 0 {

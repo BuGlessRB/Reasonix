@@ -298,15 +298,14 @@ type Options struct {
 	PromptRefiner *promptrefine.Refiner
 	Sink          event.Sink
 	Policy        permission.Policy
-	// SubagentGate is the shared, mutable gate every headless-only sub-agent
-	// surface (task, writer-capable skill sub-agents, planner) reads from. Nil
-	// disables gating for those surfaces same as before this field existed.
-	// SetToolApprovalMode and ApplyHeadlessApprovalMode call Update on it so a
-	// runtime approval-mode switch reaches sub-agents, not just the parent
-	// executor's own gate.
-	SubagentGate  *SharedHeadlessGate
-	Label         string
-	ModelRef      string
+	// SubagentGate is the shared gate every headless-only sub-agent surface
+	// reads; nil disables gating there. The approval-mode setters Update it so
+	// a runtime switch reaches sub-agents, not only the executor's own gate.
+	SubagentGate *SharedHeadlessGate
+	Label        string
+	ModelRef     string
+	// ModelModes are the optional modes the session's model declares.
+	ModelModes    []config.ModelMode
 	SystemPrompt  string
 	SessionDir    string
 	SessionPath   string

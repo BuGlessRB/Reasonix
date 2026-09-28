@@ -5,7 +5,7 @@ import type { AgentPort, ChipCall, ModelEntry, SessionStatus, Attachment } from 
 import { Picker } from "./Menu";
 import { Policy } from "./Policy";
 import { modelMenu } from "./modelmenu";
-import { effortMenu, effortReading, effortsFor } from "./effort";
+import { effortMenu, effortReading, effortsFor, routeEffortPick } from "./effort";
 import { CompletionMenu, useCompletion } from "./Completion";
 import { ChipMirror, useSkillChips } from "./ChipMirror";
 import { useIme } from "./ime";
@@ -384,12 +384,9 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
   // composer answering for an endpoint that never spoke.
   const declared = efforts.length > 0;
   const modelLb = status?.modelRef?.replace(/^[^/]+\//, "") ?? status?.label ?? "—";
-  // A model switch rebuilds the runtime kernel-side (~0.4s on a real session);
-  // the other controls on this shelf may land immediately, and which is which
-  // is the kernel's to say, not this file's. Either way the click needs a
-  // pending state or it reads as a dead control —— 而等的是哪一个就只标哪一
-  // 个：一整排一起变灰，说的是「现在什么都不能改」，而实际上只有这一个在等
-  // 内核回话。
+  // A model switch rebuilds the runtime kernel-side; other controls here may
+  // land at once. Each click needs its own pending state: greying the whole
+  // shelf says nothing can change while only one control waits on the kernel.
   const busyRef = useRef(new Set<string>());
   const change = (key: string, call: () => Promise<void>) => {
     if (busyRef.current.has(key)) return;
@@ -735,10 +732,14 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
                 onOpen={loadModels}
                 title={t("推理强度")}
                 current={declared ? status.effort || "auto" : ""}
-                pending={busy["effort"]}
-                items={effortMenu(efforts, modelLb, "__effort-declare")}
-                onPick={(value) => value === "__effort-declare" ? onSettings("providers:effort-declare") : change("effort", () => port.setEffort(value))}
-                label={<><span>{declared ? effortReading(status.effort) : t("未声明")}</span><StudioIcon name="down" /></>}
+                pending={busy["effort"] || busy["mode"]}
+                items={effortMenu(efforts, modelLb, "__effort-declare", status.modes)}
+                onPick={(value) => routeEffortPick(value, status.modes, {
+                  declare: () => onSettings("providers:effort-declare"),
+                  effort: (level) => change("effort", () => port.setEffort(level)),
+                  mode: (mode) => change("mode", () => port.setModelMode(mode)),
+                })}
+                label={<><span>{declared ? effortReading(status.effort, status.modes) : t("未声明")}</span><StudioIcon name="down" /></>}
               />
             </div>
           )}

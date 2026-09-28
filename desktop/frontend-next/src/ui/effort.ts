@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import type { ModelEntry } from "../port/port";
+import type { ModelEntry, ModelMode } from "../port/port";
 
 // Only the ladder the kernel would accept for the model in hand. A fixed list
 // here offered rungs a given model does not have, and picking one looked like
@@ -25,11 +25,38 @@ const EFFORT_LABELS: Record<string, string> = {
   auto: "自动", disabled: "关闭", none: "不思考", low: "快速", medium: "平衡", high: "深入", xhigh: "超深入", max: "极致",
 };
 
-export function effortReading(value?: string): string {
+export function effortReading(value?: string, modes?: ModelMode[]): string {
   const id = (value || "auto").toLowerCase();
   const label = EFFORT_LABELS[id] ?? id;
   const raw = id === "auto" ? "Auto" : id.charAt(0).toUpperCase() + id.slice(1);
-  return `${t(label)} · ${raw}`;
+  const on = modes?.find((m) => m.active);
+  return `${t(label)} · ${raw}${on ? ` · ${modeLabel(on)}` : ""}`;
+}
+
+// The kernel names a mode's strings by key; the wording is ours. A key this
+// build has no words for shows the mode's id rather than nothing.
+const MODE_TEXT: Record<string, string> = {
+  "model_mode.pro": "Pro 模式",
+  "model_mode.pro.hint": "更慢：模型为同一请求做更多推理，消耗的 token 与费用明显更高。仅对当前会话生效。",
+};
+
+export function modeLabel(mode: ModelMode): string {
+  return MODE_TEXT[mode.labelKey] ? t(MODE_TEXT[mode.labelKey]) : mode.id;
+}
+
+const MODE_ROW = "__mode:";
+
+/** What a row of the effort menu asks for. A mode row flips that mode, so the
+ *  answer is the mode to set — "" when it is the one already on. */
+export function routeEffortPick(
+  value: string,
+  modes: ModelMode[] | undefined,
+  act: { declare: () => void; effort: (level: string) => void; mode: (mode: string) => void },
+) {
+  const mode = value.startsWith(MODE_ROW) ? modes?.find((m) => m.id === value.slice(MODE_ROW.length)) : undefined;
+  if (mode) act.mode(mode.active ? "" : mode.id);
+  else if (value === "__effort-declare") act.declare();
+  else if (!value.startsWith(MODE_ROW)) act.effort(value);
 }
 
 export function effortLabel(value: string): string {
@@ -59,7 +86,7 @@ export function effortDescription(value: string): string {
 /** The rows the effort picker offers. An endpoint that reported no levels has
  *  not said "none" — it has said nothing, so rather than invent a rung the one
  *  row here points at where the capability is declared. */
-export function effortMenu(efforts: string[], modelLabel: string, onDeclare: string) {
+export function effortMenu(efforts: string[], modelLabel: string, onDeclare: string, modes: ModelMode[] = []) {
   const declared = efforts.length > 0;
   return [
     { value: "__effort-heading", label: t("推理强度"), right: modelLabel, header: true },
@@ -72,6 +99,14 @@ export function effortMenu(efforts: string[], modelLabel: string, onDeclare: str
       recommended: value === "auto",
       strength: value === "disabled" || value === "none" ? 0 : ({ auto: 1, low: 1, medium: 2, high: 3, xhigh: 4, max: 4 } as Record<string, number>)[value.toLowerCase()] ?? 1,
       desc: effortDescription(value),
+    })),
+    ...modes.map((mode, i) => ({
+      value: MODE_ROW + mode.id,
+      label: modeLabel(mode),
+      desc: MODE_TEXT[mode.hintKey] ? t(MODE_TEXT[mode.hintKey]) : undefined,
+      badge: mode.costlier ? t("费用更高") : undefined,
+      toggle: mode.active,
+      divide: i === 0,
     })),
     ...(declared ? [{ value: "__effort-note", label: t("仅显示当前模型实际支持的档位。"), right: t("按模型生效"), header: true }] : []),
   ];

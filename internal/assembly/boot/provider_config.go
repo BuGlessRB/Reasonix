@@ -27,6 +27,7 @@ func providerConfig(e *config.ProviderEntry, proxy netclient.ProxySpec) provider
 			"thinking":           e.Thinking,
 			"effort":             config.EffectiveEffort(e),
 			"supported_efforts":  config.RequestEffortLevels(e),
+			"reasoning_modes":    config.RequestReasoningModes(e),
 			"reasoning_protocol": config.ReasoningProtocolForEntry(e),
 			"max_output_tokens":  e.MaxOutputTokens,
 			"chat_url":           e.ChatURL,

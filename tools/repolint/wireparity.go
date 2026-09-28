@@ -73,6 +73,7 @@ var mirroredWireTypes = []wireMirror{
 	// The fold bounds and the one in force: a field the panel cannot read is a
 	// threshold a user sets and never sees applied.
 	{"internal/session/control/compaction_settings.go", "CompactionSettings", tsModelFile, "CompactionSettings"},
+	{"internal/session/control/model_modes.go", "ModelModeView", tsModelFile, "ModelMode"},
 	// The completion summary is the turn's own verdict on itself; a gap kind the
 	// desktop cannot read is a turn it shows as clean.
 	{"internal/contract/eventwire/wire.go", "CompletionSummary", tsWireFile, "CompletionSummary"},

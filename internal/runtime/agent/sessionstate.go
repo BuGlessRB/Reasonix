@@ -28,6 +28,8 @@ type sessionRuntime struct {
 	cacheMiss atomic.Int64
 
 	missingReasoning missingReasoningWatch
+	// mode is the model mode the conversation asked for; a new one starts off.
+	mode requestModeState
 
 	// path is rebound by preflight when a transcript is bound, so reset leaves
 	// it to its owner rather than blanking it.
@@ -61,6 +63,7 @@ func (r *sessionRuntime) reset(s *sessionstore.Session) {
 	r.cacheMiss.Store(0)
 	r.output.reset()
 	r.missingReasoning = missingReasoningWatch{}
+	r.mode.reset()
 	r.win.reset()
 }
 

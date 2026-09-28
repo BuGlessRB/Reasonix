@@ -170,6 +170,7 @@ const SAID: Record<string, string> = {
     "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts",
   "effort.unsupported_level": "{provider} 不提供「{level}」档位，可选值为：{levels}",
   "effort.no_provider": "无法识别当前使用的来源，请先切换一次模型",
+  "model_mode.unsupported": "当前模型 {model} 不支持「{mode}」模式",
 
   "prompt_refine.empty": "输入框是空的，先写点内容再优化",
   "prompt_refine.too_long": "内容超过 {max_bytes} 字节，无法优化",
