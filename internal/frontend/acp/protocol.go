@@ -705,8 +705,8 @@ type FSWriteTextFileParams struct {
 
 // TerminalCreateParams starts a command in a client-owned terminal.
 // Env follows ACP v1's official EnvVariable[] shape (same as MCP env): only
-// the overrides Reasonix owns (typically TMPDIR/TMP/TEMP) are sent — never a
-// full host environment dump.
+// the overrides Reasonix owns — session-private TMPDIR/TMP/TEMP plus the
+// user's [tools.shell] env — are sent, never a full host environment dump.
 type TerminalCreateParams struct {
 	SessionID       string        `json:"sessionId"`
 	Command         string        `json:"command"`
