@@ -447,6 +447,12 @@ func (s Store) RestoreArchived(archivePath string) (SaveResult, error) {
 	if err := s.validateSave(restored); err != nil {
 		return SaveResult{}, err
 	}
+	// The active file must not be written while the index is unreadable: a
+	// restore that dies mid-way cannot be retried — the identity guard above
+	// would then report the half-written file as an already-active collision.
+	if _, err := readIndexIn(base); err != nil {
+		return SaveResult{}, err
+	}
 	if err := snapshotMemoryRevisionInDir(base, archivePath, archived); err != nil {
 		return SaveResult{}, err
 	}

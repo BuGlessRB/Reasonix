@@ -301,6 +301,49 @@ func TestStoreV2RestoreArchivedPreservesIdentityAndCreatesRevision(t *testing.T)
 	}
 }
 
+func TestStoreV2RestoreArchivedPreservesUnreadableIndex(t *testing.T) {
+	store := Store{Dir: testenv.TempDir(t)}
+	first, err := store.SaveWithOptions(Memory{Name: "fact", Description: "archived", Body: "v1"}, SaveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	archivePath, err := store.Archive(first.Memory.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexPath := filepath.Join(store.Dir, indexFile)
+	before := mustReadString(t, indexPath)
+	if err := os.Chmod(indexPath, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(indexPath, 0o644) })
+	if _, err := os.ReadFile(indexPath); err == nil {
+		t.Skip("this user can read files without read permission")
+	}
+
+	if _, err := store.RestoreArchived(archivePath); err == nil {
+		t.Fatal("RestoreArchived should report the index read error")
+	}
+	if _, err := os.Stat(filepath.Join(store.Dir, "fact.md")); !os.IsNotExist(err) {
+		t.Fatalf("failed restore left an active file behind: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(store.Dir, ".revisions", first.Memory.ID)); !os.IsNotExist(err) {
+		t.Fatalf("failed restore wrote a revision snapshot: %v", err)
+	}
+	if _, err := os.Stat(archivePath); err != nil {
+		t.Fatalf("failed restore removed the archive: %v", err)
+	}
+	if err := os.Chmod(indexPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := mustReadString(t, indexPath); got != before {
+		t.Fatalf("failed restore rewrote the index:\n%s", got)
+	}
+	if _, err := store.RestoreArchived(archivePath); err != nil {
+		t.Fatalf("restore after fixing the index should succeed, got: %v", err)
+	}
+}
+
 func TestStoreV2RestoreArchivedRejectsActiveCollisions(t *testing.T) {
 	store := Store{Dir: testenv.TempDir(t)}
 	first, err := store.SaveWithOptions(Memory{Name: "fact", Description: "first", Body: "archived"}, SaveOptions{})
