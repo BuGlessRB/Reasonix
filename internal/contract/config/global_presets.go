@@ -12,6 +12,7 @@ var (
 		"moonshotai/kimi-k3", "minimax/minimax-m3",
 	}
 	openAIModels       = []string{"gpt-6-sol", "gpt-6-astra", "gpt-6-luna"}
+	openAIWindow       = 1_050_000
 	geminiModels       = []string{"gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"}
 	volcengineArkModel = "ark-code-latest"
 )
@@ -48,17 +49,19 @@ var globalProviderPresets = []ProviderPreset{
 	{
 		ID:          "openai",
 		Label:       "OpenAI",
-		Description: "OpenAI API (Chat Completions) for the GPT-6 family.",
+		Description: "OpenAI Responses API for the GPT-6 family.",
 		KeyEnv:      "OPENAI_API_KEY",
+		// Responses, because on Chat Completions GPT-6 calls tools only at
+		// reasoning_effort=none and every turn here carries tools.
 		Entries: []ProviderEntry{{
 			Name:             "openai",
-			Kind:             "openai",
+			Kind:             kindResponses,
 			BaseURL:          "https://api.openai.com/v1",
 			Models:           openAIModels,
 			VisionModels:     openAIModels,
 			Default:          "gpt-6-sol",
 			APIKeyEnv:        "OPENAI_API_KEY",
-			ContextWindow:    1_050_000,
+			ContextWindow:    openAIWindow,
 			SupportedEfforts: []string{"low", "medium", "high", "xhigh", "max"},
 			DefaultEffort:    "medium",
 		}},

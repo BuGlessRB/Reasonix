@@ -21,6 +21,9 @@ type shippedPreset struct {
 	// Default, when set, has to match too: a shape that shipped one and had it
 	// changed was changed by somebody.
 	Default string
+	// Kind, when set, is the wire that shape shipped on, and the upgrade moves
+	// the entry onto the preset's. Empty identifies the shape on the preset's own.
+	Kind string
 	// Vision is the list that shape shipped. Holding it, or nil, is unspoken;
 	// anything else is a choice, an empty list most clearly of all — it says
 	// nothing here reads images.
@@ -48,6 +51,7 @@ var shippedPresets = []shippedPreset{
 	{PresetID: "qwen-coding-plan-cn-anthropic", CurrentModels: true, Window: new(0), ByName: true},
 	{PresetID: "qwen-coding-plan-global", CurrentModels: true, Window: new(0), ByName: true},
 	{PresetID: "qwen-coding-plan-global-anthropic", CurrentModels: true, Window: new(0), ByName: true},
+	{PresetID: "openai", CurrentModels: true, Window: new(openAIWindow), Default: "gpt-6-sol", Kind: kindOpenAI},
 }
 
 // upgradeShippedPresets brings every entry still carrying a shape we shipped up
@@ -87,9 +91,13 @@ func (s shippedPreset) matches(p *ProviderEntry) (ProviderEntry, bool) {
 	if s.CurrentModels {
 		models = canonical.Models
 	}
+	kind := canonical.Kind
+	if s.Kind != "" {
+		kind = s.Kind
+	}
 	// A single model in `model` rather than `models` is a shape nothing here
 	// shipped, and replacing its catalog would answer a narrowing with a list.
-	if !strings.EqualFold(strings.TrimSpace(p.Kind), strings.TrimSpace(canonical.Kind)) ||
+	if !strings.EqualFold(strings.TrimSpace(p.Kind), strings.TrimSpace(kind)) ||
 		normalizedBaseURLForMigration(p.BaseURL) != normalizedBaseURLForMigration(canonical.BaseURL) ||
 		!stringSlicesEqual(p.Models, models) ||
 		strings.TrimSpace(p.Model) != "" {
@@ -119,6 +127,10 @@ func (s shippedPreset) identifies(p *ProviderEntry) bool {
 func (s shippedPreset) upgrade(p *ProviderEntry, canonical ProviderEntry) bool {
 	added := addedModels(p.Models, canonical.Models)
 	changed := false
+	if s.Kind != "" && !strings.EqualFold(strings.TrimSpace(p.Kind), canonical.Kind) {
+		p.Kind = canonical.Kind
+		changed = true
+	}
 	if !stringSlicesEqual(p.Models, canonical.Models) {
 		p.Models = append([]string(nil), canonical.Models...)
 		changed = true
