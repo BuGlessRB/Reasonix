@@ -317,7 +317,9 @@ func renderMemoryRecall(recall memory.RecallResult) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "last memory recall\n  query=%s\n", memoryOneLine(recall.Query))
-	fmt.Fprintf(&b, "  budget=%d/%d omitted=%d", recall.UsedChars, recall.CharBudget, recall.Omitted)
+	fmt.Fprintf(&b, "  budget=%d/%d omitted=%d (limit=%d budget=%d)",
+		recall.UsedChars, recall.CharBudget, recall.OmittedByLimit+recall.OmittedByBudget,
+		recall.OmittedByLimit, recall.OmittedByBudget)
 	if recall.Suppressed != "" {
 		fmt.Fprintf(&b, " suppressed=%s", memoryOneLine(recall.Suppressed))
 	}
