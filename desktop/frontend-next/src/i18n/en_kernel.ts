@@ -254,6 +254,8 @@ export const EN_KERNEL: Record<string, string> = {
   "该页面不属于 Studio，无法对其操作": "That page is not Studio itself, so it may not drive it",
   "缺少本次启动的凭据，请重新打开 Studio 后重试": "This launch's credential is missing — reopen Studio and try again",
   "本机通道未建立，请重新打开 Studio 后重试": "The local channel was never established — reopen Studio and try again",
+  "该服务未开启认证，只接受发往本机或其监听地址的请求": "This server runs without authentication, so it only accepts requests addressed to this machine or its listening address",
+  "该服务未开启认证，修改与审批需要本次启动的令牌，请用启动时打印的链接打开": "This server runs without authentication, so changes and approvals need this launch's token — open it with the link printed at startup",
   "文件保存请求格式不正确": "The file save request is malformed",
   "文件已在打开后被其他操作修改，请重新载入": "The file changed after it was opened; reload it and try again",
   "找不到该文件，它可能已被移动或删除": "The file was not found; it may have been moved or deleted",
