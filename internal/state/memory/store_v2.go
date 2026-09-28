@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -132,6 +133,11 @@ func (s Store) validateSave(m Memory) error {
 	return s.validateSubjectKey(m)
 }
 
+// ErrPinnedBudget is the identity of a save refused because pinned guidance would
+// exceed the configured budget. Its text is the setting the message already names,
+// so wrapping it leaves the user-visible message byte-identical.
+var ErrPinnedBudget = errors.New("memory.pinned_budget_chars")
+
 // validatePinnedBudget rejects a save that would push the total pinned-body
 // runes over the user's configured ceiling. Legacy virtually-pinned guidance
 // counts — it occupies the same prefix. Unset (the default) means no ceiling.
@@ -149,7 +155,7 @@ func (s Store) validatePinnedBudget(m Memory) error {
 	if total <= s.PinnedBudgetChars {
 		return nil
 	}
-	return fmt.Errorf("pinning this fact would put pinned guidance at %d chars, over the %d budget you configured (memory.pinned_budget_chars): unpin or consolidate existing pinned facts, raise the budget, or move rules that must always hold into REASONIX.md/AGENTS.md instructions", total, s.PinnedBudgetChars)
+	return fmt.Errorf("pinning this fact would put pinned guidance at %d chars, over the %d budget you configured (%w): unpin or consolidate existing pinned facts, raise the budget, or move rules that must always hold into REASONIX.md/AGENTS.md instructions", total, s.PinnedBudgetChars, ErrPinnedBudget)
 }
 
 func (s Store) SaveWithOptions(m Memory, opts SaveOptions) (SaveResult, error) {

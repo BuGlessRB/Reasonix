@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -77,8 +78,8 @@ func TestPinnedBudgetRejectsOverflowAndAllowsUpdates(t *testing.T) {
 	if _, err := store.SaveWithOptions(Memory{
 		Name: "second-pin", Description: "overflowing pinned fact",
 		Activation: ActivationPinned, Body: strings.Repeat("x", 200),
-	}, SaveOptions{}); err == nil || !strings.Contains(err.Error(), "memory.pinned_budget_chars") {
-		t.Fatalf("overflow must be rejected and name the setting that raises it, got %v", err)
+	}, SaveOptions{}); !errors.Is(err, ErrPinnedBudget) {
+		t.Fatalf("overflow must be rejected with the pinned-budget identity, got %v", err)
 	}
 
 	// Updating the existing pinned fact must not double-count itself.
