@@ -147,7 +147,7 @@ func (*Tool) Schema() json.RawMessage {
   "source":{"type":"string","description":"URL, local file/folder path, .mcp.json path, or package name to install from. Ignored when op=uninstall (use name instead)."},
   "kind":{"type":"string","enum":["auto","skill","mcp","plugin"],"description":"Capability kind. Defaults to auto."},
   "apply":{"type":"boolean","description":"false (default) only returns an install plan; true performs the planned writes/connects. Ignored for op=uninstall."},
-  "scope":{"type":"string","enum":["project","global"],"description":"Where to persist config or copy skills. MCP installs default to global so every project can use them; project-root .mcp.json imports default to project; skills default to project when a workspace exists, otherwise global."},
+  "scope":{"type":"string","enum":["project","global"],"description":"Where to persist config or copy skills. MCP installs and skills default to global; project-root .mcp.json imports default to project. Set project explicitly to install only for this workspace."},
   "mode":{"type":"string","enum":["auto","copy","link","register"],"description":"Skill install mode. auto registers multi-skill roots and copies single skills into the canonical <skill-name>/SKILL.md layout; copy copies skill files/folders; link creates symlinks; register adds a skill root to [skills].paths."},
   "name":{"type":"string","description":"Optional override for the installed MCP server or single skill name. Required for op=uninstall when removing by name."},
   "transport":{"type":"string","enum":["auto","stdio","http","sse"],"description":"MCP transport override. URL sources default to http unless --sse-like; package sources default to stdio."},
@@ -593,9 +593,6 @@ func (t *Tool) installScope(req request, kind, source string) string {
 			return "project"
 		}
 		return "global"
-	}
-	if strings.TrimSpace(t.root) != "" {
-		return "project"
 	}
 	return "global"
 }

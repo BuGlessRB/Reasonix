@@ -75,6 +75,7 @@ type controllerDeps struct {
 
 	shell               sandbox.Shell                    // interpreter for user-invoked "!" commands; zero = auto
 	onRemember          func(rule string) RememberResult // set via Options; invoked when user picks "always allow"
+	rememberedPath      string
 	sessionRecoveryMeta func(SessionRecoveryRequest) sessionstore.BranchMeta
 
 	// balance is the active provider's optional wallet endpoint (nil-answering
@@ -146,6 +147,7 @@ func newControllerDeps(opts Options, sink event.Sink, usageTee *goalUsageTee, ru
 		disableColdResumePrune: opts.DisableColdResumePrune,
 		shell:                  opts.Shell,
 		onRemember:             opts.OnRemember,
+		rememberedPath:         opts.RememberedPermissionPath,
 		sessionRecoveryMeta:    opts.SessionRecoveryMeta,
 		balance:                opts.Balance,
 		jobs:                   opts.Jobs,

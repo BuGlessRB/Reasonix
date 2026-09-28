@@ -118,6 +118,30 @@ func (s *stubConnector) connector() MCPConnector {
 
 // apply: skill paths
 
+func TestSkillRootWithoutScopeKeepsProjectConfigAbsent(t *testing.T) {
+	project := testenv.TempDir(t)
+	home := testenv.TempDir(t)
+	t.Setenv("REASONIX_HOME", filepath.Join(home, ".reasonix"))
+	root := filepath.Join(testenv.TempDir(t), "shared-skills")
+	writeFile(t, filepath.Join(root, "alpha.md"), "---\nname: alpha\ndescription: Alpha helper\n---\nDo alpha work.")
+
+	resp := execInstall(t, NewTool(Options{ProjectRoot: project, HomeDir: home}), map[string]any{
+		"source": root,
+		"kind":   "skill",
+		"apply":  true,
+	})
+	if !resp.OK || len(resp.Actions) != 1 || resp.Actions[0].Scope != "global" {
+		t.Fatalf("response = %+v, want a global skill root", resp)
+	}
+	if _, err := os.Stat(filepath.Join(project, "reasonix.toml")); !os.IsNotExist(err) {
+		t.Fatalf("workspace config created without a project scope: %v", err)
+	}
+	cfg := config.LoadForEdit(config.UserConfigPath())
+	if len(cfg.Skills.Paths) != 1 || cfg.Skills.Paths[0] != root {
+		t.Fatalf("user skills.paths = %v, want %q", cfg.Skills.Paths, root)
+	}
+}
+
 func TestApplyLocalSkillRootRegistersPath(t *testing.T) {
 	project := testenv.TempDir(t)
 	home := testenv.TempDir(t)

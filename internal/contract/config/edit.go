@@ -1523,6 +1523,15 @@ func configFilePerm(path string) os.FileMode {
 // unchanged. Callers must validate and lock the latest file across their full
 // read-modify-write transaction before calling this function.
 func WritePermissionsAllow(path string, allow []string) error {
+	return writePermissionsAllow(path, allow, configFilePerm(path))
+}
+
+// WritePrivatePermissionsAllow writes remembered rules into user state.
+func WritePrivatePermissionsAllow(path string, allow []string) error {
+	return writePermissionsAllow(path, allow, 0o600)
+}
+
+func writePermissionsAllow(path string, allow []string, perm os.FileMode) error {
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("write permissions: empty config path")
 	}
@@ -1555,7 +1564,7 @@ func WritePermissionsAllow(path string, allow []string) error {
 	if !slices.Equal(candidate.Permissions.Allow, allow) {
 		return fmt.Errorf("write permissions: validate updated allow: got %v, want %v", candidate.Permissions.Allow, allow)
 	}
-	return writeConfigFileResolved(resolved, body, configFilePerm(path))
+	return writeConfigFileResolved(resolved, body, perm)
 }
 
 // replaceTOMLSection replaces the content of a named TOML section (including

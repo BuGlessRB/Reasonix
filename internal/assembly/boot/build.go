@@ -148,6 +148,8 @@ func (b *builder) load() error {
 		return err
 	}
 	cfg := b.cfg
+	remembered, rememberedErr := rememberedPermissionRules(b.roots, b.root)
+	cfg.Permissions.Allow = append(cfg.Permissions.Allow, remembered...)
 	migrations.deepSeekErr = deepSeekProtocolMigrationNoticeError(handleConfigLoadWarnings(opts, cfg, b.stderr), migrations.deepSeekErr)
 	// [secrets] is user-global, so arming these package globals before any
 	// subprocess can spawn is correct for every concurrent workspace.
@@ -159,6 +161,13 @@ func (b *builder) load() error {
 	// emit from their own goroutines. The goal tee and the coalescer wrap it
 	// here, before the extension hub captures it, so agents emit through both.
 	b.sink = control.NewGoalUsageTee(event.Coalesce(quotedSink(cfg, opts), event.DefaultStreamDeltaWindow))
+	if rememberedErr != nil {
+		report(b.sink, event.Event{
+			Level: event.LevelWarn, Code: event.NoticeCodeRememberedPermissionLoadFailed,
+			Text:   "Remembered permission rules could not be loaded; no rules from that file were granted.",
+			Detail: rememberedErr.Error(),
+		})
+	}
 
 	b.proxy = cfg.NetworkProxySpec()
 	if b.ext, err = startExtensions(b.ctx, opts, b.roots, b.root, b.owner, b.sink); err != nil {
@@ -452,8 +461,9 @@ func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, 
 		OnRemember: func(rule string) control.RememberResult {
 			return rememberPermissionRule(b.roots, root, rule)
 		},
-		SessionRecoveryMeta: opts.SessionRecoveryMeta,
-		OnSessionRecovered:  opts.OnSessionRecovered,
+		RememberedPermissionPath: rememberedPermissionPath(b.roots, root),
+		SessionRecoveryMeta:      opts.SessionRecoveryMeta,
+		OnSessionRecovered:       opts.OnSessionRecovered,
 		// Nil without provider-declaring sidecars; otherwise frontends list plugin/... models through it.
 		ProviderResolver:  b.providers.extension,
 		RuntimeGeneration: b.ext.generation,

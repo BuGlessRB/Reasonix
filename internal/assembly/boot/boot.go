@@ -72,7 +72,10 @@ func effectivePlannerModel(cfg *config.Config, opts Options) string {
 }
 
 func rememberPermissionRule(roots config.Roots, workspaceRoot, rule string) control.RememberResult {
-	path := rememberPermissionConfigPath(roots, workspaceRoot)
+	path := rememberedPermissionPath(roots, workspaceRoot)
+	if path == "" {
+		path = filepath.Join(roots.Home(), "config.toml")
+	}
 	result := control.RememberResult{Rule: strings.TrimSpace(rule), Path: path}
 	unlock, err := config.LockConfigFileEdits(path)
 	if err != nil {
@@ -98,25 +101,17 @@ func rememberPermissionRule(roots config.Roots, workspaceRoot, rule string) cont
 		result.Err = err
 		return result
 	}
-	if err := config.WritePermissionsAllow(path, edit.Permissions.Allow); err != nil {
+	write := config.WritePrivatePermissionsAllow
+	if strings.TrimSpace(workspaceRoot) == "" {
+		write = config.WritePermissionsAllow
+	}
+	if err := write(path, edit.Permissions.Allow); err != nil {
 		slog.Warn("save config after permission rule", "err", err)
 		result.Err = err
 		return result
 	}
 	result.Saved = true
 	return result
-}
-
-func rememberPermissionConfigPath(roots config.Roots, workspaceRoot string) string {
-	workspaceRoot = strings.TrimSpace(workspaceRoot)
-	if workspaceRoot != "" {
-		return config.ProjectConfigPath(workspaceRoot)
-	}
-	path := roots.SourcePathForRoot(".")
-	if path == "" {
-		path = config.ProjectConfigPath(".") // match Config.Save() fallback
-	}
-	return path
 }
 
 func coveredPermissionRule(rules []string, rule string) string {

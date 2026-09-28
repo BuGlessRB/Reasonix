@@ -171,7 +171,7 @@ func RootIDs() []RootID {
 // size report read it, so a directory missing from here is left behind by a
 // relocation while the config still names what was in it — which is how a
 // wallpaper and a theme pack came back gone from a moved install.
-var StateRootEntries = []string{"sessions", "archive", "stats", "projects", "appearance", "themes", "repair"}
+var StateRootEntries = []string{"sessions", "archive", "stats", "projects", "appearance", "themes", "repair", "permissions"}
 
 // StateRootEntriesEarlyMovesLeft is what StateRootEntries did not hold when
 // relocation shipped, so a move performed by those versions left them in the

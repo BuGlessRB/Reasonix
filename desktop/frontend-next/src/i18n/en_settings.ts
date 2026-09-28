@@ -128,6 +128,9 @@ export const EN_SETTINGS: Record<string, string> = {
     "The setting above decides whether you are asked; this one decides what is never allowed and what never needs asking. Changes rebuild the runtime and cannot be made while a task is running.",
   "无法读取权限配置。": "Cannot read the permission config.",
   "当前项目自带权限配置": "This project ships its own permissions",
+  "当前项目记住的放行规则": "Remembered allow rules for this project",
+  "已记住的权限规则无法读取": "Could not read remembered permission rules",
+  "要收回这项授权，请从上述文件删除对应规则，然后重新载入会话。": "To revoke an approval, remove its rule from the file above and reload the session.",
   "{path} 中同样声明了 permissions，实际生效的是该文件。此处的修改会被保存，但需待其不再声明后才会生效。":
     "{path} declares permissions too, and that is what is in force. Edits here are saved, but only take effect once it stops declaring them.",
   "禁止访问 .env": "Keep .env off limits",

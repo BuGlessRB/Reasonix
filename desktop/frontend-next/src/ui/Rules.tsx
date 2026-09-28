@@ -290,6 +290,27 @@ export function Rules({ port, onChanged }: { port: AgentPort; onChanged: () => v
 
       <Granted rules={rules.granted ?? []} busy={busy} onRevoke={revoke} />
 
+      {rules.rememberedError && (
+        <div className="find" data-lvl="warn" role="status">
+          <span className="t">{t("已记住的权限规则无法读取")}</span>
+          <span className="why">{rules.rememberedPath}: {rules.rememberedError}</span>
+        </div>
+      )}
+
+      {!!rules.remembered?.length && (
+        <section className="rtable" aria-label={t("当前项目记住的放行规则")}>
+          <div className="rhead">{t("当前项目记住的放行规则")}</div>
+          {rules.remembered.map((rule) => (
+            <div className="rrow" data-k="allow" key={rule}>
+              <i className="dot" aria-hidden="true" />
+              <span className="pat"><code>{rule}</code></span>
+            </div>
+          ))}
+          <p className="path">{rules.rememberedPath}</p>
+          <p className="note">{t("要收回这项授权，请从上述文件删除对应规则，然后重新载入会话。")}</p>
+        </section>
+      )}
+
       <div className="rtable">
         {groups.map((g) => {
           const closed = shut.has(g.tool);

@@ -56,3 +56,25 @@ describe("what a prompt allowed for this session", () => {
     expect(container.querySelector(".granted")).toBeNull();
   });
 });
+
+it("shows remembered project rules and their private storage path", async () => {
+  const rememberedPath = "/home/u/.reasonix/permissions/project.toml";
+  const port = {
+    ...(new MockPort() as unknown as AgentPort),
+    permissions: async () => ({ ...rules([]), remembered: ["Bash(go test:*)"], rememberedPath }),
+  } as unknown as AgentPort;
+  render(<Rules port={port} onChanged={vi.fn()} />);
+  expect(await screen.findByText("Bash(go test:*)")).toBeTruthy();
+  expect(screen.getByText(rememberedPath)).toBeTruthy();
+  expect(screen.getByText("要收回这项授权，请从上述文件删除对应规则，然后重新载入会话。")).toBeTruthy();
+});
+
+it("shows a malformed remembered-rules file instead of silently hiding the failure", async () => {
+  const port = {
+    ...(new MockPort() as unknown as AgentPort),
+    permissions: async () => ({ ...rules([]), rememberedPath: "/home/u/.reasonix/permissions/broken.toml", rememberedError: "invalid TOML" }),
+  } as unknown as AgentPort;
+  render(<Rules port={port} onChanged={vi.fn()} />);
+  expect(await screen.findByText("已记住的权限规则无法读取")).toBeTruthy();
+  expect(screen.getByText(/broken\.toml: invalid TOML/)).toBeTruthy();
+});

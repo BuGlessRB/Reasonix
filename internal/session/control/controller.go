@@ -379,10 +379,10 @@ type Options struct {
 	// Shell is the interpreter user-invoked "!" commands run under, so /shell
 	// matches the agent's configured [tools.shell] choice. Zero value = auto.
 	Shell sandbox.Shell
-	// OnRemember, when set, is invoked with a new allow rule the user chose to
-	// persist to disk (e.g. "Bash(go test:*)"). The callback is wired into the
-	// permission Gate on EnableInteractiveApproval.
+	// OnRemember persists an "always allow" rule selected through the permission Gate.
 	OnRemember func(rule string) RememberResult
+	// RememberedPermissionPath is empty for global sessions to avoid listing user rules twice.
+	RememberedPermissionPath string
 	// SessionRecoveryMeta lets a frontend attach scope/topic/profile metadata to
 	// an automatic recovery branch before it is written.
 	SessionRecoveryMeta func(SessionRecoveryRequest) sessionstore.BranchMeta
