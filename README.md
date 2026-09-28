@@ -205,7 +205,7 @@ For advanced CLI usage and configuration, see the **[CLI reference](./docs/CLI.m
   [Task contracts & pause policy](./docs/TASK_CONTRACT.md) ·
   [Tool contract](./docs/TOOL_CONTRACT.md) · [Moving from 1.x to 2.x](./docs/MIGRATING.md) ·
   [2.x roadmap](./docs/ROADMAP.md)
-- **Extension development:** [Extensions](./docs/EXTENSIONS.md) ·
+- **Extension development:** [Skills](./docs/SKILLS.md) · [Extensions](./docs/EXTENSIONS.md) ·
   [Plugin packages and Manifest v1](./docs/PLUGIN_PACKAGES.md) ·
   [Extension Protocol](./docs/EXTENSION_PROTOCOL.md) ·
   [Go SDK and starter](./sdk/go/README.md)
