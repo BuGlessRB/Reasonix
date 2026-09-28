@@ -327,6 +327,78 @@ func TestStoreV2RestoreArchivedRejectsActiveCollisions(t *testing.T) {
 	}
 }
 
+// TestStoreV2RestoreArchivedRejectsSubjectConflict pins the invariant the fact
+// model states unconditionally: one scope holds at most one active value per
+// subject key. Archiving a holder, saving a new holder, then recovering the
+// archived one must not leave two active values on the same subject.
+func TestStoreV2RestoreArchivedRejectsSubjectConflict(t *testing.T) {
+	store := Store{Dir: testenv.TempDir(t)}
+	const subject = "project.package_manager"
+
+	first, err := store.SaveWithOptions(Memory{
+		Name: "package-manager", Title: "Package manager",
+		Description: "This project uses npm", SubjectKey: subject,
+		Body: "This project uses npm.",
+	}, SaveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	archivePath, err := store.Archive(first.Memory.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SaveWithOptions(Memory{
+		Name: "dependency-tooling", Title: "Dependency tooling",
+		Description: "We migrated to pnpm", SubjectKey: subject,
+		Body: "We migrated to pnpm.",
+	}, SaveOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.RestoreArchived(archivePath); err == nil {
+		t.Fatal("recovering an archived holder put a second active value on a held subject")
+	} else if !strings.Contains(err.Error(), subject) {
+		t.Fatalf("conflict error must name the held subject, got: %v", err)
+	}
+	active, ok := store.Read("dependency-tooling")
+	if !ok || active.Description != "We migrated to pnpm" {
+		t.Fatalf("failed restore disturbed the current holder: %+v, ok=%v", active, ok)
+	}
+}
+
+// The validator recovery now runs also caps pinned guidance, so recovery cannot
+// put a second pinned body into the prefix when the configured budget only has
+// room for one.
+func TestStoreV2RestoreArchivedRejectsPinnedBudgetOverflow(t *testing.T) {
+	body := strings.Repeat("x", 200)
+	store := Store{Dir: testenv.TempDir(t), PinnedBudgetChars: 250}
+
+	pinned, err := store.SaveWithOptions(Memory{
+		Name: "pinned-rule", Title: "Pinned rule",
+		Description: "always do this", Activation: ActivationPinned, Body: body,
+	}, SaveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	archivePath, err := store.Archive(pinned.Memory.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SaveWithOptions(Memory{
+		Name: "other-rule", Title: "Other rule",
+		Description: "also always", Activation: ActivationPinned, Body: body,
+	}, SaveOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.RestoreArchived(archivePath); err == nil {
+		t.Fatal("recovering a pinned fact put the pinned prefix over the configured budget")
+	}
+	if active, ok := store.Read("other-rule"); !ok || active.Body != body {
+		t.Fatalf("failed restore disturbed the current pinned fact: %+v, ok=%v", active, ok)
+	}
+}
+
 func TestStoreV2RestoreArchivedIsConcurrencySafe(t *testing.T) {
 	store := Store{Dir: testenv.TempDir(t)}
 	first, err := store.SaveWithOptions(Memory{Name: "fact", Description: "first", Body: "v1"}, SaveOptions{})

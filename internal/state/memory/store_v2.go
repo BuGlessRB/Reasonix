@@ -446,12 +446,18 @@ func (s Store) RestoreArchived(archivePath string) (SaveResult, error) {
 		return SaveResult{}, fmt.Errorf("memory name %q is already active as id %q", archived.Name, active.ID)
 	}
 
+	restored := archived
+	restored.Scope = s.scopeForDir(base)
+	// Recovery is a write: a subject key another active fact now holds, or a
+	// pinned body over the budget, is refused here exactly as the save path
+	// refuses it, so recovery cannot leave the store in a state save rejects.
+	if err := s.validateSave(restored); err != nil {
+		return SaveResult{}, err
+	}
 	if err := snapshotMemoryRevisionInDir(base, archivePath, archived); err != nil {
 		return SaveResult{}, err
 	}
 	now := time.Now().UTC()
-	restored := archived
-	restored.Scope = s.scopeForDir(base)
 	restored.Revision = s.maxKnownRevision(archived.ID) + 1
 	if restored.Revision <= archived.Revision {
 		restored.Revision = archived.Revision + 1
