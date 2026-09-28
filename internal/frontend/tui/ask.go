@@ -60,6 +60,11 @@ func (m *model) answerAsk(it *Item, k string) (tea.Cmd, bool) {
 		return m.typeAnswer(it, k)
 	}
 	if k == "esc" {
+		// vi mode ignores Esc on the ask card: it does not dismiss. Only ^C
+		// cancels the ask.
+		if m.viActive() {
+			return nil, true
+		}
 		return m.declineAsk(it), true
 	}
 	tabs := len(qs)
@@ -156,6 +161,11 @@ func (m *model) typeAnswer(it *Item, k string) (tea.Cmd, bool) {
 	st := m.ask
 	switch k {
 	case "esc":
+		// vi mode ignores Esc while typing an ask answer: it does not back out
+		// and discard the draft. Only ^C cancels the ask.
+		if m.viActive() {
+			return nil, true
+		}
 		st.entry = entryNone
 	case "enter":
 		text := strings.TrimSpace(m.composer.Value())
