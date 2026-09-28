@@ -8,33 +8,39 @@ import (
 	"strings"
 )
 
-// deniedAuthorityEndpoints are the existing sockets a backend must mask.
+// deniedAuthorityEndpoints are the existing sockets a backend must mask. Each
+// authority resolves from the host environment and from the environment the
+// confined command will see, unioned: a preset that points a client at another
+// socket must not drop the host's own endpoint from the mask, or the command
+// could still reach the host's agent by path.
 func deniedAuthorityEndpoints(s Spec) []string {
+	effective := EffectiveGetenv(s.ShellEnv)
 	var out []string
 	for _, a := range GovernedAuthorities() {
 		if s.Granted(a) {
 			continue
 		}
-		out = append(out, existingSockets(authorityEndpoints(a))...)
+		paths := append(authorityEndpoints(a, os.Getenv), authorityEndpoints(a, effective)...)
+		out = append(out, existingSockets(paths)...)
 	}
 	return out
 }
 
 // authorityEndpoints resolves an authority the way its own client resolves it,
 // so a non-default daemon is governed rather than quietly ungoverned.
-func authorityEndpoints(a HostAuthority) []string {
+func authorityEndpoints(a HostAuthority, getenv func(string) string) []string {
 	switch a {
 	case SSHAgent:
-		return []string{os.Getenv("SSH_AUTH_SOCK")}
+		return []string{getenv("SSH_AUTH_SOCK")}
 	case Docker:
-		out := []string{unixHost(os.Getenv("DOCKER_HOST")), "/var/run/docker.sock"}
+		out := []string{unixHost(getenv("DOCKER_HOST")), "/var/run/docker.sock"}
 		if home, err := os.UserHomeDir(); err == nil {
 			out = append(out, filepath.Join(home, ".docker", "run", "docker.sock"))
 		}
 		return out
 	case Podman:
-		out := []string{unixHost(os.Getenv("CONTAINER_HOST")), "/run/podman/podman.sock"}
-		if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
+		out := []string{unixHost(getenv("CONTAINER_HOST")), "/run/podman/podman.sock"}
+		if dir := getenv("XDG_RUNTIME_DIR"); dir != "" {
 			out = append(out, filepath.Join(dir, "podman", "podman.sock"))
 		}
 		return out

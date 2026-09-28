@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -66,7 +67,7 @@ func resolveToolEnvironment(opts Options, cfg *config.Config, roots config.Roots
 	// tools, never raw shell writes, so the bash write roots stay unwidened.
 	env.managedConfig = builtin.NewManagedConfigPaths(config.ReasonixManagedConfigPaths())
 	env.bash = sandbox.Spec{Mode: bashMode, WriteRoots: env.writeRoots, ForbidReadRoots: env.forbidReadRoots, Network: env.network,
-		HostAuthorities: sandbox.ParseAuthorities(cfg.Sandbox.HostAuthorities), Shell: shell}
+		HostAuthorities: sandbox.ParseAuthorities(cfg.Sandbox.HostAuthorities), Shell: shell, ShellEnv: cfg.Tools.Shell.Env}
 	// Agent writes into Reasonix's own session stores race the app's saves;
 	// an explicit allow_write entry stays the sanctioned escape hatch.
 	allowWriteRoots := cfg.AllowWriteRoots()
@@ -121,7 +122,21 @@ func (env *toolEnvironment) routeEgress(cfg *config.Config, stderr io.Writer) {
 	}
 	env.egress = p
 	env.bash.Egress = p
-	env.bash.ClosedLoopbackPorts = egress.LoopbackProxyPorts(os.Getenv)
+	env.bash.ClosedLoopbackPorts = closedLoopbackPorts(cfg.Tools.Shell.Env)
+}
+
+// closedLoopbackPorts unions the proxy ports the host environment names with
+// the ones [tools.shell] env gives the confined command. Both must stay shut: a
+// preset proxy would otherwise be reachable, and overriding a variable must not
+// reopen the host's proxy.
+func closedLoopbackPorts(shellEnv map[string]string) []int {
+	ports := egress.LoopbackProxyPorts(os.Getenv)
+	if len(shellEnv) == 0 {
+		return ports
+	}
+	ports = append(ports, egress.LoopbackProxyPorts(sandbox.EffectiveGetenv(shellEnv))...)
+	slices.Sort(ports)
+	return slices.Compact(ports)
 }
 
 // listenEgressSocket puts the proxy's socket under the user's cache, which the
