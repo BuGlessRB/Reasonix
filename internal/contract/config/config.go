@@ -1338,19 +1338,11 @@ func (e *ProviderEntry) applyModelOverride() {
 }
 
 func (e *ProviderEntry) modelOverrideForModel(model string) (ProviderModelOverride, bool) {
-	model = strings.TrimSpace(model)
-	if e == nil || model == "" || len(e.ModelOverrides) == 0 {
+	key, ok := e.modelOverrideKey(model)
+	if !ok {
 		return ProviderModelOverride{}, false
 	}
-	if ov, ok := e.ModelOverrides[model]; ok {
-		return ov, true
-	}
-	for k, ov := range e.ModelOverrides {
-		if strings.EqualFold(strings.TrimSpace(k), model) {
-			return ov, true
-		}
-	}
-	return ProviderModelOverride{}, false
+	return e.ModelOverrides[key], true
 }
 
 func clonePricing(p *provider.Pricing) *provider.Pricing {
@@ -1622,32 +1614,17 @@ func (c *Config) ResolveModel(ref string) (*ProviderEntry, bool) {
 	// "provider/model"
 	if prov, model, ok := strings.Cut(ref, "/"); ok {
 		if e, found := c.Provider(prov); found && e.HasModel(model) {
-			cp := *e
-			cp.Model = model
-			cp.applyModelPrice()
-			cp.applyModelOverride()
-			cp.applyModelCapabilities()
-			return &cp, true
+			return e.forModel(model), true
 		}
 	}
 	// a provider name → its default model
 	if e, found := c.Provider(ref); found {
-		cp := *e
-		cp.Model = e.DefaultModel()
-		cp.applyModelPrice()
-		cp.applyModelOverride()
-		cp.applyModelCapabilities()
-		return &cp, true
+		return e.forModel(e.DefaultModel()), true
 	}
 	// a bare model name → the provider that lists it
 	for i := range c.Providers {
 		if c.Providers[i].HasModel(ref) {
-			cp := c.Providers[i]
-			cp.Model = ref
-			cp.applyModelPrice()
-			cp.applyModelOverride()
-			cp.applyModelCapabilities()
-			return &cp, true
+			return c.Providers[i].forModel(ref), true
 		}
 	}
 	return nil, false

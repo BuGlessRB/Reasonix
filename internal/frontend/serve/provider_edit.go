@@ -42,6 +42,9 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 		// not the one its backend accepts. An empty list clears the declaration.
 		SupportedEfforts *[]string `json:"supportedEfforts"`
 		DefaultEffort    *string   `json:"defaultEffort"`
+		// Per-model vocabularies for a gateway serving several vendors' models;
+		// a listed model sent without one inherits the connection's.
+		ModelEfforts *map[string]modelEffortView `json:"modelEfforts"`
 	}
 	if !decodeProviderBody(w, r, &body) {
 		return
@@ -91,20 +94,8 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 	if body.Headers != nil {
 		entry.Headers = trimmedHeaders(*body.Headers)
 	}
-	if body.ReasoningProtocol != nil {
-		stored, ok := config.StoredReasoningProtocol(*body.ReasoningProtocol)
-		if !ok {
-			refuse(w, http.StatusBadRequest, "provider.bad_reasoning_protocol",
-				fmt.Sprintf("%q is not a reasoning protocol", *body.ReasoningProtocol),
-				map[string]any{"protocol": *body.ReasoningProtocol})
-			return
-		}
-		entry.ReasoningProtocol = stored
-	}
-	if level, ok := applyEffortDeclaration(entry, body.SupportedEfforts, body.DefaultEffort); !ok {
-		refuse(w, http.StatusBadRequest, "provider.default_effort_not_listed",
-			fmt.Sprintf("default effort %q is not one of the declared levels", level),
-			map[string]any{"level": level})
+	if bad := applyReasoningFields(entry, models, body.ReasoningProtocol, body.SupportedEfforts, body.DefaultEffort, body.ModelEfforts); bad != nil {
+		refuse(w, http.StatusBadRequest, bad.code, bad.message, bad.detail)
 		return
 	}
 	if body.ExtraBody != nil {
@@ -194,6 +185,25 @@ func assemblyShape(e *config.ProviderEntry) string {
 		return fmt.Sprintf("%#v", shape)
 	}
 	return string(b)
+}
+
+// applyReasoningFields stores the protocol, the connection's effort vocabulary
+// and each listed model's own, refusing the first one that cannot be applied.
+func applyReasoningFields(entry *config.ProviderEntry, models []string, protocol *string,
+	levels *[]string, def *string, perModel *map[string]modelEffortView) *editRefusal {
+	if protocol != nil {
+		stored, ok := config.StoredReasoningProtocol(*protocol)
+		if !ok {
+			return &editRefusal{"provider.bad_reasoning_protocol",
+				fmt.Sprintf("%q is not a reasoning protocol", *protocol), map[string]any{"protocol": *protocol}}
+		}
+		entry.ReasoningProtocol = stored
+	}
+	if level, ok := applyEffortDeclaration(entry, levels, def); !ok {
+		return &editRefusal{"provider.default_effort_not_listed",
+			fmt.Sprintf("default effort %q is not one of the declared levels", level), map[string]any{"level": level}}
+	}
+	return applyModelEfforts(entry, models, perModel)
 }
 
 // applyEffortDeclaration stores a declared effort vocabulary and its default.

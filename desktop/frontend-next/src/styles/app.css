@@ -3108,6 +3108,15 @@
   .addp .fields.compat textarea[aria-invalid] { border-color: var(--err) }
   .addp .fields.compat .tip { font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); font-style: normal; color: var(--ghost) }
   .addp .fields.compat .why { flex-basis: 100%; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--err) }
+  .model-efforts { display: flex; flex-direction: column; gap: 4px; flex-basis: 100% }
+  .me-list { display: flex; flex-direction: column; margin: 4px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--hair) }
+  .me-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; padding: 8px 0; border-bottom: 1px solid var(--hair) }
+  .addp .fields .me-row .me-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--w-med) var(--fs-ui) var(--mono); color: var(--text) }
+  .me-row > .me-note, .me-own { grid-column: 1 / -1 }
+  .me-own { display: flex; flex-direction: column; gap: 8px }
+  .me-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px }
+  .addp .fields .me-chips .me-extra { width: 110px; padding: 3px 9px; border-radius: var(--r-pill); font-size: var(--fs-meta) }
+  .addp .fields label.me-default { flex-direction: row; align-items: center; gap: 8px }
   .addp .more { margin-top: 14px }
   .addp .fields span { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .addp .fields input, .addp .fields select {

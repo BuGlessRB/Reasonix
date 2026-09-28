@@ -6,6 +6,8 @@ import type { Port } from "./Providers";
 import { SAVED_NOT_APPLIED, reason } from "../i18n/kernel";
 import { HttpError } from "../port/port";
 import { THINKING, headerLines, parseEffortLevels, parseExtraBody, parseHeaders } from "./provider_compat";
+import { ModelEfforts } from "./ModelEfforts";
+import type { ModelEffort } from "../port/port";
 
 // Only what this form owns is sent: the entry keeps its prices, effort
 // vocabularies and everything else the panel cannot show.
@@ -39,6 +41,7 @@ export function EditConn({
   const [levelText, setLevelText] = useState((entry.supportedEfforts ?? []).join(", "));
   const [defEffort, setDefEffort] = useState(entry.defaultEffort ?? "");
   const levels = parseEffortLevels(levelText);
+  const [ownEfforts, setOwnEfforts] = useState<Record<string, ModelEffort>>(entry.modelEfforts ?? {});
   // Kimi K3 carries a fixed vocabulary and "none" sends no reasoning field, so
   // a declared list is kept on file but has nothing to act on under either.
   const levelsDormant = think === "kimi-k3" || think === "none";
@@ -134,6 +137,18 @@ export function EditConn({
     }
   };
 
+  // A connection list typed here is what every inheriting model gets; with
+  // none typed, the kernel's answer holds only while the form still matches
+  // what was saved.
+  const savedLevels = (entry.supportedEfforts ?? []).join(",");
+  const inheritedFor = (model: string): ModelEffort | null | undefined => {
+    if (levels.length > 0 && !levelsDormant) {
+      return { supportedEfforts: levels, defaultEffort: levels.includes(defEffort) ? defEffort : "" };
+    }
+    if (think !== (entry.reasoningProtocol ?? "") || levels.join(",") !== savedLevels) return null;
+    return entry.inheritedEfforts?.[model];
+  };
+
   const save = async () => {
     setBusy(`edit:${entry.name}`);
     setErr("");
@@ -150,6 +165,7 @@ export function EditConn({
         reasoningProtocol: think,
         supportedEfforts: levels,
         defaultEffort: levels.includes(defEffort) ? defEffort : "",
+        modelEfforts: Object.fromEntries(picked.filter((m) => ownEfforts[m]).map((m) => [m, ownEfforts[m]])),
         headers: parseHeaders(heads),
         extraBody: parseExtraBody(extra) ?? {},
       });
@@ -245,7 +261,9 @@ export function EditConn({
             <strong>{t("思考参数与推理档位")}</strong>
             <small>{t("以及额外请求头、请求体。中转站的推理强度在这里声明")}</small>
           </span>
-          <span className="summary-value">{compatSummary(think, heads, extra, levels.length) || t("可选")}</span>
+          <span className="summary-value">
+            {compatSummary(think, heads, extra, levels.length, picked.filter((m) => ownEfforts[m]?.supportedEfforts.length).length) || t("可选")}
+          </span>
         </summary>
         {more && (
           <div className="fields compat addp-options-body">
@@ -288,6 +306,16 @@ export function EditConn({
               </select>
               <i className="tip">{t("推理强度选「自动」时使用的档位。")}</i>
             </label>
+            {(picked.length > 1 || picked.some((m) => ownEfforts[m])) && (
+              <ModelEfforts
+                models={picked}
+                value={ownEfforts}
+                onChange={setOwnEfforts}
+                inherited={inheritedFor}
+                protocols={entry.modelProtocols ?? {}}
+                connProtocol={think}
+              />
+            )}
             <label className="grow full">
               <span>{t("额外请求头")}</span>
               <textarea
@@ -365,11 +393,12 @@ function catalogDiff(before: string[], found: string[]) {
   };
 }
 
-function compatSummary(think: string, heads: string, extra: string, levels: number): string {
+function compatSummary(think: string, heads: string, extra: string, levels: number, ownModels: number): string {
   const parts: string[] = [];
   const protocol = THINKING.find(([value]) => value === think);
   if (think && protocol) parts.push(t(protocol[1]));
   if (levels) parts.push(t("{n} 个档位", { n: levels }));
+  if (ownModels) parts.push(t("{n} 个模型单独设置", { n: ownModels }));
   const headCount = Object.keys(parseHeaders(heads)).length;
   if (headCount) parts.push(t("{n} 个头", { n: headCount }));
   const body = parseExtraBody(extra);

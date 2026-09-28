@@ -40,6 +40,12 @@ export interface ProviderEntry {
   // level auto resolves to. Absent is no declaration.
   supportedEfforts?: string[];
   defaultEffort?: string;
+  // Per model, for a relay serving several vendors under one key: what a model
+  // declares for itself, the ladder it inherits when it declares nothing, and
+  // a reasoning protocol it declares for itself.
+  modelEfforts?: Record<string, ModelEffort>;
+  inheritedEfforts?: Record<string, ModelEffort>;
+  modelProtocols?: Record<string, string>;
   // Removing the one in use would leave the session on a model that no longer
   // resolves, so the row offers no delete.
   inUse: boolean;
@@ -163,6 +169,16 @@ export interface ProviderEdit {
   reasoningProtocol?: string;
   // An empty list clears the declared vocabulary; omitted leaves it alone.
   supportedEfforts?: string[];
+  defaultEffort?: string;
+  // The whole per-model answer for the listed models: a model left out
+  // inherits the connection's levels again. Omitted leaves every model alone.
+  modelEfforts?: Record<string, ModelEffort>;
+}
+
+// One model's effort vocabulary and the level auto resolves to; no default is
+// the first level.
+export interface ModelEffort {
+  supportedEfforts: string[];
   defaultEffort?: string;
 }
 
