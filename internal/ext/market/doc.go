@@ -15,4 +15,8 @@
 //   - Publishing sends the account token to that same host and nowhere else,
 //     and refuses a submission installable would refuse once approved. A theme
 //     is its own category installed as a plugin package that carries only themes.
+//   - A publisher may install their own package in any review state. Which one
+//     and from where is the registry's answer for that account; with no
+//     reviewer's digest, the confirmed preview's digest is the pin, and the
+//     outcome and the ledger both say the install was unreviewed.
 package market

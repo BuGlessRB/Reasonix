@@ -77,7 +77,15 @@ export interface MarketRequest {
   replace?: boolean;
 }
 
-export type MarketPlan = PluginPlan & { slug: string; version: string; contentDigest?: string };
+// unreviewed marks the publisher's own install of a version no reviewer
+// pinned: contentDigest is then this preview's, and apply must echo it.
+export type MarketPlan = PluginPlan & { slug: string; version: string; contentDigest?: string; unreviewed?: boolean };
+
+// The account's own package, any review state. digest is the previewed
+// contentDigest; the kernel refuses an apply without it (market.unpreviewed).
+export interface MarketOwnRequest extends MarketRequest {
+  digest?: string;
+}
 
 // One package offered for review under the signed-in account's handle.
 export interface MarketSubmission {
@@ -89,6 +97,8 @@ export interface MarketSubmission {
   repoUrl?: string;
   version?: string;
   tags?: string[];
+  // private keeps it to the publisher and out of review until submitted.
+  visibility?: "public" | "private";
 }
 
 // The registry's receipt: a new submission lands as pending until approved.
@@ -98,4 +108,4 @@ export interface MarketPublished {
   version: string;
 }
 
-export type MarketReviewStatus = "pending" | "active" | "rejected" | "hidden";
+export type MarketReviewStatus = "pending" | "active" | "rejected" | "hidden" | "private";

@@ -50,6 +50,8 @@ type Submission struct {
 	RepoURL     string   `json:"repoUrl,omitempty"`
 	Version     string   `json:"version,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+	// Visibility "private" keeps the package to its publisher, out of review.
+	Visibility string `json:"visibility,omitempty"`
 }
 
 // Published is the registry's receipt for a submission.
@@ -63,6 +65,7 @@ type Published struct {
 type Publisher interface {
 	Publish(ctx context.Context, token string, s Submission) (Published, error)
 	Mine(ctx context.Context, token string) ([]Package, error)
+	Owner
 }
 
 // Installer names the install_source kind a listing kind installs through.
@@ -92,6 +95,15 @@ func (s Submission) Normalize() (Submission, error) {
 		}
 	}
 	s.Tags = tags
+	// Public is the registry's default and goes unsaid, so an ordinary
+	// submission stays readable by a registry that predates the field.
+	switch s.Visibility = strings.TrimSpace(s.Visibility); s.Visibility {
+	case "", "private":
+	case "public":
+		s.Visibility = ""
+	default:
+		return s, &RejectedError{Message: "visibility: public or private"}
+	}
 	if len(s.Tags) > maxTags {
 		return s, &RejectedError{Message: fmt.Sprintf("tags: at most %d", maxTags)}
 	}
@@ -164,6 +176,10 @@ func registryRefusal(status int, body []byte) error {
 		return fmt.Errorf("%w: the identity service did not answer", ErrUnreachable)
 	case status == http.StatusUnauthorized:
 		return ErrSignedOut
+	case status == http.StatusNotFound:
+		return ErrNotFound
+	case code == "not_private":
+		return ErrNotPrivate
 	case code == "email_unverified":
 		return ErrEmailUnverified
 	case code == "not_owner":
