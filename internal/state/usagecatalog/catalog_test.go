@@ -28,7 +28,7 @@ func TestReconcileFileAndDuplicateReceiptAreIdempotent(t *testing.T) {
 	if err := catalog.ReconcileFile(ctx, path, "2026-08-10"); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop")
+	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop", "")
 	if err != nil || len(rows) != 1 || rows[0].Total != 42 || rows[0].Requests != 1 {
 		t.Fatalf("rows=%#v err=%v", rows, err)
 	}
@@ -41,7 +41,7 @@ func TestReconcileFileAndDuplicateReceiptAreIdempotent(t *testing.T) {
 	if err := catalog.applyReceipt(ctx, receipt, entry); err != nil {
 		t.Fatal(err)
 	}
-	rows, err = catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop")
+	rows, err = catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop", "")
 	if err != nil || len(rows) != 1 || rows[0].Total != 42 {
 		t.Fatalf("duplicate changed aggregate: rows=%#v err=%v", rows, err)
 	}
@@ -139,7 +139,7 @@ func TestCostsStaySeparatePerCurrencyInTheProjection(t *testing.T) {
 	if err := catalog.ReconcileFile(ctx, path, "2026-08-10"); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "cli")
+	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "cli", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestCurrencySpellingIsNormalizedOnIngest(t *testing.T) {
 	if err := catalog.ReconcileFile(ctx, path, "2026-08-11"); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := catalog.Query(ctx, "2026-08-11", "2026-08-11", "cli")
+	rows, err := catalog.Query(ctx, "2026-08-11", "2026-08-11", "cli", "")
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows=%#v err=%v", rows, err)
 	}
@@ -218,7 +218,7 @@ func TestReconcilingAFileAgainLeavesItsCostAlone(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop")
+	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop", "")
 	if err != nil || len(rows) != 1 || rows[0].Total != 30 {
 		t.Fatalf("rows=%#v err=%v", rows, err)
 	}
@@ -252,11 +252,58 @@ func TestReconcilingOneFileKeepsAnotherFileOfTheSameDay(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop")
+	rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "desktop", "")
 	if err != nil || len(rows) != 1 || rows[0].Total != 15 {
 		t.Fatalf("rows=%#v err=%v", rows, err)
 	}
 	if len(rows[0].Costs) != 1 || rows[0].Costs[0].Amount != 3_000_000_000 {
 		t.Fatalf("costs = %#v, want USD 3 from both files", rows[0].Costs)
+	}
+}
+
+// Each display view partitions the same rows: a row the vendor's table priced
+// in that currency moves into it, and any other row keeps its billed currency.
+func TestCostViewsReadVendorValuations(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := testenv.TempDir(t)
+	path := filepath.Join(dir, "2026-08-10.jsonl")
+	lines := "{\"ts\":\"2026-08-10T10:00:00Z\",\"model\":\"deepseek/m\",\"source\":\"desktop\",\"total\":1,\"cost_amount\":\"0.5\",\"cost_currency\":\"USD\",\"valuation_usd\":\"0.5\",\"valuation_cny\":\"3.5\"}\n" +
+		"{\"ts\":\"2026-08-10T11:00:00Z\",\"model\":\"relay/m\",\"source\":\"desktop\",\"total\":1,\"cost_amount\":\"0.25\",\"cost_currency\":\"USD\"}\n"
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := Open(ctx, filepath.Join(testenv.TempDir(t), "usage.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = catalog.Close(context.Background()) })
+	if err := catalog.ReconcileFile(ctx, path, "2026-08-10"); err != nil {
+		t.Fatal(err)
+	}
+	live := Entry{Day: "2026-08-10", Source: "desktop", ModelRef: "deepseek/m", Provider: "deepseek", Total: 1,
+		Cost: 1_000_000_000, CostCurrency: "USD", Valuations: map[string]int64{"CNY": 7_000_000_000, "USD": 1_000_000_000}}
+	receipt := AppendReceipt{Path: path, Day: "2026-08-10", Offset: int64(len(lines)), Length: 10, LineHash: "live"}
+	if err := catalog.applyReceipt(ctx, receipt, live); err != nil {
+		t.Fatal(err)
+	}
+	totals := func(view string) map[string]int64 {
+		rows, err := catalog.Query(ctx, "2026-08-10", "2026-08-10", "", view)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]int64{}
+		for _, row := range rows {
+			for _, c := range row.Costs {
+				out[c.Currency] += c.Amount
+			}
+		}
+		return out
+	}
+	if got := totals("CNY"); len(got) != 2 || got["CNY"] != 10_500_000_000 || got["USD"] != 250_000_000 {
+		t.Fatalf("CNY view = %v", got)
+	}
+	if got := totals(""); len(got) != 1 || got["USD"] != 1_750_000_000 {
+		t.Fatalf("billed view = %v", got)
 	}
 }

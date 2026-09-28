@@ -16,8 +16,8 @@ const (
 )
 
 // usage answers the panel's one question: what did the last N days cost, in
-// tokens and in money. The records have been accumulating since the recorder
-// was wired in; nothing here writes.
+// tokens and in money. Money reads in the currency this session's costs do, so
+// the panel and the pane never disagree. Nothing here writes.
 func (s *Server) usage(w http.ResponseWriter, r *http.Request) {
 	days := usageDefaultDays
 	if raw := r.URL.Query().Get("days"); raw != "" {
@@ -35,9 +35,10 @@ func (s *Server) usage(w http.ResponseWriter, r *http.Request) {
 	to := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
 	from := to.AddDate(0, 0, -(days - 1))
 	report, err := stats.NewWriter(config.StatsDir()).Query(stats.SourceFilter{
-		Source: r.URL.Query().Get("source"),
-		From:   from,
-		To:     to,
+		Source:   r.URL.Query().Get("source"),
+		From:     from,
+		To:       to,
+		Currency: s.bc.DisplayCurrency(),
 	})
 	if err != nil {
 		refuse(w, http.StatusInternalServerError, "internal.failed", "could not read the usage records", nil)

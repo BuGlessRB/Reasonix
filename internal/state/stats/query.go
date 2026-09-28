@@ -73,6 +73,9 @@ type SourceFilter struct {
 	Source string
 	From   time.Time
 	To     time.Time
+	// Currency is the display currency costs are read in; empty reads each
+	// turn in the currency it was billed.
+	Currency string
 }
 
 // Query aggregates the daily stats files intersecting [from, to]. Missing days
@@ -90,7 +93,8 @@ func (w *Writer) Query(f SourceFilter) (RangeStats, error) {
 		if catalog := manager.catalog.Load(); catalog != nil {
 			days := daysInRange(f.From, f.To)
 			if catalog.Ready(context.Background(), w.dir, days) {
-				rows, err := catalog.Query(context.Background(), f.From.Format(dayLayout), f.To.Format(dayLayout), f.Source)
+				rows, err := catalog.Query(context.Background(), f.From.Format(dayLayout), f.To.Format(dayLayout), f.Source,
+					usagecatalog.CostView(f.Currency))
 				if err == nil {
 					return rangeStatsFromRollups(f, days, rows), nil
 				}
@@ -113,6 +117,7 @@ func (w *Writer) queryJSONL(f SourceFilter) (RangeStats, error) {
 	if w == nil || w.dir == "" {
 		return out, nil
 	}
+	view := usagecatalog.CostView(f.Currency)
 	days := daysInRange(f.From, f.To)
 	recordsByDay, err := readDailyRange(w.dir, days)
 	if err != nil {
@@ -170,8 +175,9 @@ func (w *Writer) queryJSONL(f SourceFilter) (RangeStats, error) {
 				providerTotals[providerOf(model)] += t
 				dayTotals[model] += t
 			}
-			if addCost(dayCost, rec.CostAmount, rec.CostCurrency) {
-				addCost(totalCost, rec.CostAmount, rec.CostCurrency)
+			if currency, amount := usageEntry(day, rec).CostIn(view); currency != "" {
+				dayCost[currency] += pricing.Amount(amount)
+				totalCost[currency] += pricing.Amount(amount)
 				out.CostEstimated = out.CostEstimated || rec.CostEstimated
 			}
 			dayActive = dayActive || rec.Total > 0 || requests > 0
@@ -303,21 +309,6 @@ func dailyRow(day string, byModel, byProvider map[string]int64, cost map[string]
 		Requests: requests, Turns: turns, CacheHit: cacheHit, CacheMiss: cacheMiss,
 		Cost: moneySorted(cost),
 	}
-}
-
-// addCost folds one row's quote into a per-currency tally. An unparseable
-// amount is skipped rather than guessed: a missing total beats a wrong one.
-func addCost(into map[string]pricing.Amount, amount, currency string) bool {
-	currency = pricing.NormalizeCurrency(currency)
-	if currency == "" || strings.TrimSpace(amount) == "" {
-		return false
-	}
-	parsed, err := pricing.ParseAmount(amount)
-	if err != nil {
-		return false
-	}
-	into[currency] += parsed
-	return true
 }
 
 // moneySorted renders the tally in a stable currency order so a repeated query
