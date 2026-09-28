@@ -3,7 +3,8 @@ import type { PluginPlan } from "./plugin";
 // The community registry as the market tab reads it. Every text field is the
 // publisher's; what an install puts on disk is decided by the approved
 // version's pinned digest and the plan the person confirms, never by these.
-export type MarketKind = "skill" | "plugin" | "mcp";
+// A theme is its own category but installs as a plugin package carrying only themes.
+export type MarketKind = "skill" | "plugin" | "mcp" | "theme";
 
 // What this machine holds of a listed package, read off the market's own
 // install record — and only while the things it installed are still there.
@@ -26,6 +27,7 @@ export interface MarketPackage {
   installCount: number;
   starCount: number;
   verified: boolean;
+  status: string;
   updatedAt: string;
   installed?: MarketInstalled;
 }
@@ -71,3 +73,24 @@ export interface MarketRequest {
 }
 
 export type MarketPlan = PluginPlan & { slug: string; version: string; contentDigest?: string };
+
+// One package offered for review under the signed-in account's handle.
+export interface MarketSubmission {
+  kind: MarketKind;
+  name: string;
+  source: string;
+  summary?: string;
+  description?: string;
+  repoUrl?: string;
+  version?: string;
+  tags?: string[];
+}
+
+// The registry's receipt: a new submission lands as pending until approved.
+export interface MarketPublished {
+  package: MarketPackage;
+  created: boolean;
+  version: string;
+}
+
+export type MarketReviewStatus = "pending" | "active" | "rejected" | "hidden";

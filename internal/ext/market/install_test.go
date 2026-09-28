@@ -149,6 +149,10 @@ func TestInstallRefusesWhatCannotBeInstalledAsReviewed(t *testing.T) {
 		{"plain http", func(d *Detail) { d.Approved.Source = "http://example.test/SKILL.md" }, ErrBadSource},
 		{"windows path", func(d *Detail) { d.Approved.Source = `C:\Users\me\skill` }, ErrBadSource},
 		{"unknown kind", func(d *Detail) { d.Package.Kind = "auto" }, ErrBadSource},
+		{"theme on a branch", func(d *Detail) {
+			d.Package.Kind = "theme"
+			d.Approved.Source = "https://github.com/acme/themes/tree/main/dusk"
+		}, ErrBadSource},
 		{"plugin on a branch", func(d *Detail) {
 			d.Package.Kind = "plugin"
 			d.Approved.Source = "https://github.com/acme/kit/tree/main/plugin"

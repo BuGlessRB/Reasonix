@@ -168,6 +168,8 @@ func refuseMarket(w http.ResponseWriter, err error) {
 		refuse(w, http.StatusConflict, "market.unpinned", "the approved version is not pinned to reviewed content", detail)
 	case errors.Is(err, market.ErrBadSource):
 		refuse(w, http.StatusConflict, "market.bad_source", "the approved version names a source that is not installed from here", detail)
+	case errors.Is(err, market.ErrNotTheme):
+		refuse(w, http.StatusConflict, "market.not_theme", "the package listed as a theme would install more than themes", detail)
 	case errors.Is(err, market.ErrVersionChanged):
 		refuse(w, http.StatusConflict, "market.version_changed", "a different version has been approved since this one was shown", detail)
 	case errors.Is(err, installsource.ErrDigestMismatch):

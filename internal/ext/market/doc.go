@@ -12,4 +12,7 @@
 //   - What was installed from here is recorded in a ledger under the Reasonix
 //     home, read back only to say "installed" — and only while the recorded
 //     targets still exist.
+//   - Publishing sends the account token to that same host and nowhere else,
+//     and refuses a submission installable would refuse once approved. A theme
+//     is its own category installed as a plugin package that carries only themes.
 package market

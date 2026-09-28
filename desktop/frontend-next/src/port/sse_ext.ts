@@ -1,5 +1,5 @@
 import { SseLook } from "./sse_look";
-import type { MarketDetail, MarketList, MarketPlan, MarketQuery, MarketRequest, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, ScopeLayer, SkillCatalog } from "./port";
+import type { MarketDetail, MarketList, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, ScopeLayer, SkillCatalog } from "./port";
 import { rootQuery } from "./sse_http";
 import { download } from "./download";
 import { host } from "./host";
@@ -50,6 +50,12 @@ export class SseExtensions extends SseLook {
   }
   installMarket(req: MarketRequest) {
     return this.post0<MarketPlan>("/market/install", req);
+  }
+  publishMarket(sub: MarketSubmission) {
+    return this.post0<MarketPublished>("/market/publish", sub);
+  }
+  async myMarket() {
+    return (await this.get<{ packages: MarketPackage[] }>("/market/mine")).packages;
   }
 
   // The header is read before the body because the body is bytes and has

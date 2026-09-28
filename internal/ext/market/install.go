@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -24,6 +25,8 @@ var (
 	// ErrVersionChanged: the approved version is no longer the one the person
 	// looked at.
 	ErrVersionChanged = errors.New("market: approved version changed")
+	// ErrNotTheme: a package listed as a theme would install more than themes.
+	ErrNotTheme = errors.New("market: theme package carries more than themes")
 )
 
 // Request is one plan or install of a listed package. Version is the approved
@@ -77,7 +80,7 @@ func (s *Service) run(ctx context.Context, req Request, apply bool) (Outcome, er
 	}
 	body := map[string]any{
 		"source":       v.Source,
-		"kind":         detail.Package.Kind,
+		"kind":         Installer(detail.Package.Kind),
 		"scope":        "global",
 		"mode":         "copy",
 		"replace":      req.Replace,
@@ -86,6 +89,16 @@ func (s *Service) run(ctx context.Context, req Request, apply bool) (Outcome, er
 	}
 	if apply {
 		body["planId"] = strings.TrimSpace(req.PlanID)
+	}
+	// A planId binds the source and actions, not the listing kind, so a theme's
+	// apply re-plans and checks before anything is written.
+	if detail.Package.Kind == "theme" {
+		preview := maps.Clone(body)
+		preview["apply"] = false
+		delete(preview, "planId")
+		if err := s.themeCheck(ctx, preview, detail.Package.Slug); err != nil {
+			return Outcome{Version: v}, err
+		}
 	}
 	raw, _ := json.Marshal(body)
 	out, err := s.NewInstaller().Execute(ctx, raw)
@@ -108,6 +121,22 @@ func (s *Service) run(ctx context.Context, req Request, apply bool) (Outcome, er
 	return Outcome{Fields: fields, Version: v}, nil
 }
 
+func (s *Service) themeCheck(ctx context.Context, body map[string]any, slug string) error {
+	raw, _ := json.Marshal(body)
+	out, err := s.NewInstaller().Execute(ctx, raw)
+	if err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(out), &fields); err != nil {
+		return err
+	}
+	if !themesOnly(fields["actions"]) {
+		return fmt.Errorf("%w: %s", ErrNotTheme, slug)
+	}
+	return nil
+}
+
 func (s *Service) now() time.Time {
 	if s.Now != nil {
 		return s.Now()
@@ -125,23 +154,33 @@ func installable(d Detail) (Version, error) {
 	if !installsource.IsContentDigest(v.ContentHash) {
 		return *v, fmt.Errorf("%w: %s@%s", ErrUnpinned, d.Package.Slug, v.Version)
 	}
-	switch d.Package.Kind {
-	case "plugin":
-		if !commitPinned(v.Source) {
-			return *v, fmt.Errorf("%w: plugin source %q is not pinned to a commit", ErrBadSource, v.Source)
-		}
-	case "skill":
-		if !remoteSource(v.Source) {
-			return *v, fmt.Errorf("%w: %q", ErrBadSource, v.Source)
-		}
-	case "mcp":
-		if !remoteSource(v.Source) && !npmPackage(v.Source) {
-			return *v, fmt.Errorf("%w: %q", ErrBadSource, v.Source)
-		}
-	default:
-		return *v, fmt.Errorf("%w: kind %q", ErrBadSource, d.Package.Kind)
+	if err := sourceInstallable(d.Package.Kind, v.Source); err != nil {
+		return *v, err
 	}
 	return *v, nil
+}
+
+// sourceInstallable answers why the market would refuse to install source as
+// kind, or nil. Publishing asks the same question so nothing is sent to review
+// that could never be installed once approved.
+func sourceInstallable(kind, source string) error {
+	switch kind {
+	case "plugin", "theme":
+		if !commitPinned(source) {
+			return fmt.Errorf("%w: %s source %q is not pinned to a commit", ErrBadSource, kind, source)
+		}
+	case "skill":
+		if !remoteSource(source) {
+			return fmt.Errorf("%w: %q", ErrBadSource, source)
+		}
+	case "mcp":
+		if !remoteSource(source) && !npmPackage(source) {
+			return fmt.Errorf("%w: %q", ErrBadSource, source)
+		}
+	default:
+		return fmt.Errorf("%w: kind %q", ErrBadSource, kind)
+	}
+	return nil
 }
 
 // remoteSource admits an https URL or the git:github.com/ shorthand. A local
@@ -181,6 +220,32 @@ func npmPackage(s string) bool {
 	}
 	for _, p := range parts {
 		if !slugPart(p) {
+			return false
+		}
+	}
+	return true
+}
+
+// themesOnly holds the theme category to its name: every planned action is a
+// plugin package that contributes themes and nothing that runs or prompts.
+func themesOnly(raw json.RawMessage) bool {
+	var actions []struct {
+		Kind         string          `json:"kind"`
+		ThemeCount   int             `json:"themeCount"`
+		SkillCount   int             `json:"skillCount"`
+		AgentCount   int             `json:"agentCount"`
+		CommandCount int             `json:"commandCount"`
+		HookCount    int             `json:"hookCount"`
+		ToolCount    int             `json:"toolCount"`
+		PromptCount  int             `json:"promptCount"`
+		Runtime      json.RawMessage `json:"runtime"`
+	}
+	if json.Unmarshal(raw, &actions) != nil || len(actions) == 0 {
+		return false
+	}
+	for _, a := range actions {
+		others := a.SkillCount + a.AgentCount + a.CommandCount + a.HookCount + a.ToolCount + a.PromptCount
+		if a.Kind != "plugin" || a.ThemeCount == 0 || others != 0 || (len(a.Runtime) > 0 && string(a.Runtime) != "null") {
 			return false
 		}
 	}
