@@ -109,6 +109,8 @@ const SAID: Record<string, string> = {
   "provider.bad_max_output_tokens": "最大输出 Token 不能是负数",
   "provider.bad_reasoning_protocol": "无法识别「{protocol}」这种思考协议",
   "provider.default_effort_not_listed": "默认档位「{level}」不在填写的档位里",
+  "provider.model_default_effort_not_listed": "{model} 的默认档位「{level}」不在为它选的档位里",
+  "provider.model_effort_unlisted": "{model} 不在已启用的模型里，不能为它单独设置档位",
   "provider.running": "这个模型上的对话正在运行，停止后再删除",
   "session.running": "该会话正在运行，停止后再删除",
   "workspace.running": "这个文件夹里有正在运行的对话，停止后再移除",

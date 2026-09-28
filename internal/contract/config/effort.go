@@ -231,16 +231,14 @@ func EffortDisplay(e *ProviderEntry) string {
 
 // EffectiveEffort resolves the provider-visible effort value. Explicit
 // ProviderEntry.Effort wins; otherwise a configured SupportedEfforts list makes
-// DefaultEffort (or the first supported level) the runtime default. Empty means
-// provider default / omit the provider-specific effort field.
+// DefaultEffort (or the first supported level) the runtime default. A stored
+// level outside the resolved menu reads as auto, as EffortDisplay shows it.
+// Empty means provider default / omit the provider-specific effort field.
 func EffectiveEffort(e *ProviderEntry) string {
 	if e == nil {
 		return ""
 	}
-	if effort := normalizeStoredEffort(e.Effort); effort != "" {
-		if !effortInContract(e, effort) {
-			return ""
-		}
+	if effort := normalizeStoredEffort(e.Effort); effort != "" && effortInContract(e, effort) {
 		return effort
 	}
 	if explicitReasoningProtocol(e) == ReasoningProtocolKimiK3 {
@@ -568,7 +566,7 @@ func normalizedModelOverrides(overrides map[string]ProviderModelOverride) map[st
 		if ov.DefaultEffort != "" && !containsString(ov.SupportedEfforts, ov.DefaultEffort) {
 			ov.DefaultEffort = ""
 		}
-		if ov.ReasoningProtocol == "" && len(ov.SupportedEfforts) == 0 && ov.DefaultEffort == "" && ov.Vision == nil && ov.ContextWindow == 0 {
+		if modelOverrideEmpty(ov) {
 			continue
 		}
 		out[model] = ov

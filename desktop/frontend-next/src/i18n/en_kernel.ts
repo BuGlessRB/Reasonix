@@ -237,6 +237,8 @@ export const EN_KERNEL: Record<string, string> = {
   "最大输出 Token 不能是负数": "The maximum output tokens cannot be negative",
   "无法识别「{protocol}」这种思考协议": "Unrecognised reasoning protocol “{protocol}”",
   "默认档位「{level}」不在填写的档位里": "The default level “{level}” is not one of the levels listed",
+  "{model} 的默认档位「{level}」不在为它选的档位里": "The default level “{level}” for {model} is not one of the levels picked for it",
+  "{model} 不在已启用的模型里，不能为它单独设置档位": "{model} is not one of the enabled models, so it cannot have levels of its own",
   "这个模型上的对话正在运行，停止后再删除": "A conversation on this model is running. Stop it before removing the model",
   "该会话正在运行，停止后再删除": "This conversation is running. Stop it before deleting it",
   "这个文件夹里有正在运行的对话，停止后再移除": "A conversation in this folder is running. Stop it before removing the folder",
