@@ -17,6 +17,8 @@ type fakePage struct {
 	evalRemote     map[string]any
 	evalException  string
 	calls          []string
+	// answers, when set, is asked first and answers the methods it knows.
+	answers func(msg wireMessage) (any, bool)
 }
 
 func newFakeSession(t *testing.T, page *fakePage) (*Session, *tab) {
@@ -36,6 +38,11 @@ func newFakeSession(t *testing.T, page *fakePage) (*Session, *tab) {
 }
 
 func (p *fakePage) answer(msg wireMessage) any {
+	if p.answers != nil {
+		if out, ok := p.answers(msg); ok {
+			return out
+		}
+	}
 	var params struct {
 		BackendNodeID int64  `json:"backendNodeId"`
 		ObjectID      string `json:"objectId"`
