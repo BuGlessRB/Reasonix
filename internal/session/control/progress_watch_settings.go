@@ -47,7 +47,12 @@ func (c *Controller) SaveProgressWatchSettings(in ProgressWatchSettings) error {
 	defer unlock()
 	path := config.UserConfigPath()
 	cfg := config.LoadForEdit(path)
-	if err := cfg.SetProgressWatch(config.ProgressWatchConfig{Pause: in.Pause, Rounds: in.Rounds, TokenMultiple: in.TokenMultiple}); err != nil {
+	if err := cfg.SetProgressWatch(config.ProgressWatchConfig{
+		Pause: in.Pause, Rounds: in.Rounds, TokenMultiple: in.TokenMultiple,
+		// The settings screen does not edit the retry budget; carry the stored
+		// value so saving the pause switch never clears it.
+		PerseverationRetries: cfg.ProgressWatch.PerseverationRetries,
+	}); err != nil {
 		return err
 	}
 	if err := cfg.SaveTo(path); err != nil {

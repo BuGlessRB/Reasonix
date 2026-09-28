@@ -1200,4 +1200,8 @@ export const EN: Record<string, string> = {
   "不再提示（本会话）": "Don’t show again (this session)",
   "任务已按设置暂停：自上次有进展以来的输入已达上下文窗口的 {n} 倍": "Paused by your setting: input since the last progress reached {n}× the context window",
   "任务已按设置暂停：连续 {n} 轮没有可观察的进展": "Paused by your setting: {n} rounds in a row without observable progress",
+  "模型在重复输出同一段文字": "The model is repeating the same text",
+  "同一段内容被逐字重复": "The same block is being repeated verbatim",
+  "任务已按设置暂停：模型卡在重复输出同一段文字": "Paused by your setting: the model is stuck repeating the same text",
+  "模型卡在重复输出同一段文字，这一轮已停止；可以重试、补充引导，或换一个供应商/模型": "The model is stuck repeating the same text; this turn was stopped. Try again, add guidance, or switch provider/model.",
 };

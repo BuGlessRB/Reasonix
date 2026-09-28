@@ -17,6 +17,7 @@ type ProgressWatch struct {
 
 // Progress watch causes, wire-stable.
 const (
-	ProgressWatchCauseRounds = "rounds"
-	ProgressWatchCauseTokens = "tokens"
+	ProgressWatchCauseRounds        = "rounds"
+	ProgressWatchCauseTokens        = "tokens"
+	ProgressWatchCausePerseveration = "perseveration"
 )

@@ -13,6 +13,9 @@ type ProgressWatchConfig struct {
 	Pause         bool `toml:"pause"`          // end a stalled run resumably; off only says so
 	Rounds        int  `toml:"rounds"`         // idle tool rounds; zero is the default
 	TokenMultiple int  `toml:"token_multiple"` // input backstop in context windows; zero is the default
+	// PerseverationRetries is the loop-guard budget: unset or 0 reports a
+	// detected loop, >0 also cuts and nudges, <0 disables the guard.
+	PerseverationRetries *int `toml:"perseveration_retries"`
 }
 
 const (
@@ -63,5 +66,7 @@ func renderProgressWatchSection(b *strings.Builder, c *Config) {
 	b.WriteString("[progress_watch]\n")
 	fmt.Fprintf(b, "pause = %v   # end a run that stops producing observable effects; resumable, default off\n", c.ProgressWatch.Pause)
 	fmt.Fprintf(b, "rounds = %d   # tool rounds without a file change, check moving, task step, new read or delegated result\n", c.ProgressWatchRounds())
-	fmt.Fprintf(b, "token_multiple = %d   # also when input spent since the last observable effect reaches this many context windows\n\n", c.ProgressWatchTokenMultiple())
+	fmt.Fprintf(b, "token_multiple = %d   # also when input spent since the last observable effect reaches this many context windows\n", c.ProgressWatchTokenMultiple())
+	renderPerseverationRetries(b, c.ProgressWatch.PerseverationRetries, nil)
+	b.WriteString("\n")
 }

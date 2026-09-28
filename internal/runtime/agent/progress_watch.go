@@ -21,6 +21,10 @@ type ProgressWatch struct {
 // PauseKindNoProgress is RunPauseInfo.Kind for a run the watch paused.
 const PauseKindNoProgress = "no_progress"
 
+// PauseKindPerseveration is RunPauseInfo.Kind for a run paused because the model
+// was stuck repeating itself (a perseveration loop).
+const PauseKindPerseveration = "perseveration"
+
 // SetProgressWatch replaces the watch for the next round onward. A settings
 // change reaches a running turn without a rebuild.
 func (a *Agent) SetProgressWatch(w ProgressWatch) { a.progressWatch.Store(&w) }
@@ -89,6 +93,23 @@ func (a *Agent) settleProgressRound(state *turnRuntime, mark progressMark) error
 	return newNoProgressPause(report)
 }
 
+// emitPerseverationNotice reports a detected degenerate generation loop through
+// the progress-watch channel. The guard calls it on the rising edge of a
+// detection, so a loop that keeps tripping says so once and stays quiet until a
+// scan that does not trip re-arms it. Nothing reaches the model.
+func (a *Agent) emitPerseverationNotice(sink event.Sink) {
+	cfg := a.progressWatchConfig()
+	w := &a.turn.watch
+	report := event.ProgressWatch{
+		Stalled: true, Cause: event.ProgressWatchCausePerseveration,
+		IdleRounds: w.idle, RoundLimit: max(cfg.Rounds, 0), Pausing: cfg.Pause,
+	}
+	// w.stalled lets the next clean round clear the notice through the same
+	// report the round and token causes use.
+	w.stalled = true
+	sink.Emit(event.Event{Kind: event.ProgressWatchEvent, ProgressWatch: &report})
+}
+
 func (a *Agent) progressReport(cfg ProgressWatch, idle, promptTokens int) event.ProgressWatch {
 	report := event.ProgressWatch{
 		IdleRounds: idle, RoundLimit: max(cfg.Rounds, 0),
@@ -135,4 +156,22 @@ func newNoProgressPause(r event.ProgressWatch) *noProgressPause {
 
 func (e *noProgressPause) Error() string {
 	return fmt.Sprintf("paused: %s — the work so far is saved; send another message to continue, or turn off progress_watch.pause", e.detail)
+}
+
+// perseverationPause ends a Run because the model kept repeating itself. Key
+// names the setting that stopped it — the user's pause switch, or a spent retry
+// budget — so a host points at the knob that actually ended the run instead of
+// the other one. The work is saved and the next message continues it.
+type perseverationPause struct {
+	key    string
+	detail string
+	hint   string
+}
+
+func newPerseverationPause(key, detail, hint string) *perseverationPause {
+	return &perseverationPause{key: key, detail: detail, hint: hint}
+}
+
+func (e *perseverationPause) Error() string {
+	return fmt.Sprintf("paused: %s — the work so far is saved; send another message to continue, or %s", e.detail, e.hint)
 }
