@@ -43,7 +43,7 @@ function rules(css: string): Rule[] {
   return out.sort((a, b) => a.at - b.at).map((r) => r.rule);
 }
 
-describe("the composer's send cluster on a narrow column", () => {
+describe("the composer's send cluster", () => {
   const ordered = [...rules(SHEETS["./app.css"]), ...rules(SHEETS["./studio.css"])];
 
   const computed = (width: number) => {
@@ -56,17 +56,16 @@ describe("the composer's send cluster on a narrow column", () => {
   };
 
   it("reads the rules it judges", () => {
-    expect(ordered.length).toBeGreaterThan(1);
-    expect([320, 358, 400, 460].some((w) => computed(w).get("position") === "absolute")).toBe(true);
+    expect(ordered.length).toBeGreaterThan(0);
+    expect(computed(Infinity).get("margin-left")).toBe("auto");
   });
 
-  // Out of flow and a full row wide, the cluster sits on top of the model and
-  // effort pickers that share its line, and every tap lands on it instead.
-  it("never lies across the whole row once it is taken out of flow", () => {
-    for (const width of [300, 320, 358, 390, 420, 460, 470]) {
-      const style = computed(width);
-      if (style.get("position") !== "absolute") continue;
-      expect(style.get("width") ?? "auto", `at a ${width}px column`).not.toBe("100%");
+  // Out of flow, the cluster covers whatever toolbar control its line puts
+  // beneath it, and how much it covers changes with the button a turn shows.
+  // In flow, the toolbar wraps inside the width the cluster leaves it.
+  it("stays in flow at every column width", () => {
+    for (const width of [300, 320, 358, 390, 420, 460, 470, 520, 590, 720, Infinity]) {
+      expect(computed(width).get("position") ?? "static", `at a ${width}px column`).not.toBe("absolute");
     }
   });
 });

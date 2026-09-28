@@ -699,7 +699,6 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
           </span>
         )}
         <Policy port={port} status={status} onChanged={onChanged} onBoundary={() => onSettings("tools:sandbox")} />
-        <span className="turntools-spacer" aria-hidden="true" />
         <div className="studio-model-group">
           <Picker
             wrapClassName="studio-model-control"
