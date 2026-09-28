@@ -11,10 +11,10 @@
     "doc-prose": 2291,
     "error-text": 9,
     "essay": 2770,
-    "file-size": 21452,
+    "file-size": 21456,
     "flat-view": 0,
     "frontend-parity": 28,
-    "function-size": 3223,
+    "function-size": 3224,
     "layer-order": 0,
     "layering": 0,
     "marker": 0,
@@ -291,7 +291,7 @@
     },
     "internal/contract/config/config.go": {
       "essay": 46,
-      "file-size": 1106
+      "file-size": 1107
     },
     "internal/contract/config/credentials.go": {
       "essay": 1,
@@ -360,8 +360,8 @@
     "internal/contract/config/render.go": {
       "complexity": 183,
       "essay": 2,
-      "file-size": 546,
-      "function-size": 671
+      "file-size": 547,
+      "function-size": 672
     },
     "internal/contract/config/vision.go": {
       "essay": 1,
@@ -963,7 +963,7 @@
     "internal/runtime/agent/agent.go": {
       "complexity": 34,
       "essay": 33,
-      "file-size": 1202,
+      "file-size": 1204,
       "function-size": 98
     },
     "internal/runtime/agent/agent_options.go": {
