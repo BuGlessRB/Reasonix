@@ -224,7 +224,7 @@ export const SETTINGS: SettingEntry[] = [
   { section: "hooks", anchor: "hooks", title: "自动化", scope: "chosen", apply: "immediate", keywords: ["钩子", "hook", "触发"] },
 
   { section: "ext", anchor: "ext-runtime", title: "运行时", scope: "session", apply: "immediate", keywords: ["扩展", "沙盒"] },
-  { section: "ext", anchor: "market", title: "社区市场", scope: "machine", apply: "immediate", keywords: ["市场", "market", "社区", "发现", "下载"] },
+  { section: "ext", anchor: "market", title: "社区市场", scope: "machine", apply: "immediate", keywords: ["市场", "market", "社区", "发现", "下载", "发布", "publish", "主题"] },
   { section: "ext", anchor: "plugins", title: "插件包", scope: "machine", apply: "immediate", keywords: ["安装"] },
   { section: "ext", anchor: "mcp", title: "外部工具", scope: "chosen", apply: "immediate", keywords: ["mcp", "服务器", "连接外部"] },
   { section: "ext", anchor: "skills", title: "技能", scope: "chosen", apply: "immediate", keywords: ["skill", "技能包"] },

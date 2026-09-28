@@ -618,7 +618,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
           {at === "ext" && (
             <>
               <ExtTabs at={extTab} onPick={setExtTab} />
-              {extTab === "market" && <MarketGroup port={port} onInstalled={afterExtChange} />}
+              {extTab === "market" && <MarketGroup port={port} onInstalled={afterExtChange} account={acct} onSignIn={() => go("account", "account")} />}
               {extTab === "installed" && (
               <>
                 {scope && <ScopeBar scope={scope} scopes={scopes} onPick={setScopeAt} />}

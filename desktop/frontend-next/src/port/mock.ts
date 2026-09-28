@@ -210,7 +210,7 @@ export class MockPort extends MockBackup implements AgentPort {
   }
 
   async account(): Promise<AccountState> {
-    return { signedIn: false };
+    return localStorage.getItem("reasonix.mock.account") ? { signedIn: true, user: { handle: "demo", email: "demo@example.com", label: "demo" } } : { signedIn: false };
   }
 
   async accountLogin(): Promise<DeviceGrant> {

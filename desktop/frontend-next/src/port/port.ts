@@ -36,7 +36,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
 
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
-import type { MarketDetail, MarketList, MarketPlan, MarketQuery, MarketRequest } from "./market";
+import type { MarketDetail, MarketList, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission } from "./market";
 import type { Appearance, ThemeImport, ThemePack } from "./look";
 import type { BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
@@ -174,6 +174,9 @@ export interface AgentPort {
   marketDetail(slug: string): Promise<MarketDetail>;
   planMarket(req: MarketRequest): Promise<MarketPlan>;
   installMarket(req: MarketRequest): Promise<MarketPlan>;
+  // Publishing spends the account session; both refuse when signed out.
+  publishMarket(sub: MarketSubmission): Promise<MarketPublished>;
+  myMarket(): Promise<MarketPackage[]>;
   // Text the window assembled, put on disk. Returns where it went, or null when
   // the host handled it without a path to report (a browser download).
   saveText(name: string, content: string): Promise<string | null>;
