@@ -2,6 +2,7 @@
 package anthropic
 
 import (
+	"encoding/json"
 	"strings"
 
 	"reasonix/internal/contract/provider"
@@ -31,9 +32,10 @@ func speaksDeepSeekContract(root string, extra map[string]any) bool {
 // the wire decision and the diagnosis of a refused body cannot disagree.
 func (c *client) replayThinking(m provider.Message) (*contentBlock, bool) {
 	switch {
-	case c.deepseek && len(m.ToolCalls) > 0 && m.ReasoningContent != "":
+	case c.deepseek && len(m.ToolCalls) > 0 && (m.ReasoningContent != "" || c.deepSeekThinkingEnabled()):
 		// DeepSeek wants a tool-call turn's reasoning in every later request,
 		// even once this one declares no tools or thinking has been turned off.
+		// In thinking mode it refuses the turn with no block and accepts an empty one.
 		return &contentBlock{Type: "thinking", Thinking: m.ReasoningContent}, false
 	case c.thinking == "adaptive" && m.ReasoningContent != "" && m.ReasoningSignature != "":
 		return &contentBlock{Type: "thinking", Thinking: m.ReasoningContent, Signature: m.ReasoningSignature}, false
@@ -41,6 +43,19 @@ func (c *client) replayThinking(m provider.Message) (*contentBlock, bool) {
 	// Anthropic proper requires a signature, so unsigned reasoning is unsendable
 	// there rather than missing — only a gateway's refusal is worth reporting.
 	return nil, !c.nativeAnthropic && len(m.ToolCalls) > 0 && m.ReasoningContent != ""
+}
+
+// MarshalJSON keeps "thinking" on a thinking block even when empty: DeepSeek
+// refuses a thinking block that lacks the field.
+func (b contentBlock) MarshalJSON() ([]byte, error) {
+	type plain contentBlock
+	if b.Type != "thinking" || b.Thinking != "" {
+		return json.Marshal(plain(b))
+	}
+	return json.Marshal(struct {
+		plain
+		Thinking string `json:"thinking"`
+	}{plain(b), ""})
 }
 
 // resolveReasoning turns the configured knobs into the thinking mode and effort
