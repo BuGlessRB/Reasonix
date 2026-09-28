@@ -69,10 +69,7 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.setExpansionEnv(expansionEnv)
 	cfg.CredentialsStore = r.credentialsStoreMode()
 
-	projectTOML := "reasonix.toml"
-	if root != "." {
-		projectTOML = filepath.Join(root, "reasonix.toml")
-	}
+	projectTOML := ProjectConfigPath(root)
 	if primary := r.userConfigPath(); primary != "" {
 		if _, err := resolveConfigAccessPath(primary, true); err != nil {
 			return nil, err
