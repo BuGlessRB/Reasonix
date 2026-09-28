@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       replies:
-        description: 'JSON array of {"issue": 123, "body": "...", "close": true | "not_planned"} or {"discussion": 123, "body": "..."}'
+        description: 'JSON array of {"issue": 123, "body": "...", "close": true | "not_planned"} or {"discussion": 123, "body": "...", "close": "resolved" | "outdated" | "duplicate"}'
         required: true
         type: string
       interval:
@@ -57,11 +57,25 @@ jobs:
               await github.graphql(`mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}`, { id: d.id, body });
               return true;
             };
+            const closeReasons = { resolved: 'RESOLVED', outdated: 'OUTDATED', duplicate: 'DUPLICATE' };
+            const closeDiscussion = async (number, reason) => {
+              const q = await github.graphql(
+                `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){discussion(number:$n){id closed}}}`,
+                { owner, repo, n: number });
+              const d = q.repository.discussion;
+              if (d.closed) return;
+              await github.graphql(`mutation($id:ID!,$r:DiscussionCloseReason!){closeDiscussion(input:{discussionId:$id,reason:$r}){discussion{id}}}`, { id: d.id, r: reason });
+            };
             for (const { issue, discussion, body, close } of replies) {
               if (Number.isInteger(discussion) && typeof body === 'string' && body.trim() !== '') {
                 try {
                   const posted = await replyToDiscussion(discussion, body);
-                  core.info(`discussion #${discussion}: ${posted ? 'replied' : 'already replied'}`);
+                  if (close !== undefined && close !== false) {
+                    const reason = closeReasons[close];
+                    if (!reason) throw new Error(`unknown close reason ${close}`);
+                    await closeDiscussion(discussion, reason);
+                  }
+                  core.info(`discussion #${discussion}: ${posted ? 'replied' : 'already replied'}${close ? ', closed' : ''}`);
                 } catch (error) {
                   failed.push(`discussion ${discussion}: ${error.message}`);
                 }
