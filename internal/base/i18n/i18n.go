@@ -84,7 +84,7 @@ type Messages struct {
 	// chat TUI status line / approval banner.
 	ChatThinking                    string // live reasoning marker label, e.g. "thinking…"
 	ChatThoughtForFmt               string // collapsed reasoning summary, "%d" = elapsed s
-	ChatStatusThinkingFmt           string // "%s thinking… (%ds · <cancel hint>)" — %s = spinner, %d = elapsed s
+	ChatStatusThinkingFmt           string // "%s thinking… (%ds · %s cancels)" — %s = spinner, %d = elapsed s, %s = interrupt key
 	TurnPhaseWorking                string // host turn_phase label: working
 	TurnPhaseChecking               string // host turn_phase label: checking
 	TurnPhaseVerifying              string // host turn_phase label: verifying
@@ -106,6 +106,7 @@ type Messages struct {
 	ChatSubagentPreviewLabel        string // verbose preview marker ("▎")
 	ChatStatusRetryingFmt           string // "%s retrying (%d/%d)…" — %s = spinner, %d/%d = attempt/max
 	ChatStatusCancellingFmt         string // "%s stopping… (%ds · Ctrl+C exits)" — %s = spinner, %d = elapsed s
+	ChatStatusCancellingViFmt       string // "%s stopping… (%ds)" — vi mode: Ctrl+C re-cancels instead of exiting, so the hint drops the exit key
 	ChatStatusIdle                  string // shortcuts hint when idle
 	ChatStatusYoloIdle              string // shortcuts hint when idle in YOLO/bypass mode
 	ChatStatusCycleHint             string // plan-toggle shortcut hint shown when no modal prompt owns the status row
@@ -123,10 +124,13 @@ type Messages struct {
 	ChatStatusCacheNowFmt           string // cache status tag, "%s" = latest-turn hit rate with percent sign
 	ChatStatusCacheAvgFmt           string // cache status tag, "%s" = session-average hit rate with percent sign
 	ChatStatusPlanApproval          string // shortcuts hint while a plan is pending
+	ChatStatusPlanApprovalVi        string // vi mode: Esc is ignored on the plan card, so the hint drops it
 	PlanApprovalPrompt              string // one-line "plan above is ready" banner shown above the input
 	ApprovalChoiceHint              string // keys under an approval's choices
 	PlanApprovalChoices             string // start / revise / exit-without-executing choice list
+	PlanApprovalChoicesVi           string // vi mode: Esc is ignored on the plan card, so the hint drops it
 	ChatStatusToolApproval          string // shortcuts hint while a tool call awaits approval
+	ChatStatusToolApprovalVi        string // vi mode: Esc is ignored on the approval card, so the hint drops it
 	ToolApprovalPromptFmt           string // approval banner — tool, subject suffix, source/intent detail, choices
 	ToolApprovalChoices             string // standard approval choice list
 	BashPrefixChoices               string // approval choice list when a bash prefix can be granted
@@ -182,15 +186,16 @@ type Messages struct {
 	DiffFoldDisabled                string // notice when /diff-fold disables folding (shows all lines)
 
 	// `ask` tool question card.
-	AskTypeSomething   string // the "type your own answer" option label
-	AskTypingHint      string // shown on that row while entering free text
-	AskNoteHint        string // shown under a single-choice pick while typing its note
-	AskChatInstead     string // the "don't pick, just chat" option label
-	ChatStatusQuestion string // shortcuts hint while a question card is open
-	StatusResumePicker string // status tag while the resume picker is open (e.g. "select session")
-	AskSubmitTitle     string // submit-tab title in the ask tool question card
-	AskUnanswered      string // placeholder for an unanswered ask question
-	AskSubmitHint      string // submit-tab keyboard hint
+	AskTypeSomething     string // the "type your own answer" option label
+	AskTypingHint        string // shown on that row while entering free text
+	AskNoteHint          string // shown under a single-choice pick while typing its note
+	AskChatInstead       string // the "don't pick, just chat" option label
+	ChatStatusQuestion   string // shortcuts hint while a question card is open
+	ChatStatusQuestionVi string // vi mode: Esc is ignored on the ask card, so the hint names Ctrl+C
+	StatusResumePicker   string // status tag while the resume picker is open (e.g. "select session")
+	AskSubmitTitle       string // submit-tab title in the ask tool question card
+	AskUnanswered        string // placeholder for an unanswered ask question
+	AskSubmitHint        string // submit-tab keyboard hint
 
 	// output style listing (/output-style).
 	OutputStyleNone           string // no styles available

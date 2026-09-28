@@ -274,6 +274,35 @@ func TestCtrlCTwiceQuitsWhenIdle(t *testing.T) {
 	}
 }
 
+// ^C clears the prompt and leaves shell mode, matching send(): the next input is
+// not silently still a `!` shell command.
+func TestCtrlCLeavesShellModeWhenNotVi(t *testing.T) {
+	m, _ := testModel(t)
+	m.shell = true
+	m.composer.SetValue("ls")
+	press(m, "ctrl+c")
+	if got := m.composer.Value(); got != "" {
+		t.Fatalf("prompt after ^C = %q, want empty", got)
+	}
+	if m.shell {
+		t.Fatal("^C cleared the prompt but left shell mode on")
+	}
+}
+
+// ^C cancels a running turn even while an ask answer is being typed, where Esc
+// is ignored in vi mode: the composer must not swallow the universal interrupt.
+func TestCtrlCCancelsWhileTypingAnAskAnswer(t *testing.T) {
+	m, k := testModel(t)
+	apply(m, eventwire.Event{Kind: "turn_started"})
+	apply(m, askEvent())
+	m.openAsk(m.tr.OpenPrompt())
+	m.ask.entry = entryAnswer
+	run(m, press(m, "ctrl+c"))
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, "POST /cancel") {
+		t.Fatalf("^C while typing an ask answer did not cancel:\n%s", calls)
+	}
+}
+
 func askEvent() eventwire.Event {
 	return eventwire.Event{Kind: "ask_request", Ask: &eventwire.Ask{ID: "ask1", Questions: []eventwire.AskQuestion{
 		{ID: "q1", Prompt: "Which database?", Options: []eventwire.AskOption{{Label: "Postgres"}, {Label: "SQLite"}}},
