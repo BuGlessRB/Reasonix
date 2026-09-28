@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"maps"
 	"reasonix/internal/contract/provider"
 	"slices"
 	"strings"
@@ -18,85 +17,12 @@ const (
 	ReasoningProtocolNone      = "none"
 )
 
-// deepSeekVendorHost is the endpoint DeepSeek's own effort vocabulary was
-// measured against; a relay serving the same models speaks its own.
-const deepSeekVendorHost = "api.deepseek.com"
-
 // EffortCapability describes the abstract effort levels a provider/model can set
 // through the /effort command.
 type EffortCapability struct {
 	Supported bool
 	Levels    []string
 	Default   string
-}
-
-type modelReasoningCapability struct {
-	Protocol string
-	// Levels is the other half of the ContextWindow rule: which levels a request
-	// may carry is a fact about who serves the model, and a relay commonly
-	// speaks a different vocabulary. VendorHost is the endpoint this ladder was
-	// measured against, and it is the only one that inherits it.
-	Levels     []string
-	Default    string
-	Aliases    map[string]string
-	VendorHost string
-	// ContextWindow is what the model holds, which is a fact about the model and
-	// not about who serves it — a relay passing it through has the same ceiling.
-	// Zero means nobody has established one; see ResolvedContextWindow.
-	ContextWindow int
-}
-
-var modelReasoningCapabilities = map[string]modelReasoningCapability{
-	// Windows are the ones already stated for these models in the shipped
-	// entries; carrying them by model is what lets a gateway serving the same
-	// model inherit the ceiling instead of resolving to nothing.
-	DeepSeekFlashModel: deepSeekFlashCapability(),
-	"deepseek-v4-pro": {
-		Protocol:      ReasoningProtocolDeepSeek,
-		VendorHost:    "api.deepseek.com",
-		Levels:        []string{"disabled", "high", "max"},
-		Default:       "high",
-		ContextWindow: 1_000_000,
-	},
-	// The retired flash names are the same model under an old id, so they carry
-	// the same ladder rather than resolving to nothing on a gateway still asked
-	// by one of them.
-	"deepseek-v4-flash":            deepSeekFlashCapability(),
-	"deepseek-v4-flash-vision-exp": deepSeekFlashCapability(),
-	// GPT-5.6, measured 2026-08-20: the endpoint refuses "minimal" by naming the
-	// model, though the generic API vocabulary carries it. Keyed by model so a
-	// gateway serving them under its own name inherits the ladder.
-	"gpt-5.6-luna":  gpt56Capability(),
-	"gpt-5.6-sol":   gpt56Capability(),
-	"gpt-5.6-terra": gpt56Capability(),
-}
-
-// deepSeekFlashCapability is the flash ladder, measured 2026-09-13: the endpoint
-// names its own enum low|medium|high|xhigh|ultra|max in a 400, rejects minimal
-// and none outright, and stops thinking only for thinking.type=disabled — so
-// "disabled" is a level of ours and the aliases carry the rest onto the enum.
-func deepSeekFlashCapability() modelReasoningCapability {
-	return modelReasoningCapability{
-		Protocol:      ReasoningProtocolDeepSeek,
-		VendorHost:    "api.deepseek.com",
-		Levels:        []string{"disabled", "low", "high", "max"},
-		Default:       "high",
-		Aliases:       map[string]string{"minimal": "low", "medium": "high", "xhigh": "high", "ultra": "max"},
-		ContextWindow: 1_000_000,
-	}
-}
-
-func gpt56Capability() modelReasoningCapability {
-	return modelReasoningCapability{
-		Protocol:   ReasoningProtocolOpenAI,
-		Levels:     []string{"none", "low", "medium", "high", "xhigh", "max"},
-		Default:    "medium",
-		Aliases:    map[string]string{"minimal": "low"},
-		VendorHost: "api.openai.com",
-		// ContextWindow unset on purpose: the ladder was measured, a window here
-		// would only have been recalled, and a number nobody checked silently
-		// moves compaction.
-	}
 }
 
 // effortCapabilityForProtocol is the one place a reasoning protocol names its
@@ -521,101 +447,6 @@ func mimoEffortCapability() EffortCapability {
 	return EffortCapability{Supported: true, Levels: []string{"auto", "none", "low", "medium", "high"}, Default: "auto"}
 }
 
-// resolvedModelEffortLadder is the model table's ladder. The endpoint it was
-// measured against gets all of it; anyone else serving the same model gets the
-// standard vocabulary of it, because the levels an API accepts belong to the
-// endpoint and a relay that never took "max" answers 400 for as long as the
-// setting stands.
-func resolvedModelEffortLadder(e *ProviderEntry) (modelReasoningCapability, bool) {
-	cap, ok := resolvedModelReasoningCapability(e)
-	if !ok {
-		return modelReasoningCapability{}, false
-	}
-	if servedByVendor(e, cap.VendorHost) {
-		return cap, true
-	}
-	return standardLadder(cap), true
-}
-
-// servedByVendor reports whether this entry points at the endpoint a ladder was
-// measured against. Host-only, matching isMimoEntry: a full-URL substring would
-// let an unrelated URL enable a vendor's extensions.
-func servedByVendor(e *ProviderEntry, host string) bool {
-	return e != nil && host != "" && officialProviderHost(e.BaseURL) == host
-}
-
-// standardLadder drops the levels only the vendor's own endpoint is known to
-// take. What is left is the API's documented depth vocabulary plus the switches
-// the host resolves locally and never sends, so the control stays on screen for
-// a relay instead of disappearing. supported_efforts restores the rest.
-func standardLadder(cap modelReasoningCapability) modelReasoningCapability {
-	out := cap
-	out.Levels = nil
-	var dropped []string
-	for _, level := range cap.Levels {
-		if standardEffortLevel(level) {
-			out.Levels = append(out.Levels, level)
-			continue
-		}
-		dropped = append(dropped, level)
-	}
-	// A dropped level degrades onto the deepest standard one rather than being
-	// refused: asking for more depth than the endpoint's vocabulary carries is
-	// answered with the most it does, the way "minimal" already degrades.
-	if deepest := deepestStandardLevel(out.Levels); deepest != "" && len(dropped) > 0 {
-		aliases := make(map[string]string, len(cap.Aliases)+len(dropped))
-		maps.Copy(aliases, cap.Aliases)
-		for _, level := range dropped {
-			aliases[level] = deepest
-		}
-		out.Aliases = aliases
-	}
-	if !containsString(out.Levels, out.Default) {
-		out.Default = ""
-	}
-	return out
-}
-
-// deepestStandardLevel is the most depth a standard vocabulary can ask for.
-func deepestStandardLevel(levels []string) string {
-	for _, level := range []string{"high", "medium", "low"} {
-		if containsString(levels, level) {
-			return level
-		}
-	}
-	return ""
-}
-
-// standardEffortLevel reports a level any OpenAI-compatible endpoint is
-// expected to take. "max" and "xhigh" are vendor extensions and are the ones an
-// unmeasured endpoint rejects.
-func standardEffortLevel(level string) bool {
-	switch level {
-	case "auto", "none", "disabled", "off", "low", "medium", "high":
-		return true
-	}
-	return false
-}
-
-func resolvedModelReasoningCapability(e *ProviderEntry) (modelReasoningCapability, bool) {
-	if e == nil || e.Kind != "openai" {
-		return modelReasoningCapability{}, false
-	}
-	cap, ok := modelReasoningCapabilities[strings.ToLower(strings.TrimSpace(e.Model))]
-	return cap, ok
-}
-
-func effortCapabilityFromModel(cap modelReasoningCapability) EffortCapability {
-	levels := make([]string, 0, len(cap.Levels)+1)
-	levels = append(levels, "auto")
-	levels = append(levels, cap.Levels...)
-	def := normalizeEffortLevel(cap.Default)
-	if def == "" || !containsString(cap.Levels, def) {
-		def = "auto"
-	}
-	return EffortCapability{Supported: true, Levels: levels, Default: def}
-}
-
 // deepSeekEffortCapability is the ladder for a DeepSeek-protocol endpoint with
 // no model-table entry. "max" is the vendor's own extension, so only the
 // vendor's endpoint is offered it: a relay that never took it answers 400 for
@@ -623,7 +454,7 @@ func effortCapabilityFromModel(cap modelReasoningCapability) EffortCapability {
 // supported_efforts.
 func deepSeekEffortCapability(e *ProviderEntry) EffortCapability {
 	levels := []string{"auto", "disabled", "high", "max"}
-	if !servedByVendor(e, deepSeekVendorHost) {
+	if !servedByVendor(e, deepSeekVendor) {
 		levels = levels[:len(levels)-1]
 	}
 	return EffortCapability{Supported: true, Levels: levels, Default: "high"}

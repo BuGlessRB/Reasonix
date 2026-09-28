@@ -40,7 +40,7 @@ func isKimiK3ReasoningEffort(level string) bool {
 // it degrades onto the deepest standard level rather than being sent to an
 // endpoint that answers 400 for as long as the setting stands.
 func normalizeDeepSeekReasoningEffort(e *ProviderEntry, level string) (string, error) {
-	vendor := servedByVendor(e, deepSeekVendorHost)
+	vendor := servedByVendor(e, deepSeekVendor)
 	switch level {
 	case "disabled", "off": // "off" is the retired spelling of no thinking
 		return "disabled", nil
