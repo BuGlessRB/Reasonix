@@ -193,6 +193,7 @@ export const ACTIONS: UIAction[] = [
   { id: "market.search", kind: "view", target: "none", proof: "interaction" },
   { id: "market.kind", kind: "view", target: "none", proof: "interaction" },
   { id: "market.sort", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.pinned", kind: "view", target: "none", proof: "interaction" },
   { id: "market.more", kind: "view", target: "none", proof: "interaction" },
   { id: "market.open", kind: "navigation", target: "none", proof: "interaction" },
   { id: "market.back", kind: "navigation", target: "none", proof: "interaction" },

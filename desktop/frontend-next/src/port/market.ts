@@ -28,6 +28,9 @@ export interface MarketPackage {
   verified: boolean;
   updatedAt: string;
   installed?: MarketInstalled;
+  // The registry's word that the approved version is pinned; absent when it
+  // did not say. The install still checks the digest itself.
+  pinned?: boolean;
 }
 
 // The version a reviewer let through. contentHash is the pin: an install is
@@ -59,6 +62,8 @@ export interface MarketQuery {
   q?: string;
   sort?: "trending" | "new" | "installs";
   offset?: number;
+  // Filtered by the registry, so paging stays whole.
+  pinned?: boolean;
 }
 
 // version is the approved version the person was shown; the kernel refuses an

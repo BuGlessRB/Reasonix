@@ -72,6 +72,46 @@ func TestListDropsRowsThatAreNotActive(t *testing.T) {
 	}
 }
 
+func TestListAsksTheRegistryToFilterToInstallable(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("pinned") != "1" {
+			t.Errorf("query = %s", r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`{"packages":[{"slug":"a/kit","status":"active","pinned":true}],"limit":24,"offset":0}`))
+	})
+	page, err := c.List(context.Background(), Query{Pinned: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Packages) != 1 || page.Packages[0].Pinned == nil || !*page.Packages[0].Pinned {
+		t.Fatalf("packages = %+v", page.Packages)
+	}
+}
+
+// A registry that ignores the filter answers a page the person did not ask
+// for; handing it on filtered here would leave the paging wrong.
+func TestListRefusesAnUnfilteredAnswerToAFilteredAsk(t *testing.T) {
+	for _, body := range []string{
+		`{"packages":[{"slug":"a/old","status":"active"}]}`,
+		`{"packages":[{"slug":"a/no","status":"active","pinned":false}]}`,
+	} {
+		c := testClient(t, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) })
+		if _, err := c.List(context.Background(), Query{Pinned: true}); !errors.Is(err, ErrFilterUnsupported) {
+			t.Errorf("body %s: err = %v, want ErrFilterUnsupported", body, err)
+		}
+	}
+	plain := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("pinned") {
+			t.Errorf("unfiltered ask sent pinned: %s", r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`{"packages":[{"slug":"a/old","status":"active"}]}`))
+	})
+	page, err := plain.List(context.Background(), Query{})
+	if err != nil || len(page.Packages) != 1 || page.Packages[0].Pinned != nil {
+		t.Fatalf("page = %+v, err = %v", page, err)
+	}
+}
+
 // A redirect could hand the listing to any host; it is an unexpected answer,
 // never a hop.
 func TestClientDoesNotFollowRedirects(t *testing.T) {

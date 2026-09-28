@@ -272,6 +272,7 @@ const SAID: Record<string, string> = {
   "market.not_found": "社区市场中没有这个已审核的包",
   "market.unreachable": "无法连接社区市场：{detail}",
   "market.bad_response": "社区市场返回了无法识别的内容",
+  "market.filter_unsupported": "社区市场暂不支持只列出可安装的包",
   "market.unpinned": "该包的审核版本没有固定内容，暂不能从市场安装",
   "market.bad_source": "该包的审核版本指向本机或不安全的来源，不从市场安装",
   "market.version_changed": "审核版本已更新，请重新查看后再安装",

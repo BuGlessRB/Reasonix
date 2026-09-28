@@ -3182,7 +3182,7 @@
   .mkt-q:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .mkt-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none }
   .mkt-row {
-    display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 10px 8px; text-align: left;
+    display: flex; flex-direction: column; gap: 2px; width: 100%; min-width: 0; padding: 7px 8px; text-align: left;
     border: 0; border-bottom: 1px solid var(--hair); background: transparent; color: inherit; cursor: pointer;
   }
   .mkt-row:hover { background: var(--overlay) }
@@ -3198,6 +3198,16 @@
   .mkt-sum { margin: 0; font: var(--w-reg) var(--fs-ui)/1.55 var(--ui); color: var(--muted) }
   .mkt-meta { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .mkt-id { font-family: var(--mono) }
+  .mkt-row .mkt-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap }
+  .mkt-row .nm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
+  .mkt-row .mkt-kind, .mkt-row .mkt-badge { flex: none }
+  .mkt-n { flex: none; margin-left: auto; padding-left: 8px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint); font-variant-numeric: tabular-nums }
+  .mkt-row .mkt-sum { flex: 1 1 60%; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-meta); line-height: 1.5 }
+  .mkt-row .mkt-meta { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ghost) }
+  .mkt-pinned { flex: none; margin-left: -2px; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
+  .mkt-pinned::before { content: "· "; }
+  .mkt-pinned[data-on] { color: var(--faint) }
+  .mkt-pin { display: inline-flex; align-items: center; gap: 6px; font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted); cursor: pointer; white-space: nowrap }
   .mkt-desc { margin: 0; max-width: 70ch; font: var(--w-reg) var(--fs-ui)/1.65 var(--ui); color: var(--text); white-space: pre-wrap }
   .mkt-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 4px 0 0 }
   .mkt-facts dt { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }

@@ -32,6 +32,7 @@ export function Market({ port, onInstalled }: Props) {
   const [kind, setKind] = useState<MarketKind | "">("");
   const [sort, setSort] = useState<Sort>("trending");
   const [q, setQ] = useState("");
+  const [pinned, setPinned] = useState(false);
   const [rows, setRows] = useState<MarketPackage[] | null>(null);
   const [more, setMore] = useState(false);
   const [error, setError] = useState("");
@@ -42,7 +43,7 @@ export function Market({ port, onInstalled }: Props) {
     const n = ++asked.current;
     setError("");
     port
-      .marketList({ kind, q: q.trim(), sort, offset })
+      .marketList({ kind, q: q.trim(), sort, offset, pinned })
       .then((page) => {
         if (n !== asked.current) return;
         setRows((prev) => (offset > 0 && prev ? [...prev, ...page.packages] : page.packages));
@@ -58,7 +59,7 @@ export function Market({ port, onInstalled }: Props) {
   useEffect(() => {
     const timer = setTimeout(() => load(0), q ? 250 : 0);
     return () => clearTimeout(timer);
-  }, [kind, sort, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kind, sort, q, pinned]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (open) {
     return (
@@ -100,6 +101,10 @@ export function Market({ port, onInstalled }: Props) {
             </button>
           ))}
         </div>
+        <label className="mkt-pin">
+          <input type="checkbox" data-action="market.pinned" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
+          {t("只看可安装")}
+        </label>
       </div>
       {error && (
         <div className="find" data-lvl="err">
@@ -113,7 +118,7 @@ export function Market({ port, onInstalled }: Props) {
         {rows?.map((p) => (
           <li key={p.slug}>
             <button className="mkt-row" data-action="market.open" data-value={p.slug} onClick={() => setOpen(p.slug)}>
-              <span className="mkt-hd">
+              <span className="mkt-line">
                 <span className="nm">{p.name}</span>
                 <span className="mkt-kind">{t(KIND_NAME[p.kind] ?? p.kind)}</span>
                 {p.verified && <span className="mkt-badge" data-tone="ok">{t("已验证")}</span>}
@@ -122,10 +127,17 @@ export function Market({ port, onInstalled }: Props) {
                     {p.installed.version === p.latestVersion ? t("已安装") : t("可更新")}
                   </span>
                 )}
+                <span className="mkt-n">{t("{n} 次安装", { n: p.installCount })}</span>
               </span>
-              {p.summary && <span className="mkt-sum">{p.summary}</span>}
-              <span className="mkt-meta">
-                <span className="mkt-id">{`@${p.handle} · v${p.latestVersion}`}</span> · {t("{n} 次安装", { n: p.installCount })}
+              <span className="mkt-line">
+                <span className="mkt-sum">{p.summary}</span>
+                <span className="mkt-meta mkt-id">{`@${p.handle} · v${p.latestVersion}`}</span>
+                {/* Outside the truncating meta so a narrow row loses the handle, never this. */}
+                {p.pinned !== undefined && (
+                  <span className="mkt-pinned" data-on={p.pinned ? "" : undefined} title={p.pinned ? undefined : t("审核版本没有固定内容，不能从市场安装")}>
+                    {t(p.pinned ? "可安装" : "未固定")}
+                  </span>
+                )}
               </span>
             </button>
           </li>
