@@ -3764,6 +3764,44 @@
   .acct-who .em { font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--muted) }
   .acct-note { font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--muted); margin: 0 }
   .acct-note[data-err] { color: var(--err) }
+
+  .bk { display: flex; flex-direction: column; gap: 12px }
+  .bk-cats { display: flex; flex-direction: column; border-top: 1px solid var(--hair) }
+  .bk-cat { display: grid; grid-template-columns: auto 1fr; column-gap: 9px; row-gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--hair); cursor: pointer }
+  .bk-cat input { grid-row: span 2; margin-top: 3px }
+  .bk-cat .nm { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
+  .bk-cat .why { font: var(--w-reg) var(--fs-meta)/1.55 var(--ui); color: var(--muted) }
+  .bk-cat[data-warn] .why { color: var(--warn) }
+  .bk-fields { display: flex; flex-wrap: wrap; gap: 10px }
+  .bk-fields label { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px }
+  .bk-fields label.full { flex-basis: 100% }
+  .bk-fields span { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .bk-fields input {
+    padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
+    background: var(--raised); color: var(--text); font: var(--w-reg) var(--fs-ui) var(--ui);
+  }
+  .bk-fields input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
+  .bk-acts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px }
+  .bk-acts .act[data-primary] { border-color: var(--accent); background: var(--accent); color: var(--accent-fg) }
+  .bk-acts .act[data-primary]:disabled { border-color: var(--border); background: transparent; color: var(--ghost) }
+  .bk-list, .bk-plan { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hair) }
+  .bk-row { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--hair) }
+  .bk-row .who { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0 }
+  .bk-row .nm { font: var(--w-med) var(--fs-ui) var(--ui); color: var(--text) }
+  .bk-row .meta { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--muted); overflow-wrap: anywhere }
+  .bk-restore { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-sm) }
+  .bk-item { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--hair) }
+  .bk-item .take { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; cursor: pointer }
+  .bk-item .cat { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .bk-item .nm { font: var(--w-med) var(--fs-ui) var(--mono); color: var(--text); overflow-wrap: anywhere }
+  .bk-item .st { margin-left: auto; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--muted) }
+  .bk-item[data-status="same"] .nm { color: var(--muted) }
+  .bk-item .sum, .bk-item .prev code { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--text); overflow-wrap: anywhere; padding-left: 22px }
+  .bk-item .prev { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--muted); padding-left: 22px }
+  .bk-item .prev code { padding-left: 4px }
+  .bk-item .body { margin: 0 0 0 22px; max-height: 180px; overflow: auto; padding: 8px 10px; border-radius: var(--r-xs); background: var(--overlay); font: var(--w-reg) var(--fs-meta)/1.5 var(--mono); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere }
+  .bk-item .warn { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--warn); padding-left: 22px }
+  .bk-item .allow { display: flex; align-items: center; gap: 7px; margin-left: 22px; padding: 6px 8px; border-radius: var(--r-xs); background: var(--overlay); font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--text); cursor: pointer }
   .acct-act { display: flex; align-items: center; gap: 11px; flex-wrap: wrap }
   .acct-code { display: flex; flex-direction: column; gap: 9px; align-items: flex-start }
 

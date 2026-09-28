@@ -214,6 +214,10 @@ func (c *Client) Logout(ctx context.Context, token string) error {
 }
 
 func (c *Client) do(ctx context.Context, method, path, token string, body, out any) error {
+	return c.doLimit(ctx, method, path, token, body, out, 1<<20)
+}
+
+func (c *Client) doLimit(ctx context.Context, method, path, token string, body, out any, limit int64) error {
 	var reader io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
@@ -240,7 +244,7 @@ func (c *Client) do(ctx context.Context, method, path, token string, body, out a
 		return err
 	}
 	defer resp.Body.Close()
-	payload, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	payload, err := io.ReadAll(io.LimitReader(resp.Body, limit))
 	if err != nil {
 		return err
 	}

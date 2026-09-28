@@ -2,7 +2,7 @@ import type { PlanAction } from "./session";
 import { HttpError } from "./port";
 import type { AccountState, AgentPort, ChangeDiff, Completion, CompletionItem, DeviceGrant, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, MemoryCatalog, MemoryEdit, UsageReport, MemoryEntry, WorkspaceInfo, WorkspaceChanges, Attachment, DroppedRef, Queue, QueueItem, Queued, NotifyPrefs, TrayPrefs } from "./port";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
-import { MockTheme } from "./mock_theme";
+import { MockBackup } from "./mock_backup";
 import { SCRIPT, mockMsgIndex, mockTurnStart } from "./fixture";
 import { MockExecutionHold, mockExecutionGraph } from "./mock_graph";
 import { mockStorage, mockStoragePlan } from "./mock_storage";
@@ -11,7 +11,7 @@ import { mockUsage } from "./mock_usage";
 
 
 
-export class MockPort extends MockTheme implements AgentPort {
+export class MockPort extends MockBackup implements AgentPort {
   private listeners = new Set<(ev: WireEvent) => void>();
   private log: WireEvent[] = [];
   // What the user has sent, so checkpoints() can mirror one per turn.
