@@ -2,6 +2,10 @@
 // that remain available while an agent is live.
 export const EN_COMPOSER: Record<string, string> = {
   "↓ 回到最新": "↓ Back to latest",
+  "不思考": "No reasoning",
+  "超深入": "Extra deep",
+  "不做推理直接作答，响应最快，适合简单问答": "Answers without reasoning; fastest, for simple questions",
+  "比深入投入更多推理，适合困难的多步问题": "More reasoning than Deep, for hard multi-step problems",
   "停下": "Stop",
   "发送": "Send",
   "插话": "Steer",

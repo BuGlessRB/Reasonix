@@ -19,16 +19,22 @@ export function effortsFor(models: ModelEntry[], ref?: string): string[] {
   return EFFORT_FALLBACK;
 }
 
+// xhigh and max are distinct rungs on the ladders that carry both, so they
+// cannot share a name.
+const EFFORT_LABELS: Record<string, string> = {
+  auto: "自动", disabled: "关闭", none: "不思考", low: "快速", medium: "平衡", high: "深入", xhigh: "超深入", max: "极致",
+};
+
 export function effortReading(value?: string): string {
   const id = (value || "auto").toLowerCase();
-  const label = ({ auto: "自动", low: "快速", medium: "平衡", high: "深入", xhigh: "极致", max: "极致" } as Record<string, string>)[id] ?? id;
+  const label = EFFORT_LABELS[id] ?? id;
   const raw = id === "auto" ? "Auto" : id.charAt(0).toUpperCase() + id.slice(1);
   return `${t(label)} · ${raw}`;
 }
 
 export function effortLabel(value: string): string {
   const id = value.toLowerCase();
-  return t(({ auto: "自动", disabled: "关闭", low: "快速", medium: "平衡", high: "深入", xhigh: "极致", max: "极致" } as Record<string, string>)[id] ?? id);
+  return t(EFFORT_LABELS[id] ?? id);
 }
 
 export function effortApi(value: string): string {
@@ -41,10 +47,11 @@ export function effortDescription(value: string): string {
   return t(({
     auto: "使用模型默认或自适应策略，按任务复杂度调整",
     disabled: "不发送推理强度参数，使用服务端默认设置",
+    none: "不做推理直接作答，响应最快，适合简单问答",
     low: "轻量思考，适合改写、提取和明确的小任务",
     medium: "兼顾响应速度与可靠性，适合大多数任务",
     high: "投入更多时间分析复杂上下文与执行方案",
-    xhigh: "用于最复杂的问题，等待时间与消耗最高",
+    xhigh: "比深入投入更多推理，适合困难的多步问题",
     max: "用于最复杂的问题，等待时间与消耗最高",
   } as Record<string, string>)[id] ?? value);
 }
@@ -63,7 +70,7 @@ export function effortMenu(efforts: string[], modelLabel: string, onDeclare: str
       meta: effortApi(value),
       badge: value === "auto" ? t("推荐") : undefined,
       recommended: value === "auto",
-      strength: value === "disabled" ? 0 : ({ auto: 1, low: 1, medium: 2, high: 3, xhigh: 4, max: 4 } as Record<string, number>)[value.toLowerCase()] ?? 1,
+      strength: value === "disabled" || value === "none" ? 0 : ({ auto: 1, low: 1, medium: 2, high: 3, xhigh: 4, max: 4 } as Record<string, number>)[value.toLowerCase()] ?? 1,
       desc: effortDescription(value),
     })),
     ...(declared ? [{ value: "__effort-note", label: t("仅显示当前模型实际支持的档位。"), right: t("按模型生效"), header: true }] : []),
