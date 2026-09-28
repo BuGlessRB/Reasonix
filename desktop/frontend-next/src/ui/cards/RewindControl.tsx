@@ -136,7 +136,7 @@ export function RewindControl({
                   <button className="mi" role="menuitem" data-action="rewind.prepare" key={s.value} onClick={() => pick(s.value)}>
                     <span className="dot" />
                     <span className="tx">
-                      <span className="lb">{s.label}</span>
+                      <span className="lb">{t(s.label)}</span>
                     </span>
                     {s.files && <span className="rt">{t("{n} 个文件", { n: cp.files })}</span>}
                   </button>
@@ -165,7 +165,7 @@ export function RewindControl({
                       <span className="lb">{t("本轮有改动无法还原")}</span>
                       <span className="ds">
                         {(stage.plan.coverageGaps ?? [])
-                          .map((g) => GAP_REASONS[g.reason] ?? g.detail)
+                          .map((g) => t(GAP_REASONS[g.reason] ?? g.detail))
                           .join("；") || t("部分改动不在快照内")}
                       </span>
                     </span>
