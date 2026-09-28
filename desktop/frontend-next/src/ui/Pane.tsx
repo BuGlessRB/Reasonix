@@ -20,6 +20,7 @@ import { useRewindActions } from "./rewind";
 import { initialTraj, reduceTraj } from "../state/trajectory";
 import { Transcript } from "./Transcript";
 import { Composer } from "./Composer";
+import { draftKey } from "./drafts";
 import { Queue } from "./Queue";
 import { SlottedView } from "./SlottedView";
 import { key as slotKey, placement } from "./slots";
@@ -699,7 +700,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
           )}
         </div>
         {alert && <div className="cmpalert">{alert}</div>}
-        <Composer port={port} status={status} running={running} quote={quote} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} pulse={pulse} />
+        <Composer port={port} status={status} running={running} quote={quote} focus={askFocus} onSubmit={submit} onChanged={refreshStatus} onError={fail} onSettings={onSettings} changeCount={tree?.repo ? tree.changes.length : 0} pulse={pulse} draftKey={draftKey(rt.host ?? "", rt.root, rt.sessionPath || status?.sessionPath || "")} />
         <div className="studio-meterrail" ref={meterRef} aria-label={t("运行统计")}>
           <div className="studio-speed-anchor">
             <button
@@ -795,6 +796,5 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   );
 }
 
-// Panes run at the same time: a frame arriving in one must not re-render the
-// others, or two live conversations cost twice what one does.
+// A frame arriving in one pane must not re-render the others.
 export const Pane = memo(PaneView);

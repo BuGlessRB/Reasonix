@@ -8,6 +8,7 @@ import { useLaunchHealth } from "./launchhealth";
 import { Nav } from "./Nav";
 import { useLinkRouting } from "./links";
 import { Pane, type PaneReport } from "./Pane";
+import { clearDraftForSession } from "./drafts";
 import { DOCK, Gutter, RAIL, dockMax, keepWidth, widthOf } from "./Gutter";
 import { listenAction } from "./listen";
 import { folded as roomGaveUp, onRoomWidth } from "./viewport";
@@ -529,6 +530,7 @@ export function App({ hub }: { hub: HubPort }) {
     async (path: string, archived: boolean, runtimeId?: string) => {
       if (runtimeId) await closePanes([runtimeId]);
       await hub.archiveSession(path, archived);
+      if (archived) clearDraftForSession("", path);
       if (archived) {
         setPinnedSessions((current) => {
           if (!current.has(path)) return current;
