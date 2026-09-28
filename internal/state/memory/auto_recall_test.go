@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,6 +177,39 @@ func TestAutoRecallLabelsStaleFactsAndBoundsProviderBlock(t *testing.T) {
 	}
 	if result.CharBudget != 700 || result.UsedChars != len([]rune(block)) {
 		t.Fatalf("budget trace = %+v, block runes=%d", result, len([]rune(block)))
+	}
+}
+
+// The two reasons a matched fact never reaches the block are reported apart: the
+// per-turn hit cap and the character budget. The note the model reads still
+// carries their sum, so splitting the diagnostic does not change what it sees.
+func TestAutoRecallSplitsOmittedByLimitAndBudget(t *testing.T) {
+	store := recallTestStore(t)
+	now := time.Date(2026, 7, 27, 0, 0, 0, 0, time.UTC)
+	for i := range 6 {
+		recallTestWrite(t, store.Dir, Memory{
+			ID: fmt.Sprintf("mem-cap-%d", i), Name: fmt.Sprintf("cap-%d", i),
+			Title: "cap fact", Description: "matched cap fact", Type: TypeReference,
+			Scope: FactScopeProject, UpdatedAt: now.Add(-time.Duration(i) * time.Hour),
+			Body: strings.Repeat("cap detail ", 30),
+		})
+	}
+
+	byLimit := AutoRecall(store, "matched cap fact", RecallOptions{Now: now, Limit: 2, MaxChars: 20000})
+	if byLimit.OmittedByLimit != 4 || byLimit.OmittedByBudget != 0 {
+		t.Fatalf("hit cap must be reported apart from the budget: %+v", byLimit)
+	}
+	if len(byLimit.Hits) != 2 {
+		t.Fatalf("hit cap must still cap the block: %d hits", len(byLimit.Hits))
+	}
+
+	byBudget := AutoRecall(store, "matched cap fact", RecallOptions{Now: now, Limit: 6, MaxChars: 3000})
+	if byBudget.OmittedByLimit != 0 || byBudget.OmittedByBudget == 0 {
+		t.Fatalf("character budget must be reported apart from the hit cap: %+v", byBudget)
+	}
+	note := fmt.Sprintf("omitted=%d", byBudget.OmittedByBudget)
+	if !strings.Contains(byBudget.Block(), note) {
+		t.Fatalf("the model-visible note lost the combined count (%s): %s", note, byBudget.Block())
 	}
 }
 

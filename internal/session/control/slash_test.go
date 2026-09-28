@@ -327,7 +327,7 @@ func TestManagementMemoryRecallAndInstructionDiagnostics(t *testing.T) {
 			},
 			Score: 4.25, Freshness: memory.FreshnessFresh, Reason: "matched cache, policy; project scope",
 		}},
-		CharBudget: 2400, UsedChars: 280, Omitted: 1,
+		CharBudget: 2400, UsedChars: 280, OmittedByBudget: 1,
 	})
 
 	if !c.managementNotice("/memory recall") {
