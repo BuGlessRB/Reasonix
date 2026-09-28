@@ -170,7 +170,7 @@ func TestFetchGitHubTarballReadsCommitFromRoot(t *testing.T) {
 			githubAPIBaseURL = srv.URL
 			defer func() { githubAPIBaseURL = old }()
 
-			tl := &installSourceTool{httpClient: srv.Client()}
+			tl := &Tool{httpClient: srv.Client()}
 			dir := testenv.TempDir(t)
 			commit, err := tl.fetchGitHubTarball(context.Background(), githubRepoSource{Owner: "foo", Repo: "bar"}, dir)
 			if err != nil {
@@ -200,7 +200,7 @@ func TestFetchGitHubTarballRequestsTheBranch(t *testing.T) {
 	githubAPIBaseURL = srv.URL
 	defer func() { githubAPIBaseURL = old }()
 
-	tl := &installSourceTool{httpClient: srv.Client()}
+	tl := &Tool{httpClient: srv.Client()}
 	if _, err := tl.fetchGitHubTarball(context.Background(), githubRepoSource{Owner: "foo", Repo: "bar", Branch: "next"}, testenv.TempDir(t)); err != nil {
 		t.Fatalf("fetchGitHubTarball: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestFetchGitHubTarballClassifiesFailures(t *testing.T) {
 	githubAPIBaseURL = srv.URL
 	defer func() { githubAPIBaseURL = old }()
 
-	tl := &installSourceTool{httpClient: srv.Client()}
+	tl := &Tool{httpClient: srv.Client()}
 	_, err := tl.fetchGitHubTarball(context.Background(), githubRepoSource{Owner: "foo", Repo: "bar"}, testenv.TempDir(t))
 	if err == nil {
 		t.Fatal("missing archive accepted")

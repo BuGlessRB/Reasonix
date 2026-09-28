@@ -36,6 +36,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
 
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
+import type { MarketDetail, MarketList, MarketPlan, MarketQuery, MarketRequest } from "./market";
 import type { Appearance, ThemeImport, ThemePack } from "./look";
 import type { BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
@@ -43,6 +44,7 @@ export type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntr
 import type { StoragePlan, StorageState } from "./storage";
 
 export type * from "./plugin";
+export type * from "./market";
 
 // GET /mcp. One external tool provider. state is ready | connecting | failed |
 // disabled | idle: disabled is switched off and stays off across restarts, idle
@@ -166,6 +168,12 @@ export interface AgentPort {
   // it on the way. Installing is the same door: a folder, a link, or this
   // archive unpacked — there is no separate import.
   exportPlugin(name: string): Promise<PluginExport>;
+  // The community market: a source like a pasted address, not a trust root.
+  // Install is the same plan-then-apply pair, pinned to the reviewed digest.
+  marketList(q: MarketQuery): Promise<MarketList>;
+  marketDetail(slug: string): Promise<MarketDetail>;
+  planMarket(req: MarketRequest): Promise<MarketPlan>;
+  installMarket(req: MarketRequest): Promise<MarketPlan>;
   // Text the window assembled, put on disk. Returns where it went, or null when
   // the host handled it without a path to report (a browser download).
   saveText(name: string, content: string): Promise<string | null>;

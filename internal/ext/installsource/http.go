@@ -22,7 +22,7 @@ const defaultFetchLimit = 2 << 20
 // fetchText performs a bounded GET on sourceURL using the tool's HTTP client.
 // It applies defaultFetchTimeout unless the caller's context already has a
 // tighter deadline, and never reads more than defaultFetchLimit bytes.
-func (t *installSourceTool) fetchText(ctx context.Context, sourceURL string) (string, error) {
+func (t *Tool) fetchText(ctx context.Context, sourceURL string) (string, error) {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, defaultFetchTimeout)

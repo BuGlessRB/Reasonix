@@ -23,7 +23,7 @@ const (
 )
 
 // skillAction builds the DTO for a single-skill install (copy or link).
-func (t *installSourceTool) skillAction(req request, cand skillCandidate, mode string) action {
+func (t *Tool) skillAction(req request, cand skillCandidate, mode string) action {
 	scope := t.installScope(req, "skill", cand.SourcePath)
 	actionName := "copy_skill"
 	if mode == "link" {
@@ -77,7 +77,7 @@ func skillActionRisk(mode string, cand skillCandidate) (RiskLevel, []string) {
 }
 
 // skillRootAction builds the DTO for registering a whole skill directory.
-func (t *installSourceTool) skillRootAction(req request, path string, names []string) action {
+func (t *Tool) skillRootAction(req request, path string, names []string) action {
 	scope := t.installScope(req, "skill", path)
 	return action{
 		Kind:        "skill",
@@ -97,7 +97,7 @@ func (t *installSourceTool) skillRootAction(req request, path string, names []st
 	}
 }
 
-func (t *installSourceTool) skillInstallRoot(scope string) (string, error) {
+func (t *Tool) skillInstallRoot(scope string) (string, error) {
 	if scope == "global" {
 		if t.reasonixHome == "" {
 			return "", newErr(ErrSourceUnreadable, "global skill install requires a Reasonix home directory")
@@ -110,7 +110,7 @@ func (t *installSourceTool) skillInstallRoot(scope string) (string, error) {
 // skillCanonicalPath computes the canonical install destination:
 // <scope>/skills/<skill-name>/SKILL.md. Flat <name>.md remains readable for
 // backward compatibility, but the installer no longer writes it by default.
-func (t *installSourceTool) skillCanonicalPath(name, scope string) (string, error) {
+func (t *Tool) skillCanonicalPath(name, scope string) (string, error) {
 	if !config.IsValidSkillName(name) {
 		return "", newErr(ErrInvalidManifest, "invalid skill name %q", name)
 	}
@@ -123,7 +123,7 @@ func (t *installSourceTool) skillCanonicalPath(name, scope string) (string, erro
 
 // verifySkill confirms the installed skill is reachable through a freshly
 // built Store. It is the post-install guard against partial failures.
-func (t *installSourceTool) verifySkill(scope, name string, act *action) error {
+func (t *Tool) verifySkill(scope, name string, act *action) error {
 	custom := []string(nil)
 	if scope == "project" {
 		cfg := config.LoadForEdit(filepath.Join(t.root, "reasonix.toml"))
@@ -159,7 +159,7 @@ func (t *installSourceTool) verifySkill(scope, name string, act *action) error {
 // installing name: the canonical directory, its SKILL.md, and the legacy flat
 // file. The apply step checks all of them so new canonical installs don't
 // silently shadow older <name>.md installs.
-func (t *installSourceTool) skillConflictTargets(name, scope string) ([]string, error) {
+func (t *Tool) skillConflictTargets(name, scope string) ([]string, error) {
 	canonical, err := t.skillCanonicalPath(name, scope)
 	if err != nil {
 		return nil, err

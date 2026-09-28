@@ -38,7 +38,7 @@ var tarballRootCommit = regexp.MustCompile(`-([0-9a-f]{40})$`)
 // fetchGitHubTarball unpacks owner/repo at its branch (the default branch when
 // empty) into dir, returning the commit the archive was cut from — empty when
 // the archive root does not name one.
-func (t *installSourceTool) fetchGitHubTarball(ctx context.Context, src githubRepoSource, dir string) (string, error) {
+func (t *Tool) fetchGitHubTarball(ctx context.Context, src githubRepoSource, dir string) (string, error) {
 	sourceURL := fmt.Sprintf("%s/repos/%s/%s/tarball", strings.TrimRight(githubAPIBaseURL, "/"), src.Owner, src.Repo)
 	if src.Branch != "" {
 		sourceURL += "/" + src.Branch

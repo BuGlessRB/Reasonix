@@ -41,7 +41,7 @@ type claudeMarketplaceURLSource struct {
 
 var fullGitSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 
-func (t *installSourceTool) localPluginPackageAction(req request, root string) (action, []string, error) {
+func (t *Tool) localPluginPackageAction(req request, root string) (action, []string, error) {
 	pkg, warnings, err := pluginpkg.ParseDir(root)
 	if err != nil {
 		return action{}, warnings, newErr(ErrManifestMissing, "%v", err)
@@ -50,7 +50,7 @@ func (t *installSourceTool) localPluginPackageAction(req request, root string) (
 	return act, warnings, err
 }
 
-func (t *installSourceTool) planGitHubPluginPackage(ctx context.Context, req request) ([]action, []string, error) {
+func (t *Tool) planGitHubPluginPackage(ctx context.Context, req request) ([]action, []string, error) {
 	src, ok := parseGitHubRepoSource(req.Source)
 	if !ok {
 		return nil, nil, newErr(ErrUnsupportedKind, "plugin URL %q is not a GitHub repository", req.Source)
@@ -104,7 +104,7 @@ func (t *installSourceTool) planGitHubPluginPackage(ctx context.Context, req req
 	return actions, warnings, nil
 }
 
-func (t *installSourceTool) planClaudeMarketplace(ctx context.Context, req request, src githubRepoSource, root, commit string) ([]action, []string, error) {
+func (t *Tool) planClaudeMarketplace(ctx context.Context, req request, src githubRepoSource, root, commit string) ([]action, []string, error) {
 	manifestPath := filepath.Join(root, filepath.FromSlash(claudeMarketplaceManifest))
 	body, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -322,14 +322,14 @@ func currentPluginGitBranch(ctx context.Context, root string) string {
 // apply phases go through this single function so their views can never
 // diverge (the approval-contract guarantee); for git sources it also reports
 // the resolved commit SHA ("" for local directories).
-func (t *installSourceTool) pluginSource(ctx context.Context, source, mode string) (string, string, func(), error) {
+func (t *Tool) pluginSource(ctx context.Context, source, mode string) (string, string, func(), error) {
 	if t.preparePlugin != nil {
 		return t.preparePlugin(ctx, source, mode)
 	}
 	return t.preparePluginSource(ctx, source, mode)
 }
 
-func (t *installSourceTool) pluginPackageAction(req request, pkg pluginpkg.Package, source string) (action, error) {
+func (t *Tool) pluginPackageAction(req request, pkg pluginpkg.Package, source string) (action, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = pkg.Manifest.Name
@@ -419,7 +419,7 @@ func modeForPlugin(mode string) string {
 	return "copy"
 }
 
-func (t *installSourceTool) applyInstallPluginPackage(ctx context.Context, req request, act *action) error {
+func (t *Tool) applyInstallPluginPackage(ctx context.Context, req request, act *action) error {
 	if t.reasonixHome == "" {
 		return newErr(ErrSourceUnreadable, "plugin install requires a Reasonix home directory")
 	}
@@ -499,7 +499,7 @@ func (t *installSourceTool) applyInstallPluginPackage(ctx context.Context, req r
 	return nil
 }
 
-func (t *installSourceTool) preparePluginSource(ctx context.Context, source, mode string) (string, string, func(), error) {
+func (t *Tool) preparePluginSource(ctx context.Context, source, mode string) (string, string, func(), error) {
 	source = strings.TrimSpace(source)
 	if after, ok := strings.CutPrefix(source, "git:github.com/"); ok {
 		source = "https://github.com/" + after
@@ -521,6 +521,9 @@ func (t *installSourceTool) preparePluginSource(ctx context.Context, source, mod
 				_ = os.RemoveAll(tmp)
 				return "", "", func() {}, err
 			}
+			if commit == "" && fullGitSHA.MatchString(src.Branch) {
+				commit = strings.ToLower(src.Branch)
+			}
 			root, err := pluginRootFromClone(tmp, src.Path)
 			if err != nil {
 				_ = os.RemoveAll(tmp)
@@ -529,8 +532,11 @@ func (t *installSourceTool) preparePluginSource(ctx context.Context, source, mod
 			return root, commit, func() { _ = os.RemoveAll(tmp) }, nil
 		}
 		cloneURL := fmt.Sprintf("https://github.com/%s/%s.git", src.Owner, src.Repo)
+		// --branch takes a ref name, never an object id, so a commit-pinned
+		// source clones the default branch and then fetches its own commit.
+		pinned := fullGitSHA.MatchString(src.Branch)
 		args := []string{"clone", "--depth=1"}
-		if src.Branch != "" {
+		if src.Branch != "" && !pinned {
 			args = append(args, "--branch", src.Branch)
 		}
 		args = append(args, cloneURL, tmp)
@@ -538,6 +544,12 @@ func (t *installSourceTool) preparePluginSource(ctx context.Context, source, mod
 		if out, err := cmd.CombinedOutput(); err != nil {
 			_ = os.RemoveAll(tmp)
 			return "", "", func() {}, newErr(ErrSourceUnreadable, "git clone failed: %v: %s", err, strings.TrimSpace(string(out)))
+		}
+		if pinned {
+			if err := checkoutPluginCommit(ctx, tmp, src.Branch); err != nil {
+				_ = os.RemoveAll(tmp)
+				return "", "", func() {}, newErr(ErrSourceUnreadable, "%v", err)
+			}
 		}
 		commit := ""
 		rev := pluginGitCommand(ctx, "-C", tmp, "rev-parse", "HEAD")
@@ -702,7 +714,7 @@ func replaceSymlink(target, sourceRoot string, replace bool) error {
 	return os.Symlink(sourceRoot, target)
 }
 
-func (t *installSourceTool) applyRemovePluginPackage(_ request, act *action) error {
+func (t *Tool) applyRemovePluginPackage(_ request, act *action) error {
 	installed, ok, err := pluginpkg.Remove(t.reasonixHome, act.Name)
 	if err != nil || !ok {
 		return err

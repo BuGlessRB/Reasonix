@@ -14,7 +14,7 @@ import (
 // mcpEntryAction assembles the DTO for a single MCP server install. The
 // caller decides whether apply=true actually runs cfg.UpsertPlugin +
 // SaveTo + connectMCP.
-func (t *installSourceTool) mcpEntryAction(req request, e config.PluginEntry, source string) action {
+func (t *Tool) mcpEntryAction(req request, e config.PluginEntry, source string) action {
 	scope := t.installScope(req, "mcp", source)
 	// install_source is an explicit user action. Preserve that provenance for
 	// the live connector so a newly installed server is usable immediately,
@@ -82,7 +82,7 @@ func mcpActionRisk(e config.PluginEntry, reasons []string) (RiskLevel, []string)
 
 // remoteMCPAction builds a server entry from a URL alone. The default
 // transport is http unless the URL's path smells like SSE.
-func (t *installSourceTool) remoteMCPAction(req request, sourceURL string) action {
+func (t *Tool) remoteMCPAction(req request, sourceURL string) action {
 	transport := req.Transport
 	if transport == "" || transport == "auto" {
 		transport = "http"
@@ -107,7 +107,7 @@ func (t *installSourceTool) remoteMCPAction(req request, sourceURL string) actio
 // localExecutableMCPAction treats a chmod +x'd local file as a stdio MCP
 // server. By default the file itself becomes the command; callers may override
 // the command to wrap the source with an interpreter.
-func (t *installSourceTool) localExecutableMCPAction(req request, path string) action {
+func (t *Tool) localExecutableMCPAction(req request, path string) action {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = sanitizeName(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
@@ -129,7 +129,7 @@ func (t *installSourceTool) localExecutableMCPAction(req request, path string) a
 // packageMCPAction treats the source as an npm package name and constructs
 // the canonical `npx -y <pkg>` invocation. The caller can override the
 // command and args for non-npm package sources.
-func (t *installSourceTool) packageMCPAction(req request) action {
+func (t *Tool) packageMCPAction(req request) action {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = sanitizeName(strings.TrimPrefix(req.Source, "@"))
