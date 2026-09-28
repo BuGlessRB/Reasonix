@@ -23,6 +23,9 @@ type UpdateHost interface {
 	// once the move is under way. Which build runs and where it lives is passed
 	// in, so the hub's declared Install stays the one answer.
 	StartInstall(install update.Install, target string) error
+	// CommitInstall installs the release StartInstall left ready and restarts
+	// into it. It is a separate act because it ends every session running here.
+	CommitInstall(target string) error
 	// InstallProgress is what that move is doing, as a projection.
 	InstallProgress() update.Progress
 }
@@ -33,6 +36,10 @@ const (
 	// move already running, or fix what was asked for.
 	codeInstallRunning  = "update.install_running"
 	codeInstallRejected = "update.install_rejected"
+	// The restart is refused while work runs here unless the person saw that
+	// and asked anyway, and refused when there is nothing verified to restart into.
+	codeRestartBusy    = "update.restart_busy"
+	codeNothingToApply = "update.nothing_ready"
 )
 
 func (h *Hub) registerUpdateRoutes(mux *http.ServeMux) {
@@ -42,6 +49,7 @@ func (h *Hub) registerUpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /update/health", h.acknowledgeLaunchHealth)
 	mux.HandleFunc("POST /update/install", h.startInstall)
 	mux.HandleFunc("GET /update/install", h.readInstallProgress)
+	mux.HandleFunc("POST /update/restart", h.commitInstall)
 }
 
 // The swap is performed by a process that cannot judge it. This is the other
@@ -87,4 +95,44 @@ func (h *Hub) startInstall(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) readInstallProgress(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, h.opts.Update.InstallProgress())
+}
+
+// commitInstall is the restart the person allowed. Work running in a local pane
+// or a background job ends with this process, so it is counted and refused
+// unless the request says the person has already seen that. A remote pane's
+// work lives on its own kernel and survives the restart.
+func (h *Hub) commitInstall(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Version string `json:"version"`
+		Force   bool   `json:"force"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		refuse(w, http.StatusBadRequest, codeInstallRejected, err.Error(), nil)
+		return
+	}
+	if !req.Force {
+		if n := h.runningWork(); n > 0 {
+			busy(w, codeRestartBusy, "work is running and would end with the restart", map[string]any{"n": n})
+			return
+		}
+	}
+	switch err := h.opts.Update.CommitInstall(req.Version); {
+	case errors.Is(err, appupdate.ErrNothingReady):
+		refuse(w, http.StatusConflict, codeNothingToApply, err.Error(), nil)
+		return
+	case err != nil:
+		refuse(w, http.StatusBadRequest, codeInstallRejected, err.Error(), nil)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *Hub) runningWork() int {
+	n := h.runningJobs()
+	for _, rt := range h.localRuntimes() {
+		if rt.Server != nil && rt.Server.Controller().Running() {
+			n++
+		}
+	}
+	return n
 }

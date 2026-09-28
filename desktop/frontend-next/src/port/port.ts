@@ -323,6 +323,10 @@ export interface AgentPort {
   // one. Resolves only on failure: a success ends with the process handing over
   // to the build it just installed.
   goToVersion(version: string): Promise<void>;
+  // Installs the release goToVersion left verified and waiting, and restarts
+  // into it. Refused with update.restart_busy while work runs here, unless
+  // force says the person has seen that.
+  restartToVersion(version: string, force: boolean): Promise<void>;
   // Returns an unsubscribe. A browser tab has no shell to report progress, so
   // it never fires there.
   onUpdateProgress(cb: (p: UpdateProgress) => void): () => void;

@@ -32,6 +32,7 @@ type ApplicationOwner interface {
 type Capability interface {
 	AcknowledgeLaunchHealth() error
 	StartInstall(install update.Install, target string) error
+	CommitInstall(target string) error
 	InstallProgress() update.Progress
 }
 
@@ -61,10 +62,20 @@ func New(opts Options) Capability {
 	// Read now, before a concurrent update can rewrite it: what this launch may
 	// retire is the transaction it booted from, and nothing later can tell that
 	// apart from one written since.
-	return &capability{
+	c := &capability{
 		opts:    opts,
 		witness: repair.CaptureUpdateHealth(opts.Running),
 	}
+	// This launch is the only witness to whether the last move landed, and a
+	// pin naming another build holds nothing; both are settled before a panel
+	// can ask.
+	if dir, err := update.CacheDir(); err == nil {
+		if p, ok := settleLastMove(dir, opts.Running); ok {
+			c.install.progress = p
+		}
+	}
+	_ = update.ReleaseStalePin(opts.Running)
+	return c
 }
 
 type capability struct {

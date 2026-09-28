@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	goruntime "runtime"
 	"strings"
 	"sync"
@@ -19,11 +20,13 @@ import (
 const installTimeout = 30 * time.Minute
 
 // What a caller tells apart. Each is a different thing to do about it: name a
-// version, install this build somewhere the updater recognizes, or wait.
+// version, install this build somewhere the updater recognizes, wait, or start
+// the install again.
 var (
 	ErrNoTarget        = errors.New("appupdate: no version was named")
 	ErrUnknownInstall  = errors.New("appupdate: cannot tell where this build is installed")
 	ErrInstallInFlight = errors.New("appupdate: an install is already running")
+	ErrNothingReady    = errors.New("appupdate: no verified release is waiting for a restart")
 )
 
 // installState is the one install this application may have in flight. It is a
@@ -33,6 +36,16 @@ var (
 type installState struct {
 	mu       sync.Mutex
 	progress update.Progress
+	ready    *readyMove // set only while progress is PhaseReady
+}
+
+// readyMove is a verified release and the one act that installs it. Everything
+// before that act only reads the install and writes the cache, so a user who
+// never allows the restart is left exactly where they were.
+type readyMove struct {
+	target string
+	cache  string
+	apply  func(context.Context) error
 }
 
 // begin claims the slot, or reports that something else holds it. Claiming and
@@ -43,14 +56,33 @@ func (s *installState) begin(target string) bool {
 	if s.progress.Running() {
 		return false
 	}
-	s.progress = update.Progress{Version: target, Phase: update.PhaseDownloading}
+	s.progress, s.ready = update.Progress{Version: target, Phase: update.PhaseDownloading}, nil
 	return true
 }
 
 func (s *installState) set(p update.Progress) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.progress = p
+	s.progress, s.ready = p, nil
+}
+
+func (s *installState) park(mv *readyMove) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.progress, s.ready = update.Progress{Version: mv.target, Phase: update.PhaseReady}, mv
+}
+
+// claim takes the waiting release for target, once: a second restart request
+// finds nothing ready rather than a second installer.
+func (s *installState) claim(target string) (*readyMove, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	mv := s.ready
+	if mv == nil || !update.SameVersion(mv.target, target) {
+		return nil, false
+	}
+	s.progress, s.ready = update.Progress{Version: target, Phase: update.PhaseApplying}, nil
+	return mv, true
 }
 
 func (s *installState) read() update.Progress {
@@ -67,9 +99,9 @@ func (c *capability) InstallProgress() update.Progress {
 }
 
 // StartInstall begins moving this application to target, forward or back, and
-// returns once it is under way rather than once it is done. It cannot report
-// the end: an install that worked finishes by ending this process, so what a
-// caller watches is InstallProgress and then the application coming back.
+// returns once it is under way. It stops at a verified release waiting for
+// CommitInstall: restarting is the user's to allow, because it ends every
+// session this application is running.
 func (c *capability) StartInstall(install update.Install, target string) error {
 	target = strings.TrimSpace(target)
 	if target == "" {
@@ -85,89 +117,151 @@ func (c *capability) StartInstall(install update.Install, target string) error {
 		return ErrInstallInFlight
 	}
 	// Detached from the request that asked for it: the caller is answered now,
-	// and a move that outlives its HTTP context is the point rather than a leak.
-	go c.move(install, target)
+	// and a download that outlives its HTTP context is the point, not a leak.
+	go c.prepare(install, target)
 	return nil
 }
 
-func (c *capability) move(install update.Install, target string) {
+func (c *capability) prepare(install update.Install, target string) {
 	ctx, cancel := context.WithTimeout(context.Background(), installTimeout)
 	defer cancel()
-	switch err := c.apply(ctx, install, target); {
-	case update.DebAuthCancelled(err):
-		// A dismissed prompt is a decision, not a failure. The verified cache
-		// stays, so a retry costs no download.
-		c.install.set(update.Progress{Version: target, Phase: update.PhaseCached})
-		return
-	case err != nil:
-		c.install.set(update.Progress{Version: target, Phase: update.PhaseFailed, Err: err.Error()})
+	mv, err := c.stage(ctx, install, target)
+	if err != nil {
+		c.install.set(failed(target, err))
 		return
 	}
-	c.install.set(update.Progress{Version: target, Phase: update.PhaseRelaunching})
+	c.install.park(mv)
+}
+
+// CommitInstall installs the release waiting for target and hands over to it.
+// Like StartInstall it answers once the act is under way: an install that
+// works ends this process.
+func (c *capability) CommitInstall(target string) error {
+	mv, ok := c.install.claim(strings.TrimSpace(target))
+	if !ok {
+		return ErrNothingReady
+	}
+	go c.commit(mv)
+	return nil
+}
+
+func (c *capability) commit(mv *readyMove) {
+	ctx, cancel := context.WithTimeout(context.Background(), installTimeout)
+	defer cancel()
+	restorePin, err := c.pinFor(mv.target)
+	if err != nil {
+		c.install.set(failed(mv.target, failAs(FailDisk, err)))
+		return
+	}
+	switch err := mv.apply(ctx); {
+	case update.DebAuthCancelled(err):
+		// A dismissed prompt is a decision, not a failure: the release stays
+		// ready, so asking again costs no download.
+		restorePin()
+		c.install.park(mv)
+		return
+	case err != nil:
+		restorePin()
+		c.install.set(failed(mv.target, failAs(FailInstaller, err)))
+		return
+	}
+	if update.CompareVersions(mv.target, c.opts.Running) > 0 {
+		_ = recordMove(mv.cache, pendingMove{From: c.opts.Running, To: mv.target})
+	}
+	c.install.set(update.Progress{Version: mv.target, Phase: update.PhaseRelaunching})
 	c.handOver(ctx)
 }
 
-// apply moves this application, and returns only if it did not.
-func (c *capability) apply(ctx context.Context, install update.Install, target string) error {
+// pinFor writes the pin a move leaves behind: going back holds the chosen build,
+// so nothing offers the one just left; going forward releases any hold. It is
+// written as the install starts, not before the download, and the returned
+// func puts the previous pin back when the install does not happen.
+func (c *capability) pinFor(target string) (func(), error) {
+	prior, next := update.PinnedVersion(), ""
+	if update.CompareVersions(target, c.opts.Running) < 0 {
+		next = target
+	}
+	if update.SameVersion(prior, next) {
+		return func() {}, nil
+	}
+	if err := update.Pin(next); err != nil {
+		return nil, err
+	}
+	return func() { _ = update.Pin(prior) }, nil
+}
+
+func failed(target string, err error) update.Progress {
+	return update.Progress{Version: target, Phase: update.PhaseFailed, Err: err.Error(), Code: failureCode(err)}
+}
+
+// stage fetches and verifies target and returns the act that installs it.
+// Nothing here writes outside the update cache.
+func (c *capability) stage(ctx context.Context, install update.Install, target string) (*readyMove, error) {
 	dir, err := update.CacheDir()
 	if err != nil {
-		return err
+		return nil, failAs(FailDisk, err)
 	}
 	u, err := c.updater(target, dir, "")
 	if err != nil {
-		return err
+		return nil, failAs(FailDownload, err)
 	}
 	m, err := u.ManifestFor(ctx, target)
 	if err != nil {
-		return err
+		return nil, failAs(FailCatalog, err)
 	}
+	mv := &readyMove{target: target, cache: dir}
 	// A dpkg install upgrades through its package, or apt and the filesystem
 	// end up disagreeing. It is also the only channel carrying the SPA tree:
 	// the versioned layout stages single files.
 	if _, ok := m.NativePackage(); ok && c.opts.Line.OwnsInstalledPath(install.Layout.Executable) {
-		return c.applyNativePackage(ctx, dir, target, m)
+		mv.apply, err = c.stageNativePackage(ctx, dir, target, m)
+		return mv, err
 	}
 	if _, ok := m.Asset(); !ok {
-		return fmt.Errorf("appupdate: %s has no installable package for %s; download it from %s", target, update.CurrentPlatform(), m.DownloadPage)
+		return nil, failAs(FailNoPackage, fmt.Errorf("appupdate: %s has no installable package for %s; download it from %s", target, update.CurrentPlatform(), m.DownloadPage))
 	}
-	// Pinned before the install, not after: if the machine dies mid-swap, the
-	// next launch must not helpfully update past the version the user chose.
-	if err := update.Pin(target); err != nil {
-		return err
-	}
-	if c.tryDelta(ctx, install, target, dir, m) {
-		return nil
+	if h, ok := c.tryDelta(ctx, install, target, dir, m); ok {
+		mv.apply = func(context.Context) error {
+			self, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			return update.StartTreeHandoff(h, self)
+		}
+		return mv, nil
 	}
 	cached, err := u.DownloadManifest(ctx, m, c.report(target))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.applyDownloaded(ctx, install, target, dir, cached)
+	mv.apply = func(ctx context.Context) error {
+		return c.applyDownloaded(ctx, install, target, dir, cached)
+	}
+	return mv, nil
 }
 
-// applyNativePackage hands a verified .deb to Polkit. The updater is rebuilt
+// stageNativePackage verifies a .deb for Polkit. The updater is rebuilt
 // declaring the deb kind so it resolves the package rather than the tarball:
 // handing a dpkg install the portable archive would leave apt and the
 // filesystem disagreeing about what is installed.
-func (c *capability) applyNativePackage(ctx context.Context, cacheDir, target string, m *update.Manifest) error {
+func (c *capability) stageNativePackage(ctx context.Context, cacheDir, target string, m *update.Manifest) (func(context.Context) error, error) {
 	u, err := c.updater(target, cacheDir, update.KindDeb)
 	if err != nil {
-		return err
-	}
-	if err := update.Pin(target); err != nil {
-		return err
+		return nil, failAs(FailDownload, err)
 	}
 	cached, err := u.DownloadManifest(ctx, m, c.report(target))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if cached.SignaturePath == "" {
-		return fmt.Errorf("appupdate: the package for %s carries no signature", target)
+		return nil, failAs(FailVerify, fmt.Errorf("appupdate: the package for %s carries no signature", target))
 	}
-	c.install.set(update.Progress{Version: target, Phase: update.PhaseAuthorizing})
-	return c.opts.Line.InstallDeb(cached.Path, cached.SignaturePath, func(phase string) {
-		c.install.set(update.Progress{Version: target, Phase: phase})
-	})
+	return func(context.Context) error {
+		c.install.set(update.Progress{Version: target, Phase: update.PhaseAuthorizing})
+		return c.opts.Line.InstallDeb(cached.Path, cached.SignaturePath, func(phase string) {
+			c.install.set(update.Progress{Version: target, Phase: phase})
+		})
+	}, nil
 }
 
 // handOver ends this application so the installed build can take its place. All
