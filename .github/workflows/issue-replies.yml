@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       replies:
-        description: 'JSON array of {"issue": 123, "body": "...", "close": true | "not_planned"}'
+        description: 'JSON array of {"issue": 123, "body": "...", "close": true | "not_planned"} or {"discussion": 123, "body": "..."}'
         required: true
         type: string
       interval:
@@ -18,6 +18,7 @@ on:
 permissions:
   issues: write
   pull-requests: write
+  discussions: write
 
 concurrency:
   group: issue-replies
@@ -45,7 +46,28 @@ jobs:
               return error.status === 429 ||
                 (error.status === 403 && (headers['retry-after'] !== undefined || headers['x-ratelimit-remaining'] === '0'));
             };
-            for (const { issue, body, close } of replies) {
+            // Discussions have no REST comment API; they are addressed by node id.
+            const replyToDiscussion = async (number, body) => {
+              const q = await github.graphql(
+                `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){discussion(number:$n){id comments(last:100){nodes{body author{login}}}}}}`,
+                { owner, repo, n: number });
+              const d = q.repository.discussion;
+              if (!d) throw new Error('no such discussion');
+              if (d.comments.nodes.some((c) => c.author?.login === 'github-actions' && c.body === body)) return false;
+              await github.graphql(`mutation($id:ID!,$body:String!){addDiscussionComment(input:{discussionId:$id,body:$body}){comment{id}}}`, { id: d.id, body });
+              return true;
+            };
+            for (const { issue, discussion, body, close } of replies) {
+              if (Number.isInteger(discussion) && typeof body === 'string' && body.trim() !== '') {
+                try {
+                  const posted = await replyToDiscussion(discussion, body);
+                  core.info(`discussion #${discussion}: ${posted ? 'replied' : 'already replied'}`);
+                } catch (error) {
+                  failed.push(`discussion ${discussion}: ${error.message}`);
+                }
+                await sleep(Math.max(1, Number(process.env.INTERVAL) || 20) * 1000);
+                continue;
+              }
               if (!Number.isInteger(issue) || typeof body !== 'string' || body.trim() === '') {
                 failed.push(`${issue}: malformed entry`);
                 continue;
