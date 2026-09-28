@@ -61,6 +61,17 @@ export interface ModelEntry {
   preset?: boolean;
 }
 
+// An optional way the session's model can run, beside its effort level. The
+// kernel lists one only for a model that declares it; label and hint are keys
+// the frontend owns the wording for.
+export interface ModelMode {
+  id: string;
+  labelKey: string;
+  hintKey: string;
+  costlier: boolean;
+  active: boolean;
+}
+
 // A configured provider as the settings panel lists it.
 // Which model takes which job. Only the roles with a field behind them in the
 // kernel appear here; image routing joins once it can name its own model

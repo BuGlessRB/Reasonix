@@ -2,6 +2,7 @@ package boot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reasonix/internal/state/sessionstore"
 	"strings"
@@ -147,6 +148,7 @@ type RuntimeMigration struct {
 	planMode         bool
 	goal             string
 	goalRunning      bool
+	modelMode        string
 }
 
 // CaptureRuntimeMigration reads the outgoing runtime's state. Capture it
@@ -163,6 +165,7 @@ func CaptureRuntimeMigration(old control.SessionAPI) RuntimeMigration {
 	}
 	if ctrl, ok := old.(*control.Controller); ok {
 		m.authorizations = ctrl.SessionAuthorizations()
+		m.modelMode = ctrl.ModelMode()
 	}
 	return m
 }
@@ -191,6 +194,11 @@ func ApplyRuntimeMigration(ctrl, old *control.Controller, m RuntimeMigration) er
 		ctrl.InheritLifecycleFrom(old)
 	}
 	ctrl.RestoreSessionAuthorizations(m.authorizations)
+	// A mode survives only onto a model that declares it: switching to one
+	// that does not is what turns it off, rather than a request it would 400.
+	if err := ctrl.SetModelMode(m.modelMode); err != nil && !errors.Is(err, control.ErrModelModeUnsupported) {
+		return err
+	}
 	return nil
 }
 

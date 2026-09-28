@@ -780,6 +780,7 @@ export class MockPort extends MockBackup implements AgentPort {
   async setEffort(effort: string) {
     this.state.effort = effort;
   }
+  async setModelMode(mode: string) { this.state.modes = this.state.modes?.map((m) => ({ ...m, active: m.id === mode })); }
   async setGoal(text: string) {
     this.state.goal = text;
   }

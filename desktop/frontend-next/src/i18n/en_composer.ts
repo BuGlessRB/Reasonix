@@ -6,6 +6,10 @@ export const EN_COMPOSER: Record<string, string> = {
   "超深入": "Extra deep",
   "不做推理直接作答，响应最快，适合简单问答": "Answers without reasoning; fastest, for simple questions",
   "比深入投入更多推理，适合困难的多步问题": "More reasoning than Deep, for hard multi-step problems",
+  "Pro 模式": "Pro mode",
+  "更慢：模型为同一请求做更多推理，消耗的 token 与费用明显更高。仅对当前会话生效。":
+    "Slower: the model does more reasoning for the same request, using noticeably more tokens and money. Applies to this session only.",
+  "费用更高": "Costs more",
   "停下": "Stop",
   "发送": "Send",
   "插话": "Steer",

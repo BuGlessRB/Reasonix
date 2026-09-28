@@ -57,6 +57,8 @@ type modelReasoningCapability struct {
 	Kinds []string
 	// ContextWindow is a fact about the model; zero means none is established.
 	ContextWindow int
+	// Modes are the optional run modes the model takes; see RequestModes.
+	Modes []modelModeDecl
 }
 
 // modelReasoningCapabilities is keyed by exact model id, so a gateway serving a
@@ -115,6 +117,7 @@ func gpt56Capability() modelReasoningCapability {
 		Aliases:  map[string]string{"minimal": "low"},
 		Vendor:   openAIVendor,
 		Kinds:    []string{kindOpenAI, kindResponses},
+		Modes:    []modelModeDecl{openAIProMode},
 	}
 }
 
@@ -128,6 +131,7 @@ func gpt6Capability(levels []string, def string) modelReasoningCapability {
 		Aliases:  map[string]string{"minimal": "low"},
 		Vendor:   openAIVendor,
 		Kinds:    []string{kindResponses},
+		Modes:    []modelModeDecl{openAIProMode},
 	}
 }
 

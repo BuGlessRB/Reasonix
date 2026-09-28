@@ -408,3 +408,43 @@ describe("the effort ladder follows the source", () => {
     expect(models).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("a model mode switch", () => {
+  const gpt: ModelEntry[] = [{ ref: "openai/gpt-5.6-sol", provider: "openai", model: "gpt-5.6-sol", efforts: ["auto", "medium", "high"] }];
+  const pro = (active: boolean) => [{ id: "pro", labelKey: "model_mode.pro", hintKey: "model_mode.pro.hint", costlier: true, active }];
+  const open = async (st: SessionStatus, port = new MockPort()) => {
+    vi.spyOn(port, "models").mockResolvedValue(gpt);
+    const view = draw({ port, st });
+    await waitFor(() => expect(view.container.querySelector(".studio-effort-picker")?.textContent).not.toContain("未声明"));
+    fireEvent.click(view.container.querySelector(".studio-effort-picker") as HTMLElement);
+    return { ...view, port };
+  };
+
+  it("is drawn only for a model that declares a mode", async () => {
+    await open(status({ modelRef: "openai/gpt-5.6-sol" }));
+    expect(screen.queryByRole("menuitemcheckbox")).toBeNull();
+  });
+
+  it("says it costs more and turns the mode on", async () => {
+    const port = new MockPort();
+    const set = vi.spyOn(port, "setModelMode");
+    await open(status({ modelRef: "openai/gpt-5.6-sol", modes: pro(false) }), port);
+    const row = screen.getByRole("menuitemcheckbox");
+    expect(row.getAttribute("aria-checked")).toBe("false");
+    expect(row.textContent).toContain("Pro 模式");
+    expect(row.textContent).toContain("费用更高");
+    fireEvent.click(row);
+    await waitFor(() => expect(set).toHaveBeenCalledWith("pro"));
+  });
+
+  it("reads as on, and a second pick turns it off", async () => {
+    const port = new MockPort();
+    const set = vi.spyOn(port, "setModelMode");
+    const { container } = await open(status({ modelRef: "openai/gpt-5.6-sol", modes: pro(true) }), port);
+    expect(container.querySelector(".studio-effort-picker")?.textContent).toContain("Pro 模式");
+    const row = screen.getByRole("menuitemcheckbox");
+    expect(row.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(row);
+    await waitFor(() => expect(set).toHaveBeenCalledWith(""));
+  });
+});
