@@ -6,24 +6,26 @@ import { Outcome } from "./AddPlugin";
 import { Group } from "./Group";
 import { PlanConfirm } from "./MarketConfirm";
 import { MyPackages, PublishForm } from "./MarketPublish";
+import { MarketVote, approvalLabel } from "./MarketVote";
 import { arrowTabs } from "./tablist";
 
 const KINDS: [MarketKind | "", string][] = [["", "全部"], ["skill", "技能"], ["plugin", "插件"], ["mcp", "MCP 服务"], ["theme", "主题"]];
-type Sort = "trending" | "installs" | "new";
-const SORTS: [Sort, string][] = [["trending", "近期热门"], ["installs", "安装最多"], ["new", "最新"]];
+type Sort = "recommended" | "trending" | "installs" | "new";
+const SORTS: [Sort, string][] = [["recommended", "推荐"], ["trending", "近期热门"], ["installs", "安装最多"], ["new", "最新"]];
 const KIND_NAME: Record<string, string> = { skill: "技能", plugin: "插件", mcp: "MCP 服务", theme: "主题" };
 
 interface Props {
   port: AgentPort;
   onInstalled: () => void;
+  onSignIn?: () => void;
 }
 
 // The market is one more place a source comes from. It lists what reviewers let
 // through and hands the approved version to the same plan-then-install every
 // pasted address goes through; the kernel holds the pin, this only shows it.
-export function Market({ port, onInstalled }: Props) {
+export function Market({ port, onInstalled, onSignIn }: Props) {
   const [kind, setKind] = useState<MarketKind | "">("");
-  const [sort, setSort] = useState<Sort>("trending");
+  const [sort, setSort] = useState<Sort>("recommended");
   const [q, setQ] = useState("");
   const [pinned, setPinned] = useState(false);
   const [rows, setRows] = useState<MarketPackage[] | null>(null);
@@ -59,6 +61,7 @@ export function Market({ port, onInstalled }: Props) {
       <Entry
         port={port}
         slug={open}
+        onSignIn={onSignIn}
         onBack={() => setOpen("")}
         onInstalled={() => {
           onInstalled();
@@ -121,6 +124,7 @@ export function Market({ port, onInstalled }: Props) {
                   </span>
                 )}
                 <span className="mkt-n">{t("{n} 次安装", { n: p.installCount })}</span>
+                <span className="mkt-n mkt-rate">{approvalLabel(p)}</span>
               </span>
               <span className="mkt-line">
                 <span className="mkt-sum">{p.summary}</span>
@@ -145,7 +149,7 @@ export function Market({ port, onInstalled }: Props) {
   );
 }
 
-function Entry({ port, slug, onBack, onInstalled }: { port: AgentPort; slug: string; onBack: () => void; onInstalled: () => void }) {
+function Entry({ port, slug, onBack, onInstalled, onSignIn }: { port: AgentPort; slug: string; onBack: () => void; onInstalled: () => void; onSignIn?: () => void }) {
   const [d, setD] = useState<MarketDetail | null>(null);
   const [plan, setPlan] = useState<MarketPlan | null>(null);
   const [done, setDone] = useState<MarketPlan | null>(null);
@@ -255,6 +259,7 @@ function Entry({ port, slug, onBack, onInstalled }: { port: AgentPort; slug: str
           </>
         )}
       </dl>
+      <MarketVote port={port} pkg={p} onSignIn={onSignIn} />
       <div className="acts">
         <span className="note">
           {current
@@ -308,7 +313,7 @@ export function MarketGroup({ port, onInstalled, account, onSignIn }: Props & { 
           </div>
         )
       )}
-      {at === "browse" && <Market port={port} onInstalled={onInstalled} />}
+      {at === "browse" && <Market port={port} onInstalled={onInstalled} onSignIn={onSignIn} />}
       {at === "mine" && <MyPackages port={port} onInstalled={onInstalled} />}
       {at === "publish" && handle && <PublishForm port={port} handle={handle} onMine={() => setView("mine")} />}
     </Group>

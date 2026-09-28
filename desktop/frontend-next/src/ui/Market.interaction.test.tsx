@@ -11,7 +11,7 @@ afterEach(cleanup);
 
 const row = (slug: string, pinned?: boolean): MarketPackage => ({
   kind: "skill", handle: slug.split("/")[0], name: slug.split("/")[1], slug, summary: "s", description: "", homepage: "",
-  repoUrl: "", tags: [], latestVersion: "1.0.0", installCount: 3, starCount: 0, verified: false, status: "active", updatedAt: "", pinned,
+  repoUrl: "", tags: [], latestVersion: "1.0.0", installCount: 3, starCount: 0, upCount: 0, downCount: 0, approvalRate: null, score: 0, verified: false, status: "active", updatedAt: "", pinned,
 });
 
 describe("market list", () => {
