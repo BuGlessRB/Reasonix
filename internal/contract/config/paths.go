@@ -597,7 +597,7 @@ func SourcePathForRoot(root string) string { return processRoots().SourcePathFor
 // binding.
 func (r Roots) SourcePathForRoot(root string) string {
 	root = resolveRoot(root)
-	projectTOML := ProjectConfigPath(root)
+	projectTOML := r.ProjectConfigPath(root)
 	if _, err := os.Stat(projectTOML); err == nil {
 		return projectTOML
 	}
@@ -607,18 +607,4 @@ func (r Roots) SourcePathForRoot(root string) string {
 		}
 	}
 	return ""
-}
-
-// projectConfigFile is the project config filename, resolved against the
-// project root.
-const projectConfigFile = "reasonix.toml"
-
-// ProjectConfigPath returns the project config file for root: the bare
-// filename when root resolves to ".", otherwise reasonix.toml under root.
-func ProjectConfigPath(root string) string {
-	root = resolveRoot(root)
-	if root == "." {
-		return projectConfigFile
-	}
-	return filepath.Join(root, projectConfigFile)
 }

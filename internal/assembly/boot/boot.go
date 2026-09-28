@@ -110,11 +110,11 @@ func rememberPermissionRule(roots config.Roots, workspaceRoot, rule string) cont
 func rememberPermissionConfigPath(roots config.Roots, workspaceRoot string) string {
 	workspaceRoot = strings.TrimSpace(workspaceRoot)
 	if workspaceRoot != "" {
-		return config.ProjectConfigPath(workspaceRoot)
+		return roots.ProjectConfigPath(workspaceRoot)
 	}
 	path := roots.SourcePathForRoot(".")
 	if path == "" {
-		path = config.ProjectConfigPath(".") // match Config.Save() fallback
+		path = roots.ProjectConfigPath(".") // match Config.Save() fallback
 	}
 	return path
 }

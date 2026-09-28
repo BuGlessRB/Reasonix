@@ -23,6 +23,9 @@ type Config struct {
 	DefaultModel     string              `toml:"default_model"`
 	Language         string              `toml:"language"` // ui/model language tag (e.g. "zh"); empty = auto-detect from $LANG / $REASONIX_LANG
 	CredentialsStore string              `toml:"credentials_store"`
+	// ProjectConfigHidden switches the repo-local project config to the hidden
+	// <root>/.reasonix/config.toml location. User/global only.
+	ProjectConfigHidden bool                `toml:"project_config_hidden"`
 	UI               UIConfig            `toml:"ui"`
 	CLI              CLIConfig           `toml:"cli"`
 	Desktop          DesktopConfig       `toml:"desktop"`

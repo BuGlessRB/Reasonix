@@ -60,6 +60,16 @@ The global user config is named `config.toml`. Project-local config files keep
 the name `reasonix.toml`. If someone says "global reasonix.toml", they usually
 mean `<Reasonix home>/config.toml`.
 
+A user-global `project_config_hidden = true` prefers
+`<project>/.reasonix/config.toml` over `<project>/reasonix.toml`. The plain
+`reasonix.toml` still wins when both exist, and a project `reasonix.toml` that
+sets the key is ignored: a repository cannot move its own config.
+
+```toml
+project_config_hidden = true   # prefer <project>/.reasonix/config.toml over <project>/reasonix.toml
+```
+
+
 ## Global `config.toml`
 
 `<Reasonix home>/config.toml` stores non-secret configuration shared by the CLI

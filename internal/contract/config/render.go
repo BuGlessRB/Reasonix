@@ -53,6 +53,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	}
 	if scope != RenderScopeProject {
 		fmt.Fprintf(&b, "credentials_store = %q   # legacy compatibility; provider keys are saved in Reasonix's global .env\n", normalizeCredentialsStore(c.CredentialsStore))
+		fmt.Fprintf(&b, "project_config_hidden = %v   # user/global only: prefer <project>/.reasonix/config.toml over <project>/reasonix.toml\n", c.ProjectConfigHidden)
 	}
 	b.WriteString("\n")
 

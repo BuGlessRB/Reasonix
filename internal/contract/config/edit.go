@@ -2100,7 +2100,7 @@ func IsUserConfigPath(path string) bool {
 func (c *Config) Save() error {
 	path := SourcePath()
 	if path == "" {
-		path = ProjectConfigPath(".")
+		path = projectConfigPathForRoot(".", c.ProjectConfigHidden)
 	}
 	return c.SaveTo(path)
 }
@@ -2110,7 +2110,7 @@ func (c *Config) Save() error {
 // are edited from their own TOML only, never from a runtime user+project merge.
 func (c *Config) SaveForRoot(root string) error {
 	root = resolveRoot(root)
-	projectTOML := ProjectConfigPath(root)
+	projectTOML := projectConfigPathForRoot(root, c.ProjectConfigHidden)
 	if _, err := os.Stat(projectTOML); err == nil {
 		projectCfg := LoadForEditWithoutCredentials(projectTOML)
 		return projectCfg.SaveTo(projectTOML)

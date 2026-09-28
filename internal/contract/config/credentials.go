@@ -149,10 +149,10 @@ func (r Roots) credentialEnvNamesForRoot(root string) []string {
 	root = resolveRoot(root)
 	cfg := Default()
 
-	projectTOML := ProjectConfigPath(root)
 	if uc := r.userConfigLoadPath(); uc != "" {
 		_ = mergeFile(cfg, uc)
 	}
+	projectTOML := projectConfigPathForRoot(root, cfg.ProjectConfigHidden)
 	_ = mergeFile(cfg, projectTOML)
 	var tomlSources []string
 	if uc := r.userConfigLoadPath(); uc != "" {

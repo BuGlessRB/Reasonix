@@ -69,14 +69,10 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.setExpansionEnv(expansionEnv)
 	cfg.CredentialsStore = r.credentialsStoreMode()
 
-	projectTOML := ProjectConfigPath(root)
 	if primary := r.userConfigPath(); primary != "" {
 		if _, err := resolveConfigAccessPath(primary, true); err != nil {
 			return nil, err
 		}
-	}
-	if _, err := resolveConfigAccessPath(projectTOML, false); err != nil {
-		return nil, err
 	}
 
 	mergeTOML := mergeFileSnapshot
@@ -129,6 +125,12 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	globalPricingCurrency := cfg.Desktop.Currency
 	globalBillingDisplayCurrency := cfg.Billing.DisplayCurrency
 	globalTelemetry, globalStatusline, globalProgressWatch := cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch
+	// Resolve the user-global hidden-config choice before the project merge.
+	globalProjectHidden := cfg.ProjectConfigHidden
+	projectTOML, err := projectConfigPathForLoad(root, globalProjectHidden)
+	if err != nil {
+		return nil, err
+	}
 
 	tomlSources = append(tomlSources, projectTOML)
 	projectMeta, err := mergeTOML(cfg, projectTOML)
@@ -154,6 +156,7 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.Secrets = globalSecrets
 	// Sandbox grants are the same kind of control (see heldUserGlobals).
 	globalSandbox.restore(cfg, projectMeta)
+	holdProjectConfigHidden(cfg, globalProjectHidden, projectMeta)
 	// Remote hosts, storage locations and serve authentication are user-global:
 	// a repo must not inject hosts or forwards, redirect where transcripts live,
 	// or choose serve's launch token, auth mode, or trust in forwarded headers.
