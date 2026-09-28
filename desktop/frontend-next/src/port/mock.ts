@@ -204,6 +204,7 @@ export class MockPort extends MockBackup implements AgentPort {
   async goToVersion(): Promise<void> {
     throw new Error("演示模式不会真的安装版本");
   }
+  async restartToVersion(): Promise<void> { throw new Error("演示模式不会真的安装版本"); }
 
   onUpdateProgress(): () => void {
     return () => {};

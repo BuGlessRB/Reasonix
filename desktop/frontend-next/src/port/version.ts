@@ -21,13 +21,16 @@ export interface VersionHub {
 
 // One report from an install in flight. received/total are meaningful only
 // while downloading; verifying is the pause after the last byte, which is long
-// enough on a large artifact that not naming it reads as a hang. authorizing is
-// the Linux package prompt, and idle is what a kernel that has installed
-// nothing this launch answers rather than an empty body.
+// enough on a large artifact that not naming it reads as a hang. ready is a
+// verified release waiting for the user to allow the restart, applying the
+// moment after they did. authorizing is the Linux package prompt, and idle is
+// what a kernel that has installed nothing this launch answers rather than an
+// empty body. code says why an error happened, as a dotted code.
 export interface UpdateProgress {
   version: string;
-  phase: "idle" | "downloading" | "verifying" | "downloaded" | "authorizing" | "relaunching" | "error";
+  phase: "idle" | "downloading" | "verifying" | "downloaded" | "ready" | "applying" | "authorizing" | "relaunching" | "error";
   received: number;
   total: number;
   err?: string;
+  code?: string;
 }

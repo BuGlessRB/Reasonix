@@ -241,6 +241,16 @@ export class SsePort extends SseBackup implements AgentPort {
     if (!res.ok) await SsePort.fail("/update/install", res);
   }
 
+  async restartToVersion(version: string, force: boolean): Promise<void> {
+    const res = await fetch("/update/restart", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ version, force }),
+    });
+    if (!res.ok) await SsePort.fail("/update/restart", res);
+  }
+
   // Failure is silent on purpose. Nothing the user asked for is happening here,
   // there is nothing for them to do about it, and the two ordinary answers are
   // both non-events: a kernel with no update capability has no route, and a

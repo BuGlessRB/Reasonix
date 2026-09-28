@@ -31,31 +31,26 @@ const (
 // asked for, or whose index is not the one the manifest names.
 var errDeltaMismatch = errors.New("appupdate: the published delta does not match the release")
 
-// tryDelta installs target from the chunks this install lacks and reports
-// whether it did. Everything before the handoff only reads the install and
-// writes the cache, so any failure there leaves the full package to do the
-// job, which is why it is logged rather than returned.
-func (c *capability) tryDelta(ctx context.Context, install update.Install, target, cacheDir string, m *update.Manifest) bool {
+// tryDelta stages target from the chunks this install lacks and reports
+// whether it did. Staging only reads the install and writes the cache, so any
+// failure leaves the full package to do the job, which is why it is logged
+// rather than returned. The swap itself starts when the restart is allowed.
+func (c *capability) tryDelta(ctx context.Context, install update.Install, target, cacheDir string, m *update.Manifest) (update.TreeHandoff, bool) {
 	d, ok := m.Deltas[update.CurrentPlatform()]
 	if !ok || !update.TreeHandoffSupported() || install.Layout.Root == "" || c.opts.Application.PID <= 0 {
-		return false
+		return update.TreeHandoff{}, false
 	}
 	if err := update.CheckTreeSwap(install.Layout.Root, filepath.Join(cacheDir, "delta")); err != nil {
 		slog.Warn("appupdate: this install cannot take a chunked update, downloading the full package", "target", target, "err", err)
-		return false
+		return update.TreeHandoff{}, false
 	}
 	h, err := c.stageDelta(ctx, install, target, cacheDir, d)
-	if err == nil {
-		var self string
-		if self, err = os.Executable(); err == nil {
-			err = update.StartTreeHandoff(h, self)
-		}
-	}
 	if err != nil {
 		slog.Warn("appupdate: chunked update unavailable, downloading the full package", "target", target, "err", err)
-		return false
+		return update.TreeHandoff{}, false
 	}
-	return true
+	h.Outcome = filepath.Join(cacheDir, swapOutcomeName)
+	return h, true
 }
 
 func (c *capability) stageDelta(ctx context.Context, install update.Install, target, cacheDir string, d update.Delta) (update.TreeHandoff, error) {

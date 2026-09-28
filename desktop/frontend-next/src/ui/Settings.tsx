@@ -748,7 +748,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
           {at === "versions" && (
             <Group id="versions"
               title={t("版本")}
-              hint={t("当前安装的版本、可用更新，以及出现问题时如何回退。回退后将固定在所选版本，不会被自动更新覆盖。")}
+              hint={t("当前安装的版本、可用更新，以及出现问题时如何回退。更新下载好后由你决定何时重启；回退后会固定在所选版本，不再提示新版本。")}
             >
               <Versions port={port} />
             </Group>

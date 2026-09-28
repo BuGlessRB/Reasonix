@@ -37,6 +37,9 @@ type TreeHandoff struct {
 	Files      []StagedFile `json:"files"`
 	Relaunch   string       `json:"relaunch"`
 	WaitPIDs   []int        `json:"waitPids"`
+	// Outcome is where a failed swap leaves its reason. The helper is detached
+	// and has no one to tell, so the build it restores reads it on its next launch.
+	Outcome string `json:"outcome,omitempty"`
 }
 
 // StagedFile is one file of the new tree, slash-separated and relative.
@@ -227,6 +230,9 @@ func MaybeRunTreeHandoff(args []string) (handled bool, exitCode int) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "tree handoff:", err)
 		code = 1
+		if h.Outcome != "" {
+			_ = os.WriteFile(h.Outcome, []byte(err.Error()), 0o600)
+		}
 	} else {
 		afterTreeInstalled(h)
 	}

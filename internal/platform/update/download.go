@@ -2,7 +2,16 @@ package update
 
 import (
 	"context"
+	"errors"
 	"fmt"
+)
+
+// Why a download did not produce a verified cache, told apart because each asks
+// for something different: a retry, a report, or room on the disk.
+var (
+	ErrFetch  = errors.New("update: the release could not be downloaded")
+	ErrVerify = errors.New("update: the release failed its signature check")
+	ErrStore  = errors.New("update: the verified release could not be saved")
 )
 
 // MaxSignatureSize caps a detached .minisig. A signature is a few hundred bytes;
@@ -90,21 +99,21 @@ func (u *Updater) DownloadManifest(ctx context.Context, m *Manifest, r Report) (
 	r.phase(PhaseDownloading)
 	data, err := t.Download(ctx, asset.URL, asset.Size, r.Bytes)
 	if err != nil {
-		return Cached{}, err
+		return Cached{}, fmt.Errorf("%w: %w", ErrFetch, err)
 	}
 	r.phase(PhaseVerifying)
 	sig, err := t.Fetch(ctx, asset.Sig, MaxSignatureSize)
 	if err != nil {
-		return Cached{}, err
+		return Cached{}, fmt.Errorf("%w: %w", ErrFetch, err)
 	}
 	// Signature first: the digest is only the manifest's claim about the bytes,
 	// and the manifest is only trustworthy once its artifact has been verified.
 	if err := verifyArtifact(data, sig); err != nil {
-		return Cached{}, err
+		return Cached{}, fmt.Errorf("%w: %w", ErrVerify, err)
 	}
 	c, err := cache.Save(m.Version, asset, data, kind, sig)
 	if err != nil {
-		return Cached{}, err
+		return Cached{}, fmt.Errorf("%w: %w", ErrStore, err)
 	}
 	r.phase(PhaseCached)
 	return c, nil

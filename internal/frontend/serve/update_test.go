@@ -17,6 +17,8 @@ type stubUpdateHost struct {
 	started      []string
 	install      update.Install
 	startErr     error
+	committed    []string
+	commitErr    error
 	progress     update.Progress
 }
 
@@ -26,6 +28,11 @@ func (s *stubUpdateHost) StartInstall(install update.Install, target string) err
 	s.install = install
 	s.started = append(s.started, target)
 	return s.startErr
+}
+
+func (s *stubUpdateHost) CommitInstall(target string) error {
+	s.committed = append(s.committed, target)
+	return s.commitErr
 }
 
 func (s *stubUpdateHost) InstallProgress() update.Progress { return s.progress }
@@ -170,5 +177,49 @@ func TestInstallProgressIsRead(t *testing.T) {
 	}
 	if got != host.progress {
 		t.Fatalf("GET /update/install = %+v, want %+v", got, host.progress)
+	}
+}
+
+func postRestart(t *testing.T, url, body string) (int, string) {
+	t.Helper()
+	resp, err := http.Post(url+"/update/restart", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	return resp.StatusCode, got.Code
+}
+
+// Downloading and restarting are two acts: the restart reaches the host only
+// when asked for, and names the release it restarts into.
+func TestRestartCommitsTheReadyRelease(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	host := &stubUpdateHost{}
+	owned := httptest.NewServer(operatorHandler(NewHub(HubOptions{Update: host})))
+	defer owned.Close()
+
+	if status, _ := postRestart(t, owned.URL, `{"version":"v2.0.0"}`); status != http.StatusAccepted {
+		t.Fatalf("POST /update/restart = %d, want 202", status)
+	}
+	if len(host.committed) != 1 || host.committed[0] != "v2.0.0" {
+		t.Fatalf("committed %v, want one restart into v2.0.0", host.committed)
+	}
+}
+
+// Nothing verified to restart into is its own answer: the panel offers to
+// download again rather than reporting a failed install.
+func TestRestartWithNothingReadyIsRefusedByName(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	host := &stubUpdateHost{commitErr: appupdate.ErrNothingReady}
+	owned := httptest.NewServer(operatorHandler(NewHub(HubOptions{Update: host})))
+	defer owned.Close()
+
+	status, code := postRestart(t, owned.URL, `{"version":"v2.0.0","force":true}`)
+	if status != http.StatusConflict || code != codeNothingToApply {
+		t.Fatalf("POST /update/restart = %d %q, want 409 %q", status, code, codeNothingToApply)
 	}
 }

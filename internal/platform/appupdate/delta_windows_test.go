@@ -59,7 +59,7 @@ func TestADeltaForAnInstallTheSwapCannotWriteFetchesNothing(t *testing.T) {
 	readOnlyLikeProgramFiles(t, root)
 	c := New(Options{Owner: stubOwner{}, Running: "v1.0.0", Application: update.Application{PID: 1}}).(*capability)
 	install := update.Install{Version: "v1.0.0", Layout: update.Layout{Root: root, Executable: filepath.Join(root, "app.exe")}}
-	if c.tryDelta(t.Context(), install, "v2.0.0", cache, m) {
+	if _, ok := c.tryDelta(t.Context(), install, "v2.0.0", cache, m); ok {
 		t.Fatal("a delta was applied to an install the swap cannot write")
 	}
 	if hits != 0 {

@@ -4,9 +4,12 @@ import { t } from "../i18n";
 import type { UpdateProgress, VersionHub } from "../port/port";
 import { reason } from "../i18n/kernel";
 import { HttpError } from "../port/http_error";
+import { failureCopy, releasePage } from "./versionFailure";
 
 // A shell that declared no install: a build run from source, not a failure.
 const NO_INSTALL = "studio.no_install";
+// Work is running and would end with the restart; the person decides.
+const RESTART_BUSY = "update.restart_busy";
 
 // The panel answers three questions in the order a user asks them: what am I
 // running, is something wrong with it, and how do I get off it. Every action
@@ -17,8 +20,12 @@ type Port = {
   versions(): Promise<VersionHub>;
   pinVersion(v: string): Promise<void>;
   goToVersion(v: string): Promise<void>;
+  restartToVersion(v: string, force: boolean): Promise<void>;
   onUpdateProgress(cb: (p: UpdateProgress) => void): () => void;
 };
+
+// Phases during which a move owns the install and nothing else may start.
+const MOVING = new Set<UpdateProgress["phase"]>(["downloading", "verifying", "downloaded", "applying", "authorizing", "relaunching"]);
 
 function when(iso: string): string {
   const at = Date.parse(iso);
@@ -40,6 +47,8 @@ function say(p: UpdateProgress): string {
       return t("校验签名…");
     case "downloaded":
       return t("准备安装…");
+    case "applying":
+      return t("正在安装…");
     case "authorizing":
       return t("等待系统授权…");
     case "idle":
@@ -47,20 +56,24 @@ function say(p: UpdateProgress): string {
       // sees the move: the panel is already showing this row as going.
       return t("准备中…");
     case "relaunching":
-      return "正在重启到新版本…";
+      return t("正在重启到新版本…");
+    case "ready":
+      return t("已下载，待重启");
     case "error":
-      return p.err || "安装失败";
+      return t("安装失败");
   }
 }
 
 export function Versions({ port }: { port: Port }) {
   const [hub, setHub] = useState<VersionHub | null>(null);
   const [busy, setBusy] = useState(false);
-  const [going, setGoing] = useState("");
+  const [starting, setStarting] = useState("");
   const [failed, setFailed] = useState("");
   const [unread, setUnread] = useState("");
   const [uninstalled, setUninstalled] = useState(false);
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
+  const [later, setLater] = useState("");
+  const [running, setRunning] = useState(0);
 
   // The kernel says why it cannot answer — a shell that never declared an
   // install, a server that does not carry this at all. Folding that back into
@@ -85,6 +98,12 @@ export function Versions({ port }: { port: Port }) {
   useEffect(reload, [reload]);
   useEffect(() => port.onUpdateProgress(setProgress), [port]);
 
+  // Starting ends once the kernel's own answer names the move; from then on
+  // the row follows that answer rather than a local guess.
+  useEffect(() => {
+    if (starting && progress?.version === starting && progress.phase !== "idle") setStarting("");
+  }, [starting, progress]);
+
   const pin = async (v: string) => {
     setBusy(true);
     setFailed("");
@@ -98,32 +117,34 @@ export function Versions({ port }: { port: Port }) {
     }
   };
 
-  // Answered when the move is under way, not when it is done: an install that
-  // worked ends by ending the kernel this asked, so a resolved promise says
-  // only that it started. What ends the row is the progress the kernel reports,
-  // or the window going with it.
+  // Answered once the download is under way. It stops at a verified release
+  // waiting for the restart, which is the person's to allow.
   const goTo = async (v: string) => {
-    setGoing(v);
+    setStarting(v);
+    setLater("");
+    setRunning(0);
     setProgress(null);
     try {
       await port.goToVersion(v);
     } catch (e) {
-      setProgress({ version: v, phase: "error", received: 0, total: 0, err: String(e) });
-      setGoing("");
+      setProgress({ version: v, phase: "error", received: 0, total: 0, err: reason(e) });
+      setStarting("");
     }
   };
 
-  // The kernel owns whether the move is still running, so the row follows its
-  // answer rather than a local guess. Reaching a resting phase means the
-  // install did not take over -- it failed, or a package prompt was dismissed --
-  // and the catalog is re-read because a pin was written either way.
-  useEffect(() => {
-    if (!going || progress?.version !== going || progress.phase === "idle") return;
-    if (progress.phase === "error" || progress.phase === "downloaded") {
-      setGoing("");
-      reload();
+  const restart = async (v: string, force: boolean) => {
+    setFailed("");
+    try {
+      await port.restartToVersion(v, force);
+      setRunning(0);
+    } catch (e) {
+      if (e instanceof HttpError && e.reason?.code === RESTART_BUSY) {
+        setRunning(Number(e.reason.params?.n) || 1);
+        return;
+      }
+      setFailed(reason(e));
     }
-  }, [going, progress, reload]);
+  };
 
   if (uninstalled) {
     return <p className="acct-note">{t("当前是从源码启动的开发版，没有可以查看或切换的版本。安装版 Studio 会在这里列出可用的更新。")}</p>;
@@ -151,7 +172,11 @@ export function Versions({ port }: { port: Port }) {
   // be able to take the window down with it.
   const list = hub.versions ?? [];
   const dev = !hub.current || hub.current === "dev";
-  const locked = busy || going !== "";
+  const moving = progress !== null && MOVING.has(progress.phase) ? progress.version : "";
+  const ready = progress?.phase === "ready" ? progress.version : "";
+  const locked = busy || starting !== "" || moving !== "";
+  const readyOlder = ready !== "" && list.some((v) => v.version === ready && v.older);
+  const failure = progress?.phase === "error" ? failureCopy(progress, hub.current) : null;
   return (
     <div className="vers">
       <div className="vnow">
@@ -176,11 +201,11 @@ export function Versions({ port }: { port: Port }) {
       )}
       {hub.pinned && !hub.stalePin && (
         <div className="find" data-lvl="ok">
-          <span className="t">{t("已固定在 {v}，不会自动更新", { v: hub.pinned })}</span>
+          <span className="t">{t("已固定在 {v}，不再提示新版本", { v: hub.pinned })}</span>
           <span className="why">
-            {t("回退后固定是有意为之：否则下次更新会将你带回刚离开的版本。")}
-              <button className="lnk" data-action="versions.pin" onClick={() => pin("")} disabled={locked}>
-              {t("恢复自动更新")}
+            {t("回退时会固定在所选版本，免得新版本提示把你带回刚离开的版本。")}
+            <button className="lnk" data-action="versions.pin" onClick={() => pin("")} disabled={locked}>
+              {t("取消固定")}
             </button>
           </span>
         </div>
@@ -189,29 +214,53 @@ export function Versions({ port }: { port: Port }) {
         <div className="find" data-lvl="warn">
           <span className="t">{t("固定版本为 {pinned}，当前运行的是 {current}", { pinned: hub.pinned, current: hub.current })}</span>
           <span className="why">
-            {t("该固定已与实际情况不符，自动更新按未固定处理。")}
-              <button className="lnk" data-action="versions.pin" onClick={() => pin("")} disabled={locked}>
-              {t("清除固定")}
+            {t("这个固定没有作用，下次启动时会自动清除。")}
+            <button className="lnk" data-action="versions.pin" onClick={() => pin("")} disabled={busy}>
+              {t("现在清除")}
             </button>
           </span>
         </div>
       )}
-      {!hub.err && hub.newer && !hub.pinned && (
+      {!hub.err && hub.newer && !hub.pinned && !ready && !moving && !failure && (
         <div className="find" data-lvl="ok">
           <span className="t">{t("有新版本 {v}", { v: hub.latest })}</span>
-          <span className="why">{t("可在下方对应行安装，安装完成后会自动重启。")}</span>
+          <span className="why">{t("可在下方对应行安装。下载完成后会先问你，再重启。")}</span>
         </div>
       )}
-      {progress?.phase === "error" && (
-        <div className="find" data-lvl="warn">
-          <span className="t">{t("切换到 {v} 失败", { v: progress.version })}</span>
-          <span className="why">{t("{err}　—— 当前版本未被改动，可以重试。", { err: progress.err ?? "" })}</span>
+      {ready && later !== ready && (
+        <div className="find" data-lvl={running > 0 ? "warn" : "ok"} role="status">
+          <span className="t">
+            {running > 0 ? t("有 {n} 项任务正在运行", { n: running }) : t("{v} 已下载并通过签名校验", { v: ready })}
+          </span>
+          <span className="why">
+            {running > 0
+              ? t("现在重启会中断它们。可以等任务结束后再重启。")
+              : t("重启 Studio 后生效。重启会关闭当前窗口，稍后重启也可以。")}
+            {readyOlder && t("较新版本写入的会话在旧版本中暂时无法打开，升级回去后即可恢复。")}
+          </span>
+          <span className="acts">
+            <button className="btn sm" data-primary="" data-action="versions.restart" onClick={() => restart(ready, running > 0)}>
+              {running > 0 ? t("仍然重启") : t("立即重启")}
+            </button>
+            <button className="btn sm" data-action="versions.later" onClick={() => { setLater(ready); setRunning(0); }}>
+              {t("稍后")}
+            </button>
+          </span>
         </div>
       )}
-      {/* Going back is the one move with a consequence the user cannot undo by
-          going forward again, so it is said before they click, not after. */}
-      {going !== "" && (
-        <p className="acct-note">{t("切换版本期间请勿关闭窗口。较新版本写入的会话在旧版本中暂时无法打开，升级回去后即可恢复。")}</p>
+      {failure && progress && (
+        <div className="find" data-lvl="warn" role="alert">
+          <span className="t">{failure.title}</span>
+          <span className="why">
+            {failure.why}
+            {failure.manual && (
+              <a className="lnk" href={releasePage(progress.version)} target="_blank" rel="noreferrer noopener">
+                {t("下载完整安装包")}
+              </a>
+            )}
+          </span>
+          {progress.err && <span className="gapd">{progress.err}</span>}
+        </div>
       )}
 
       {/* Newest first: the list reads as history, and where you are in it is
@@ -230,17 +279,23 @@ export function Versions({ port }: { port: Port }) {
             {/* A row the catalog does not carry has no date. Saying so beats an
                 empty column: it is why this version has no download page. */}
             <span className="sc">{v.publishedAt ? when(v.publishedAt) : v.current ? t("未发布") : ""}</span>
-            {going === v.version && progress ? (
-              <span className="sa">{say(progress)}</span>
+            {moving === v.version && progress ? (
+              <span className="sa" data-keep="">{say(progress)}</span>
+            ) : starting === v.version ? (
+              <span className="sa" data-keep="">{t("准备中…")}</span>
+            ) : ready === v.version ? (
+              <button className="sa lnk" data-keep="" data-action="versions.restart" onClick={() => { setLater(""); void restart(v.version, false); }}>
+                {t("重启以完成安装")}
+              </button>
             ) : (
               !v.current && (
-                  <button className="sa lnk" data-action="versions.activate" onClick={() => goTo(v.version)} disabled={locked}>
+                <button className="sa lnk" data-action="versions.activate" onClick={() => goTo(v.version)} disabled={locked}>
                   {t(v.older ? "回退到这个版本" : "安装这个版本")}
                 </button>
               )
             )}
             {v.current && !hub.pinned && (
-                <button className="sa lnk" data-action="versions.pin" onClick={() => pin(v.version)} disabled={locked}>
+              <button className="sa lnk" data-action="versions.pin" onClick={() => pin(v.version)} disabled={locked}>
                 {t("固定在这里")}
               </button>
             )}

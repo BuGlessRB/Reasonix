@@ -702,15 +702,6 @@ export const EN: Record<string, string> = {
   "无法连接版本目录": "Cannot reach the version index",
   "已固定": "Pinned",
   "固定在这里": "Pin here",
-  "清除固定": "Clear the pin",
-  "恢复自动更新": "Resume automatic updates",
-  "可在下方对应行安装，安装完成后会自动重启。": "Install it from the row below; it restarts itself when done.",
-  "回退后固定是有意为之：否则下次更新会将你带回刚离开的版本。":
-    "Pinning after a rollback is deliberate: otherwise the next update would put you back on the version you just left.",
-  "该固定已与实际情况不符，自动更新按未固定处理。":
-    "This pin no longer describes anything real, so automatic updates treat it as unpinned.",
-  "切换版本期间请勿关闭窗口。较新版本写入的会话在旧版本中暂时无法打开，升级回去后即可恢复。":
-    "Do not close the window while versions are switching. A session written by a newer version will not open on an older one until you upgrade again.",
 
   // ── 账号 ─────────────────────────────────────────────────────────
   "正在检查登录状态…": "Checking sign-in status…",

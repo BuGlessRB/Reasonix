@@ -336,6 +336,8 @@ const SAID: Record<string, string> = {
   "studio.pin_rejected": "版本固定未能保存：{detail}",
   "update.install_running": "已有一个版本切换正在进行，请等待其完成后重试",
   "update.install_rejected": "本次版本切换未能启动：{detail}",
+  "update.restart_busy": "有 {n} 项任务正在运行，重启会中断它们",
+  "update.nothing_ready": "没有已下载好的版本可供重启安装，请重新点击安装",
 
   "loopback.host_rejected": "该请求未发往 Studio 监听的地址，已被拒绝",
   "loopback.origin_rejected": "该页面不属于 Studio，无法对其操作",

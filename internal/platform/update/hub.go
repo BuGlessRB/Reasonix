@@ -137,6 +137,19 @@ func Pin(version string) error {
 	return cfg.SaveTo(config.UserConfigPath())
 }
 
+// ReleaseStalePin drops a pin that names a build other than the one running.
+// Such a pin holds nobody anywhere: it is what a move that never landed, or an
+// install from outside the app, leaves behind. A running build that is not a
+// release (a source build says "dev") keeps the pin, since it proves nothing.
+func ReleaseStalePin(running string) error {
+	pinned := PinnedVersion()
+	v := normalizeVersion(running)
+	if pinned == "" || SameVersion(pinned, running) || v == "" || v[0] < '0' || v[0] > '9' {
+		return nil
+	}
+	return Pin("")
+}
+
 // ProxySpec is the network route updates take, read from config so a machine
 // behind a proxy reaches the catalog the same way everything else does.
 func ProxySpec() netclient.ProxySpec {
