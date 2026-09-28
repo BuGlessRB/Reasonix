@@ -1,8 +1,13 @@
 import { SseLook } from "./sse_look";
-import type { MarketDetail, MarketList, MarketOwnRequest, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, ScopeLayer, SkillCatalog } from "./port";
+import type { MarketDetail, MarketList, MarketOwnRequest, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission, MarketVote, PluginExport, PluginInstallRequest, PluginPackage, PluginPlan, ScopeLayer, SkillCatalog } from "./port";
 import { rootQuery } from "./sse_http";
 import { download } from "./download";
 import { host } from "./host";
+
+function marketPath(slug: string) {
+  const [handle = "", name = ""] = slug.split("/", 2);
+  return "/market/packages/" + encodeURIComponent(handle) + "/" + encodeURIComponent(name);
+}
 
 // Skills and plugin packages: what a project brought with it, and the two acts
 // that change that — installing one and switching one off.
@@ -45,8 +50,13 @@ export class SseExtensions extends SseLook {
     return this.get<MarketList>("/market/packages" + (query ? "?" + query : ""));
   }
   marketDetail(slug: string) {
-    const [handle = "", name = ""] = slug.split("/", 2);
-    return this.get<MarketDetail>("/market/packages/" + encodeURIComponent(handle) + "/" + encodeURIComponent(name));
+    return this.get<MarketDetail>(marketPath(slug));
+  }
+  marketMyVote(slug: string) {
+    return this.get<MarketVote>(marketPath(slug) + "/vote");
+  }
+  voteMarket(slug: string, value: -1 | 0 | 1) {
+    return this.post0<MarketVote>(marketPath(slug) + "/vote", { value });
   }
   planMarket(req: MarketRequest) {
     return this.post0<MarketPlan>("/market/plan", req);

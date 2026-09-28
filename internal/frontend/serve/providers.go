@@ -25,6 +25,7 @@ type hostGrants struct {
 	accountAuth     bool // /account routes; see AllowAccountAuth
 	providerEdit    bool // /providers writes; see AllowProviderEdit
 	localDesktop    bool // POST /workspace/editor, GET /workspace/locate; see AllowLocalDesktop
+	installReport   bool // market installs may be reported; see AllowMarketInstallReport
 }
 
 // AllowProviderEdit grants the /providers routes. Off until a host asks:

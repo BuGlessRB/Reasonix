@@ -3243,6 +3243,23 @@
   .mkt-fields textarea { resize: vertical }
   .mkt-fields input:focus, .mkt-fields textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .mkt-fields input::placeholder { color: var(--ghost) }
+  .mkt-vote { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 0 }
+  .mkt-vote-rate { font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted); font-variant-numeric: tabular-nums }
+  .mkt-vote-btns { display: inline-flex; gap: 6px }
+  .mkt-vote .act .n { margin-left: 2px; color: var(--faint); font-variant-numeric: tabular-nums }
+  .mkt-vote .act[aria-pressed="true"] {
+    border-color: var(--muted); background: var(--raised); color: var(--text); font-weight: var(--w-med);
+    box-shadow: var(--lit);
+  }
+  .mkt-vote .act[aria-pressed="true"] .n { color: var(--text) }
+  .mkt-vote .note, .mkt-vote .why { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
+  .mkt-vote .why { color: var(--muted) }
+  .mkt-n.mkt-rate { margin-left: 0 }
+  @media (max-width: 520px) {
+    .mkt-row .mkt-line:first-child { flex-wrap: wrap; row-gap: 2px }
+    .mkt-row .nm { flex: none; max-width: 100% }
+    .mkt-row .mkt-n.mkt-rate { flex-basis: 100%; padding-left: 0 }
+  }
 
   .hooks .scope { max-width: 460px; margin-top: 0 }
   .hooks .path { margin: 8px 0 0; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); word-break: break-all }

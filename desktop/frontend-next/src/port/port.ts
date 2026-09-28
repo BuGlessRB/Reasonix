@@ -36,7 +36,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
 
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
-import type { MarketDetail, MarketList, MarketOwnRequest, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission } from "./market";
+import type { MarketDetail, MarketList, MarketOwnRequest, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission, MarketVote } from "./market";
 import type { Appearance, ThemeImport, ThemePack } from "./look";
 import type { BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, ProgressWatchSettings, SandboxSettings } from "./boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
@@ -196,6 +196,9 @@ export interface AgentPort {
   planOwnMarket(req: MarketOwnRequest): Promise<MarketPlan>;
   installOwnMarket(req: MarketOwnRequest): Promise<MarketPlan>;
   submitMarket(slug: string): Promise<MarketPackage>;
+  marketMyVote(slug: string): Promise<MarketVote>;
+  // value 0 withdraws. The kernel sends the account token to the registry.
+  voteMarket(slug: string, value: -1 | 0 | 1): Promise<MarketVote>;
   // Text the window assembled, put on disk. Returns where it went, or null when
   // the host handled it without a path to report (a browser download).
   saveText(name: string, content: string): Promise<string | null>;

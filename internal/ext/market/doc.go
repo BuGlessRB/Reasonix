@@ -1,8 +1,13 @@
 // Package market reads the Reasonix community registry and installs what it
 // lists through install_source. It is a source, never a trust root:
 //
-//   - The registry is read-only here, over https to one fixed host, with a
-//     timeout, a body cap and no redirects. Its rows are untrusted data.
+//   - The registry is reached over https at one fixed host, with a timeout, a
+//     body cap and no redirects. Its rows are untrusted data.
+//   - Two things are written back. A vote carries the account token, which
+//     therefore only ever goes to that host. An install report carries the
+//     slug and a random id kept only for the market (InstallID) — no token,
+//     no content — and is sent only when the host passes that id, which it
+//     does only with anonymous usage statistics switched on.
 //   - Only an approved version is installable, and only when its row carries a
 //     content digest a reviewer bound to it. The digest reaches install_source
 //     as expectDigest, which refuses material that differs before writing.

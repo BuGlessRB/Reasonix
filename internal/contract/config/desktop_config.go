@@ -81,8 +81,8 @@ type DesktopConfig struct {
 	DefaultToolApprovalMode string           `toml:"default_tool_approval_mode"` // ask|auto|yolo; defaults to auto for newly-created desktop sessions
 	CheckUpdates            *bool            `toml:"check_updates"`              // startup update checks; nil keeps the default enabled
 	UpdateChannel           string           `toml:"update_channel"`             // legacy: read for compatibility, never written back
-	Telemetry               *bool            `toml:"telemetry"`                  // anonymous launch ping plus scrubbed next-launch native crash diagnostics; nil keeps the default enabled
-	Metrics                 *bool            `toml:"metrics"`                    // aggregate desktop metrics (anonymous signal/bucket counts, including lifecycle health; no content); nil keeps the default enabled
+	Telemetry               *bool            `toml:"telemetry"`                  // anonymous launch ping, scrubbed native crash diagnostics, per-package market install counts (anonymous, no content); nil = enabled
+	Metrics                 *bool            `toml:"metrics"`                    // aggregate desktop metrics (anonymous signal/bucket counts, lifecycle health) and per-package market install counts (anonymous, no content); nil = enabled
 	ProviderAccess          []string         `toml:"provider_access"`            // desktop-only list of provider entries shown in Settings > Model > Access
 	ExpandThinking          bool             `toml:"expand_thinking"`            // deprecated compatibility alias: true maps to auto
 	ReasoningDisplayMode    string           `toml:"reasoning_display_mode"`

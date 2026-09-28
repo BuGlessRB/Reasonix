@@ -26,6 +26,17 @@ func Enabled(mode, version string, interactive bool) bool {
 	return interactive
 }
 
+// OptedOut reports the environment-level refusals every anonymous report
+// honours whatever the configuration says: DO_NOT_TRACK, REASONIX_TELEMETRY=off
+// and CI.
+func OptedOut() bool { return envOptOut() || inCI() }
+
+// ReleaseVersion reports whether version names a release build; development
+// builds report nothing.
+func ReleaseVersion(version string) bool {
+	return releaseVersionPattern.MatchString(strings.TrimSpace(version))
+}
+
 func envOptOut() bool {
 	if strings.TrimSpace(os.Getenv("DO_NOT_TRACK")) != "" {
 		return true

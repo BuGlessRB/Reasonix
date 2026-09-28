@@ -57,9 +57,14 @@ type Package struct {
 	LatestVersion string   `json:"latestVersion"`
 	InstallCount  int      `json:"installCount"`
 	StarCount     int      `json:"starCount"`
-	Verified      bool     `json:"verified"`
-	Status        string   `json:"status"`
-	UpdatedAt     string   `json:"updatedAt"`
+	UpCount       int      `json:"upCount"`
+	DownCount     int      `json:"downCount"`
+	// Nil while nobody has voted, which is not the same as zero approval.
+	ApprovalRate *float64 `json:"approvalRate"`
+	Score        float64  `json:"score"`
+	Verified     bool     `json:"verified"`
+	Status       string   `json:"status"`
+	UpdatedAt    string   `json:"updatedAt"`
 	// Pinned is the registry's word that the latest version carries a reviewed
 	// digest; nil when it did not say. Install still checks the digest itself.
 	Pinned *bool `json:"pinned,omitempty"`
