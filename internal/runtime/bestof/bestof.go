@@ -16,6 +16,7 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/tool"
+	"reasonix/internal/platform/gitcmd"
 	"reasonix/internal/platform/worktree"
 )
 
@@ -56,11 +57,11 @@ type Runner func(ctx context.Context, run Run) (Outcome, error)
 
 // Spec is what the host supplies once at boot.
 type Spec struct {
-	WorkspaceRoot string
-	ManagedRoot   string
-	Runner        Runner
-	KnownModel    func(ref string) bool
-	Judge         JudgeSpec
+	Repo        gitcmd.Repo // the workspace's identity, resolved when it opened
+	ManagedRoot string
+	Runner      Runner
+	KnownModel  func(ref string) bool
+	Judge       JudgeSpec
 }
 
 type bestOf struct{ spec Spec }
@@ -112,7 +113,7 @@ func (b bestOf) Execute(ctx context.Context, raw json.RawMessage) (string, error
 			return "", fmt.Errorf("invalid args: model %q is not configured", m)
 		}
 	}
-	snap, err := worktree.TakeSnapshot(ctx, b.spec.WorkspaceRoot)
+	snap, err := worktree.TakeSnapshot(ctx, b.spec.Repo)
 	if err != nil {
 		return "", fmt.Errorf("best_of_n needs a Git workspace: %w", err)
 	}

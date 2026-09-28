@@ -1162,7 +1162,7 @@ ask   = []                                 # force a prompt even if otherwise al
 # forbid_read    = ["${HOME}/.ssh"]   # paths read/list/search tools and sandboxed bash may not inspect
 
 [serve]
-auth_mode = "none"             # none|token|password; use auth before binding beyond localhost
+# auth_mode = "token"          # token (default)|password|none; none still requires the launch token for changes
 # token = ""                   # optional fixed token; empty token mode generates one at startup
 # password_hash = ""           # bcrypt hash generated with reasonix serve --hash-password --password '...'
 # behind_proxy = false         # trust X-Forwarded-* only behind a trusted reverse proxy
@@ -1207,10 +1207,16 @@ unknown values fall back to `bar`. It applies to the Bubble Tea CLI/TUI
 textarea only, while desktop and browser inputs keep their platform-native
 cursor behavior.
 
-`[serve]` controls the HTTP browser frontend used by `reasonix serve`. The
-default `auth_mode = "none"` is intended for the loopback default
-`127.0.0.1:8787`; deployments reachable from another machine must use `token` or
-`password`. Password mode requires either a startup `--password` or a stored
+`[serve]` controls the HTTP browser frontend used by `reasonix serve`. An unset
+`auth_mode` generates a per-launch token. `none` is an explicit opt-out for a
+Serve fronted by other authentication; reads stay open, while every
+state-changing request, approvals included, still requires the launch token and
+otherwise refuses with `auth.launch_token_required`.
+
+The token goes to a 0600 file under `<Reasonix home>/remote/`, not the
+terminal. `[serve]` is read from the user config only.
+
+Password mode requires either a startup `--password` or a stored
 bcrypt `password_hash`. `behind_proxy` must stay false unless the server is
 behind a trusted proxy that owns the `X-Forwarded-For` and `X-Forwarded-Proto`
 headers.

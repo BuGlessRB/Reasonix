@@ -459,7 +459,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) handler() http.Handler {
-	return logMiddleware(s.auth.middleware(csrfGuard(s.routes())))
+	return logMiddleware(s.auth.middleware(s.auth.hostGuard(csrfGuard(s.auth.mutationGate(s.routes())))))
 }
 
 func (s *Server) reloadExtensionsHTTP(w http.ResponseWriter, r *http.Request) {

@@ -25,7 +25,7 @@ func TestAttachmentSavesAndReturnsATurnReference(t *testing.T) {
 	dir := testenv.TempDir(t)
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	var buf bytes.Buffer
@@ -58,7 +58,7 @@ func TestAttachmentSavesAndReturnsATurnReference(t *testing.T) {
 func TestAttachmentRefusesWhatIsNotAnImage(t *testing.T) {
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: testenv.TempDir(t)})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	junk, _ := json.Marshal(map[string]string{"mime": "image/png", "data": base64.StdEncoding.EncodeToString([]byte("not an image"))})

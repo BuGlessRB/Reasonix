@@ -39,7 +39,7 @@ api_key_env = "RELAY_API_KEY"
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, ModelRef: "relay/claude-sonnet-4-5"})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	res, err := http.Post(srv.URL+"/effort", "application/json", strings.NewReader(`{"effort":"high"}`))

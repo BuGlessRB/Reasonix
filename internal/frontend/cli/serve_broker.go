@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"reasonix/internal/base/secrets"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/model/providerbroker"
 )
@@ -40,6 +41,8 @@ func (b brokerFlags) resolver() (provider.Resolver, error) {
 	if addr == "" && file == "" {
 		return nil, nil
 	}
+	secrets.RegisterHostSecretPath(file)
+	secrets.RegisterHostSecretPath(tokenFile)
 	if addr != "" && file != "" {
 		return nil, fmt.Errorf("--provider-broker and --provider-broker-file name the broker twice; give one")
 	}

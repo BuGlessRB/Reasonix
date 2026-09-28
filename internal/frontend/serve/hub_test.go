@@ -58,7 +58,7 @@ func TestHubRoutesEachRuntimeToItsOwnWorkspace(t *testing.T) {
 	h := NewHub(HubOptions{})
 	a := hubRuntime(t, h, first)
 	b := hubRuntime(t, h, second)
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 
 	for _, want := range []struct {
@@ -120,7 +120,7 @@ func TestHubTreeListsWorkspaceSessionsAndMarksOpenOnes(t *testing.T) {
 	}
 	rt.Server.Controller().SetSessionPath(open)
 
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 	tree := hubGet[[]treeWorkspace](t, srv, "/tree")
 	if len(tree) != 1 || tree[0].Root != root {
@@ -147,7 +147,7 @@ func TestHubCloseRetiresTheRuntime(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	h := NewHub(HubOptions{})
 	rt := hubRuntime(t, h, testenv.TempDir(t))
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 
 	if err := h.Close(rt.ID); err != nil {
@@ -183,7 +183,7 @@ func TestHubServesTheFirstRuntimeUnprefixed(t *testing.T) {
 	root := testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	hubRuntime(t, h, root)
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 
 	got := hubGet[struct {
@@ -277,7 +277,7 @@ func TestHubTreeFoldsRecoveryCopiesIntoTheirConversation(t *testing.T) {
 		parent = info.Path
 	}
 
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 	tree := hubGet[[]treeWorkspace](t, srv, "/tree")
 	if len(tree) != 1 {
@@ -352,7 +352,7 @@ func TestUnclaimedServerRecordsAsServe(t *testing.T) {
 func TestHubServesThePageWithNoPaneOpen(t *testing.T) {
 	h := NewHub(HubOptions{Page: fstest.MapFS{"index.html": {Data: []byte("<!doctype html><title>studio</title>")}}})
 	defer h.Shutdown()
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/")

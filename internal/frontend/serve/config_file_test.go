@@ -36,7 +36,7 @@ func TestASaveIntoAnUnreadableConfigRefusesWithOneCode(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
 	breakUserConfig(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	for _, path := range []string{"/sandbox", "/permissions"} {
@@ -64,7 +64,7 @@ func TestTheProblemIsReadableBeforeAnythingIsSaved(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
 	breakUserConfig(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	problem := readJSON[*control.ConfigProblem](t, srv.URL, "/config/problem")
@@ -80,7 +80,7 @@ func TestRepairingTheFileLetsSettingsSaveAgain(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
 	breakUserConfig(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/config/repair", "")
@@ -107,7 +107,7 @@ func TestRepairingTheFileLetsSettingsSaveAgain(t *testing.T) {
 func TestTheOffendingLineIsNotHandedToAnUngrantedClient(t *testing.T) {
 	s := newProviderEditServer(t)
 	breakUserConfig(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/config/problem")

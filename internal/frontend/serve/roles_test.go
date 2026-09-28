@@ -30,7 +30,7 @@ func readRoles(t *testing.T, base string) map[string]string {
 // model" rather than a missing answer.
 func TestRolesDefaultToTheMainModel(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	roles := readRoles(t, srv.URL)
@@ -50,7 +50,7 @@ func TestEveryRoleTheUIOffersSurvivesARoundTrip(t *testing.T) {
 		t.Run(role, func(t *testing.T) {
 			s := newProviderEditServer(t)
 			s.AllowProviderEdit()
-			srv := httptest.NewServer(s.Handler())
+			srv := httptest.NewServer(operatorHandler(s))
 			defer srv.Close()
 
 			resp := postProvider(t, srv.URL, "/roles", `{"role":"`+role+`","ref":"existing/model-a"}`)
@@ -69,7 +69,7 @@ func TestEveryRoleTheUIOffersSurvivesARoundTrip(t *testing.T) {
 func TestSetRoleWritesTheAssignmentAndReadsBack(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/roles", `{"role":"subagent","ref":"existing/model-a"}`)
@@ -106,7 +106,7 @@ func TestSetRoleWritesTheAssignmentAndReadsBack(t *testing.T) {
 func TestSetRoleRejectsWhatItCannotResolve(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	for name, body := range map[string]string{
@@ -125,7 +125,7 @@ func TestSetRoleRejectsWhatItCannotResolve(t *testing.T) {
 // wait on the same grant provider edits do.
 func TestSetRoleIsRefusedUntilTheHostGrantsIt(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/roles", `{"role":"planner","ref":"existing/model-a"}`)

@@ -42,7 +42,7 @@ func TestProviderSetupStoresRemoteCredentialAndRebuildsController(t *testing.T) 
 		}), nil
 	}
 
-	httpServer := httptest.NewServer(s.Handler())
+	httpServer := httptest.NewServer(operatorHandler(s))
 	defer httpServer.Close()
 
 	// The page onboards; this kernel only has to say a key is owed, and it must
@@ -144,7 +144,7 @@ func TestProviderSetupActivationFailureKeepsCredentialAndHidesDetails(t *testing
 			SessionDir: testenv.TempDir(t),
 		}), nil
 	}
-	httpServer := httptest.NewServer(s.Handler())
+	httpServer := httptest.NewServer(operatorHandler(s))
 	defer httpServer.Close()
 
 	resp := postProviderSetup(t, httpServer.URL, `{"apiKey":"`+secret+`"}`)
@@ -197,7 +197,7 @@ func TestProviderSetupActivationRetryReturnsToMissingWhenCredentialWasRemoved(t 
 		built++
 		return nil, errors.New("transient activation failure")
 	}
-	httpServer := httptest.NewServer(s.Handler())
+	httpServer := httptest.NewServer(operatorHandler(s))
 	defer httpServer.Close()
 
 	resp := postProviderSetup(t, httpServer.URL, `{"apiKey":"`+secret+`"}`)
@@ -237,7 +237,7 @@ func TestProviderSetupRejectsCredentialSavedByAnotherProcess(t *testing.T) {
 		return nil, nil
 	}
 
-	httpServer := httptest.NewServer(s.Handler())
+	httpServer := httptest.NewServer(operatorHandler(s))
 	defer httpServer.Close()
 	resp := postProviderSetup(t, httpServer.URL, `{"apiKey":"stale-browser-secret"}`)
 	resp.Body.Close()
@@ -286,7 +286,7 @@ func TestProviderSetupIsLoopbackOnlyAndAuthenticated(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/provider-setup", nil)
 	rec := httptest.NewRecorder()
-	s.Handler().ServeHTTP(rec, req)
+	operatorHandler(s).ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("disabled setup endpoint = %d, want 404", rec.Code)
 	}
@@ -309,7 +309,7 @@ func TestProviderSetupIsLoopbackOnlyAndAuthenticated(t *testing.T) {
 func TestProviderSetupRejectsUnsafeOrAmbiguousRequests(t *testing.T) {
 	s, _ := newProviderSetupTestServer(t)
 	s.EnableProviderSetupForListener("127.0.0.1:8787")
-	httpServer := httptest.NewServer(s.Handler())
+	httpServer := httptest.NewServer(operatorHandler(s))
 	defer httpServer.Close()
 
 	req, err := http.NewRequest(http.MethodPost, httpServer.URL+"/provider-setup", strings.NewReader(`{"apiKey":"secret"}`))

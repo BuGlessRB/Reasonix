@@ -30,7 +30,7 @@ func installPack(t *testing.T, id, name string) {
 
 func themeServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(New(&extensionCtl{}, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(&extensionCtl{}, NewBroadcaster(), config.ServeConfig{})))
 	t.Cleanup(srv.Close)
 	return srv
 }

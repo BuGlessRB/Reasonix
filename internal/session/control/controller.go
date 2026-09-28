@@ -41,6 +41,7 @@ import (
 	"reasonix/internal/ext/skill"
 	"reasonix/internal/model/billing"
 	"reasonix/internal/platform/browser"
+	"reasonix/internal/platform/gitcmd"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/capability"
 	"reasonix/internal/runtime/goaleval"
@@ -359,9 +360,9 @@ type Options struct {
 	// RuntimeOwner isolates publish/drain gates and receipts to one
 	// controller/session rebuild lineage. Nil preserves compatibility behavior.
 	RuntimeOwner *extension.RuntimeOwner
-	// WorkspaceRoot is the project root checkpoint restores are confined to ("" =
-	// no confinement). Frontends pass the cwd they launched the session in.
+	// WorkspaceRoot confines checkpoint restores ("" = none); frontends pass the launch cwd.
 	WorkspaceRoot          string
+	WorkspaceRepo          gitcmd.Repo // WorkspaceRoot's identity, resolved when the session opened
 	ExternalFolderToolRefs externalFolderToolRefs
 	ShowTurnReceipt        bool // attach the end-of-turn verification report; see display_prefs.go
 	// ResponseLanguage controls final-answer language preference. Empty/auto

@@ -110,7 +110,7 @@ func TestRemotePaneStreamsEventsUnbuffered(t *testing.T) {
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{})
 	rt := remotePane(t, h, rk.Listener.Addr().String())
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, front.URL+rt.view().Base+"/events", nil)
@@ -166,7 +166,7 @@ func TestRemotePaneCarriesTheRemoteToken(t *testing.T) {
 	rk := fakeRemoteKernel(t)
 	h := NewHub(HubOptions{})
 	rt := remotePane(t, h, rk.Listener.Addr().String())
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, front.URL+rt.view().Base+"/status", nil)
@@ -200,7 +200,7 @@ func TestRemotePaneRefusesWithACodeWhenTheLinkIsDown(t *testing.T) {
 
 	h := NewHub(HubOptions{})
 	rt := remotePane(t, h, addr)
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	resp, err := http.Get(front.URL + rt.view().Base + "/status")
@@ -243,7 +243,7 @@ func TestAFarKernelThatRefusesSaysSoRatherThanLookingLikeADeadLink(t *testing.T)
 			Addr: far.Listener.Addr().String(), Token: "remote-secret",
 		}, func() {}, nil
 	}}})
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	resp, err := http.Post(front.URL+"/remotes/open", "application/json",
@@ -293,7 +293,7 @@ func TestAFarKernelWithNoPaneHubReadsAsAVersionBehind(t *testing.T) {
 			Addr: far.Listener.Addr().String(), Token: "remote-secret",
 		}, func() {}, nil
 	}}})
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	resp, err := http.Post(front.URL+"/remotes/open", "application/json",
@@ -395,7 +395,7 @@ func TestClosingARemotePaneReleasesItsHold(t *testing.T) {
 func TestOpenRemoteIsRefusedWhereNoAttacherIsWired(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	h := NewHub(HubOptions{})
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	resp, err := http.Post(front.URL+"/remotes/open", "application/json",
@@ -433,7 +433,7 @@ func TestOpenRemoteEndpointPublishesTheProxiedPane(t *testing.T) {
 			}, func() {}, nil
 		},
 	}})
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	resp, err := http.Post(front.URL+"/remotes/open", "application/json",
@@ -470,7 +470,7 @@ func TestOpenRemoteGivesBackTheHoldWhenTheHubRefuses(t *testing.T) {
 				func() { released <- struct{}{} }, nil
 		},
 	}})
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	resp, err := http.Post(front.URL+"/remotes/open", "application/json", strings.NewReader(`{"host":"gpu-box"}`))
@@ -513,7 +513,7 @@ host = "10.0.0.5"
 	h := NewHub(HubOptions{Remote: &stubAttacher{states: map[string]RemoteLinkState{
 		"gpu-box": {Status: "degraded", Err: "forward 8080 未挂上", Panes: 2},
 	}}})
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	var rows []RemoteHostView
@@ -552,7 +552,7 @@ func TestTwoRemotePanesDriveTwoRuntimesOnTheFarSide(t *testing.T) {
 	writeOpenableConfig(t)
 	far := NewHub(HubOptions{})
 	defer far.Shutdown()
-	farSide := httptest.NewServer(far.Handler())
+	farSide := httptest.NewServer(operatorHandler(far))
 	defer farSide.Close()
 
 	near := NewHub(HubOptions{Remote: &stubAttacher{
@@ -565,7 +565,7 @@ func TestTwoRemotePanesDriveTwoRuntimesOnTheFarSide(t *testing.T) {
 			}, func() {}, nil
 		},
 	}})
-	nearSide := httptest.NewServer(near.Handler())
+	nearSide := httptest.NewServer(operatorHandler(near))
 	defer nearSide.Close()
 
 	// One workspace for both, which is the case that was broken: they share a
@@ -665,7 +665,7 @@ func TestClosingARemotePaneRetiresTheFarRuntime(t *testing.T) {
 	writeOpenableConfig(t)
 	far := NewHub(HubOptions{})
 	defer far.Shutdown()
-	farSide := httptest.NewServer(far.Handler())
+	farSide := httptest.NewServer(operatorHandler(far))
 	defer farSide.Close()
 
 	near := NewHub(HubOptions{Remote: &stubAttacher{
@@ -676,7 +676,7 @@ func TestClosingARemotePaneRetiresTheFarRuntime(t *testing.T) {
 			}, func() {}, nil
 		},
 	}})
-	nearSide := httptest.NewServer(near.Handler())
+	nearSide := httptest.NewServer(operatorHandler(near))
 	defer nearSide.Close()
 
 	resp, err := http.Post(nearSide.URL+"/remotes/open", "application/json",
@@ -768,7 +768,7 @@ func TestRemotePaneCarriesTheResumePointToTheFarKernel(t *testing.T) {
 	upstream := resumeKernel(t, resumed)
 	h := NewHub(HubOptions{})
 	rt := remotePane(t, h, upstream.Listener.Addr().String())
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	// Two connections, because the point is per-request: a proxy that cached

@@ -70,7 +70,7 @@ func TestDecisionIdentityCannotCrossRuntimeRoutes(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, runtimePrefix+idB+"/answer",
 		strings.NewReader(`{"id":"`+cardA.ID+`","answers":[{"QuestionID":"q1","Selected":["A"]}]}`))
 	req.Header.Set("Content-Type", "application/json")
-	h.Handler().ServeHTTP(httptest.NewRecorder(), req)
+	operatorHandler(h).ServeHTTP(httptest.NewRecorder(), req)
 
 	if got := a.Decisions(); len(got) != 1 || got[0].ID != cardA.ID {
 		t.Fatalf("a request routed to B answered A's card: %+v", got)

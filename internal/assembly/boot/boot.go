@@ -304,6 +304,7 @@ func RuntimeForbidReadRoots(cfg *config.Config, root string) []string {
 	secrets.RegisterCredentialEnvKeys(cfg.CredentialEnvNames())
 	base := cfg.ForbidReadRootsForRoot(root)
 	base = appendUniquePaths(base, secrets.ForbiddenReadPaths(cfg.Secrets.ProtectSensitiveFiles)...)
+	base = appendUniquePaths(base, append(secrets.HostSecretPaths(), cfg.Roots().RemoteStateDir())...)
 	credentialPath := strings.TrimSpace(cfg.Roots().UserCredentialsPath())
 	if credentialPath == "" {
 		return append([]string(nil), base...)

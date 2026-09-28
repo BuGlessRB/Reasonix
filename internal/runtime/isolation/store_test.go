@@ -16,6 +16,16 @@ import (
 	"reasonix/internal/platform/gitcmd"
 )
 
+// opened is dir's identity as a session opening it resolves it.
+func opened(t *testing.T, dir string) gitcmd.Repo {
+	t.Helper()
+	repo, err := gitcmd.Open(context.Background(), dir)
+	if err != nil {
+		return gitcmd.Repo{Dir: dir}
+	}
+	return repo
+}
+
 func gitRepo(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
@@ -82,7 +92,7 @@ func args(id string) json.RawMessage { return json.RawMessage(`{"id":"` + id + `
 // apply writes them beside whatever the workspace did meanwhile.
 func TestIsolatedRunIsHeldUntilApplied(t *testing.T) {
 	repo := gitRepo(t)
-	store := NewStore(testenv.TempDir(t), repo)
+	store := NewStore(testenv.TempDir(t), repo, opened(t, repo))
 	ctx := context.Background()
 
 	report, err := store.Execute(ctx, writes(map[string]string{"a.txt": "isolated\n", "b.txt": "new\n"}), repo, "do it", "")
@@ -118,7 +128,7 @@ func TestIsolatedRunIsHeldUntilApplied(t *testing.T) {
 // and keeps the result so it can still be discarded.
 func TestApplyConflictKeepsTheResult(t *testing.T) {
 	repo := gitRepo(t)
-	store := NewStore(testenv.TempDir(t), repo)
+	store := NewStore(testenv.TempDir(t), repo, opened(t, repo))
 	ctx := context.Background()
 
 	report, err := store.Execute(ctx, writes(map[string]string{"a.txt": "isolated\n"}), repo, "do it", "")
@@ -147,7 +157,7 @@ func TestApplyConflictKeepsTheResult(t *testing.T) {
 // A run that changed nothing leaves nothing to settle.
 func TestUnchangedRunLeavesNoEntry(t *testing.T) {
 	repo := gitRepo(t)
-	store := NewStore(testenv.TempDir(t), repo)
+	store := NewStore(testenv.TempDir(t), repo, opened(t, repo))
 	report, err := store.Execute(context.Background(), writes(nil), repo, "look", "")
 	if err != nil {
 		t.Fatal(err)
@@ -162,12 +172,12 @@ func TestUnchangedRunLeavesNoEntry(t *testing.T) {
 func TestPendingResultOutlivesItsStore(t *testing.T) {
 	repo := gitRepo(t)
 	managed := testenv.TempDir(t)
-	report, err := NewStore(managed, repo).Execute(context.Background(), writes(map[string]string{"a.txt": "isolated\n"}), repo, "do it", "")
+	report, err := NewStore(managed, repo, opened(t, repo)).Execute(context.Background(), writes(map[string]string{"a.txt": "isolated\n"}), repo, "do it", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	id := idOf(t, report)
-	resumed := NewStore(managed, repo)
+	resumed := NewStore(managed, repo, opened(t, repo))
 	if got := resumed.Pending(); len(got) != 1 || got[0] != id {
 		t.Fatalf("pending after rebuild = %v, want [%s]", got, id)
 	}
@@ -187,11 +197,11 @@ func TestPendingResultOutlivesItsStore(t *testing.T) {
 func TestPendingResultsBelongToTheirWorkspace(t *testing.T) {
 	repo, other := gitRepo(t), gitRepo(t)
 	managed := testenv.TempDir(t)
-	report, err := NewStore(managed, repo).Execute(context.Background(), writes(map[string]string{"a.txt": "x\n"}), repo, "do it", "")
+	report, err := NewStore(managed, repo, opened(t, repo)).Execute(context.Background(), writes(map[string]string{"a.txt": "x\n"}), repo, "do it", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	elsewhere := NewStore(managed, other)
+	elsewhere := NewStore(managed, other, opened(t, other))
 	if got := elsewhere.Pending(); len(got) != 0 {
 		t.Fatalf("another workspace sees %v", got)
 	}
@@ -204,7 +214,7 @@ func TestPendingResultsBelongToTheirWorkspace(t *testing.T) {
 // Isolation is never faked: a workspace git cannot snapshot is refused, and
 // the runner is never started.
 func TestNonGitWorkspaceIsRefused(t *testing.T) {
-	store := NewStore(testenv.TempDir(t), testenv.TempDir(t))
+	store := NewStore(testenv.TempDir(t), testenv.TempDir(t), gitcmd.Repo{})
 	ran := false
 	_, err := store.Execute(context.Background(), func(context.Context, Run) (Outcome, error) {
 		ran = true

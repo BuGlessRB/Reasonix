@@ -34,7 +34,7 @@ func readJSON[T any](t *testing.T, base, path string) T {
 // hand itself the boundary it is supposed to be held by.
 func TestBoundaryWritesRefusedWithoutGrant(t *testing.T) {
 	s := newProviderEditServer(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	for _, path := range []string{"/permissions", "/sandbox", "/browser-tools"} {
@@ -49,7 +49,7 @@ func TestBoundaryWritesRefusedWithoutGrant(t *testing.T) {
 func TestSavePermissionsPersistsAllThreeLists(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	body := `{"mode":"deny","deny":["bash(git push:*)"],"ask":["bash(rm:*)"],"allow":["bash(go test:*)"]}`
@@ -88,7 +88,7 @@ func TestSavePermissionsPersistsAllThreeLists(t *testing.T) {
 func TestSavePermissionsRejectsUnparsableRule(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/permissions", `{"mode":"ask","deny":["(no tool name)"]}`)
@@ -110,7 +110,7 @@ func TestSavePermissionsRejectsUnparsableRule(t *testing.T) {
 func TestSavePermissionsReplacesRatherThanAppends(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	first := postProvider(t, srv.URL, "/permissions", `{"mode":"ask","deny":["bash(rm:*)","bash(git push:*)"]}`)
@@ -130,7 +130,7 @@ func TestSavePermissionsReplacesRatherThanAppends(t *testing.T) {
 func TestSandboxSettingsReportWhatTheConfinerWillUse(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/sandbox", `{"bash":"off","network":false,"allowWrite":["/tmp/scratch"," "]}`)
@@ -171,7 +171,7 @@ func TestSandboxSettingsReportWhatTheConfinerWillUse(t *testing.T) {
 func TestSandboxSettingsReportTheModeThatWillRun(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	want := "enforce"
@@ -198,7 +198,7 @@ func TestSaveSandboxRefusesEnforceWithoutABackendByCode(t *testing.T) {
 	}
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/sandbox", `{"bash":"enforce"}`)
@@ -226,7 +226,7 @@ func TestSaveSandboxRefusesEnforceWithoutABackendByCode(t *testing.T) {
 func TestSaveSandboxRejectsUnknownBashMode(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	resp := postProvider(t, srv.URL, "/sandbox", `{"bash":"maybe"}`)
@@ -241,7 +241,7 @@ func TestSaveSandboxRejectsUnknownBashMode(t *testing.T) {
 func TestSaveBrowserToolsPersists(t *testing.T) {
 	s := newProviderEditServer(t)
 	s.AllowProviderEdit()
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	if got := readJSON[control.BrowserToolsSettings](t, srv.URL, "/browser-tools"); !got.Enabled {

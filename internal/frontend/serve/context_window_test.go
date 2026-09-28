@@ -149,7 +149,7 @@ func TestSetContextWindowMidTurnSaysItAppliesAfterTheTurn(t *testing.T) {
 // Declaring a window writes the config file and rebuilds the runtime, so it
 // rides the same grant as every other route that edits a source.
 func TestSetContextWindowRefusedWithoutGrant(t *testing.T) {
-	srv := httptest.NewServer(newProviderEditServer(t).Handler())
+	srv := httptest.NewServer(operatorHandler(newProviderEditServer(t)))
 	defer srv.Close()
 
 	resp := declareWindow(t, srv.URL, `{"window":200000}`)

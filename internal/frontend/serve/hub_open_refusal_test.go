@@ -69,7 +69,7 @@ func TestOpenPaneOnADeletedSessionSaysItIsGoneNotHeld(t *testing.T) {
 	root := testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	hubRuntime(t, h, root)
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 
 	gone := filepath.Join(SessionDirFor(root), "deleted.jsonl")
@@ -91,7 +91,7 @@ func TestOpenPaneReadsASessionAnotherRuntimeHolds(t *testing.T) {
 	root := testenv.TempDir(t)
 	h := NewHub(HubOptions{})
 	hubRuntime(t, h, root)
-	srv := httptest.NewServer(h.Handler())
+	srv := httptest.NewServer(operatorHandler(h))
 	defer srv.Close()
 
 	held := filepath.Join(SessionDirFor(root), "held.jsonl")

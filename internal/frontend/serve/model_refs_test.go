@@ -85,7 +85,7 @@ func offeredModelRefs(t *testing.T, base string) []string {
 func TestEveryModelThePickerOffersIsAssignableToARole(t *testing.T) {
 	var offered []string
 	func() {
-		srv := httptest.NewServer(newRoleServerWithExtensionModel(t).Handler())
+		srv := httptest.NewServer(operatorHandler(newRoleServerWithExtensionModel(t)))
 		defer srv.Close()
 		offered = offeredModelRefs(t, srv.URL)
 	}()
@@ -95,7 +95,7 @@ func TestEveryModelThePickerOffersIsAssignableToARole(t *testing.T) {
 	// earlier assignment left behind.
 	for _, ref := range offered {
 		t.Run(ref, func(t *testing.T) {
-			srv := httptest.NewServer(newRoleServerWithExtensionModel(t).Handler())
+			srv := httptest.NewServer(operatorHandler(newRoleServerWithExtensionModel(t)))
 			defer srv.Close()
 			payload, err := json.Marshal(map[string]string{"role": "planner", "ref": ref})
 			if err != nil {
@@ -118,7 +118,7 @@ func TestEveryModelThePickerOffersIsAssignableToARole(t *testing.T) {
 // catalogs, so it must not have widened into accepting anything with slashes.
 func TestRoleStillRefusesARefNoCatalogCarries(t *testing.T) {
 	s := newRoleServerWithExtensionModel(t)
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 
 	for _, ref := range []string{"plugin/ghost/cloud/nothing", "nosuch/model", "plugin/two"} {

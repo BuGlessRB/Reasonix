@@ -66,7 +66,7 @@ func TestAMalformedActivationStoreIsNotABadRequest(t *testing.T) {
 		WorkspaceRoot: testenv.TempDir(t),
 	})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	got := postSwitch(t, srv.URL, `{"name":"deploy","enabled":false,"scope":"project"}`)
@@ -84,7 +84,7 @@ func TestAnUnknownSkillIsTheThingMissing(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	ctrl := control.New(control.Options{})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	missing := postSwitch(t, srv.URL, `{"name":"no-such-skill","enabled":false}`)
@@ -146,7 +146,7 @@ func TestTheStatusAHostRecordedReachesTheRow(t *testing.T) {
 
 	ctrl := control.New(control.Options{Host: host})
 	defer ctrl.Close()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/mcp")

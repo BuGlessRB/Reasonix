@@ -45,7 +45,7 @@ func TestARemoteDialRunsUnderTheRequestThatAskedForIt(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	link := &blockingAttacher{dialing: make(chan context.Context, 1)}
 	h := NewHub(HubOptions{Remote: link})
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	cases := []struct {
@@ -241,7 +241,7 @@ func TestTheAnswerEndpointNamesWhatWentWrong(t *testing.T) {
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	b := NewAskBroker(nil)
 	h := NewHub(HubOptions{Asks: b})
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -315,7 +315,7 @@ func TestAnsweringAQuestionLetsTheDialFinishAndThePaneOpen(t *testing.T) {
 		Asks:   asks,
 		Remote: &askingAttacher{asks: asks, endpoint: RemoteEndpoint{Addr: far.Listener.Addr().String(), Token: "remote-secret"}},
 	})
-	front := httptest.NewServer(h.Handler())
+	front := httptest.NewServer(operatorHandler(h))
 	defer front.Close()
 
 	const operation = "op-the-client-named"

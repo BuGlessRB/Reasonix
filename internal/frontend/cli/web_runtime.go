@@ -21,8 +21,13 @@ import (
 	"reasonix/internal/state/store"
 )
 
+// serveConfigWithCommandDefaults authenticates serve with a per-launch token
+// unless the user opted out by flag or config; `web` ignores a configured none.
 func serveConfigWithCommandDefaults(command string, authExplicit bool, cfg config.ServeConfig) config.ServeConfig {
-	if command == "web" && !authExplicit {
+	if authExplicit {
+		return cfg
+	}
+	if command == "web" || strings.TrimSpace(cfg.AuthMode) == "" {
 		cfg.AuthMode = "token"
 	}
 	return cfg

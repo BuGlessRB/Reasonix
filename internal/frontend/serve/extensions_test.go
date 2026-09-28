@@ -49,7 +49,7 @@ func (c *extensionCtl) SubmitExtensionForm(_ context.Context, pluginID, surfaceI
 
 func extensionServer(t *testing.T, ctl *extensionCtl) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(New(ctl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctl, NewBroadcaster(), config.ServeConfig{})))
 	t.Cleanup(srv.Close)
 	return srv
 }

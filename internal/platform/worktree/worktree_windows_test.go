@@ -40,7 +40,7 @@ func TestCreateChecksOutLongRepositoryPathOnWindows(t *testing.T) {
 	git("add", "--", relativePath)
 	git("commit", "-m", "add long path")
 
-	result, err := Create(context.Background(), repo, testenv.TempDir(t))
+	result, err := Create(context.Background(), opened(t, repo), testenv.TempDir(t))
 	if err != nil {
 		t.Fatalf("Create() with a long repository path: %v", err)
 	}

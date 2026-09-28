@@ -11,7 +11,19 @@ import (
 	"time"
 
 	"reasonix/internal/base/testenv"
+	"reasonix/internal/platform/gitcmd"
 )
+
+// opened is dir's identity as a session opening it resolves it; a directory
+// outside any work tree yields the unresolved Repo a session would hold.
+func opened(t *testing.T, dir string) gitcmd.Repo {
+	t.Helper()
+	repo, err := gitcmd.Open(context.Background(), dir)
+	if err != nil {
+		return gitcmd.Repo{Dir: dir}
+	}
+	return repo
+}
 
 func requireGit(t *testing.T) {
 	t.Helper()
@@ -49,7 +61,7 @@ func TestCreateManagedWorktreeFromRepositoryFolder(t *testing.T) {
 	requireGit(t)
 	repo := initRepo(t)
 	managed := testenv.TempDir(t)
-	result, err := Create(context.Background(), repo, managed)
+	result, err := Create(context.Background(), opened(t, repo), managed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +109,7 @@ func TestCreatePreservesSelectedRepositorySubdirectory(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git commit: %v %s", err, out)
 	}
-	result, err := Create(context.Background(), subdir, testenv.TempDir(t))
+	result, err := Create(context.Background(), opened(t, subdir), testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,15 +126,15 @@ func TestInspectRejectsUncommittedSelectedSubdirectoryWithoutGitMutation(t *test
 	if err := os.MkdirAll(untracked, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	before, _, err := runGit(context.Background(), repo, "for-each-ref", "--format=%(refname)", "refs/heads/reasonix/delivery-")
+	before, _, err := runGit(context.Background(), opened(t, repo), "for-each-ref", "--format=%(refname)", "refs/heads/reasonix/delivery-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := Inspect(context.Background(), untracked)
+	got := Inspect(context.Background(), opened(t, untracked))
 	if got.Available || !strings.Contains(got.Reason, "committed HEAD") {
 		t.Fatalf("availability = %+v", got)
 	}
-	after, _, err := runGit(context.Background(), repo, "for-each-ref", "--format=%(refname)", "refs/heads/reasonix/delivery-")
+	after, _, err := runGit(context.Background(), opened(t, repo), "for-each-ref", "--format=%(refname)", "refs/heads/reasonix/delivery-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +152,7 @@ func TestCreateFromExistingLinkedWorktree(t *testing.T) {
 		t.Fatalf("git worktree add: %v %s", err, out)
 	}
 
-	result, err := Create(context.Background(), linked, testenv.TempDir(t))
+	result, err := Create(context.Background(), opened(t, linked), testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +183,7 @@ func TestCreateDoesNotCopyOrChangeDirtySource(t *testing.T) {
 	if err := os.WriteFile(dirtyPath, []byte("uncommitted\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := Create(context.Background(), repo, testenv.TempDir(t))
+	result, err := Create(context.Background(), opened(t, repo), testenv.TempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,14 +208,14 @@ func TestCreateDoesNotCopyOrChangeDirtySource(t *testing.T) {
 
 func TestInspectRejectsNonRepositoryAndUnbornRepository(t *testing.T) {
 	requireGit(t)
-	if got := Inspect(context.Background(), testenv.TempDir(t)); got.Available || !strings.Contains(got.Reason, "not inside a Git repository") {
+	if got := Inspect(context.Background(), opened(t, testenv.TempDir(t))); got.Available || !strings.Contains(got.Reason, "not inside a Git repository") {
 		t.Fatalf("non-repo availability = %+v", got)
 	}
 	unborn := testenv.TempDir(t)
 	if out, err := exec.Command("git", "-C", unborn, "init").CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)
 	}
-	if got := Inspect(context.Background(), unborn); got.Available || !strings.Contains(got.Reason, "initial commit") {
+	if got := Inspect(context.Background(), opened(t, unborn)); got.Available || !strings.Contains(got.Reason, "initial commit") {
 		t.Fatalf("unborn availability = %+v", got)
 	}
 }
@@ -214,7 +226,7 @@ func TestInspectWithoutGitExplainsSafeFallback(t *testing.T) {
 	} else {
 		t.Setenv("PATH", testenv.TempDir(t))
 	}
-	got := Inspect(context.Background(), testenv.TempDir(t))
+	got := Inspect(context.Background(), opened(t, testenv.TempDir(t)))
 	if got.Available || !strings.Contains(got.Reason, "Git is not installed") || !strings.Contains(got.Reason, "serialize writes") {
 		t.Fatalf("no-Git availability = %+v", got)
 	}
@@ -252,6 +264,9 @@ func TestGitWorktreeAddUsesExtendedTimeout(t *testing.T) {
 	if got := gitTimeout([]string{"status", "--porcelain=v1"}); got != gitProbeTimeout {
 		t.Fatalf("status timeout = %v, want %v", got, gitProbeTimeout)
 	}
+	if got := gitTimeout([]string{"reset", "--hard", "HEAD"}); got != gitWorktreeAddTimeout {
+		t.Fatalf("reset timeout = %v, want %v: the new worktree's checkout happens there", got, gitWorktreeAddTimeout)
+	}
 	got := gitTimeout([]string{"worktree", "add", "-b", "branch", "destination", "HEAD"})
 	if got != gitWorktreeAddTimeout {
 		t.Fatalf("worktree add timeout = %v, want %v", got, gitWorktreeAddTimeout)
@@ -281,7 +296,7 @@ func TestCreateSupportsPathsWithSpaces(t *testing.T) {
 	}
 	git("add", ".")
 	git("commit", "-m", "initial")
-	result, err := Create(context.Background(), repo, filepath.Join(parent, "managed worktrees"))
+	result, err := Create(context.Background(), opened(t, repo), filepath.Join(parent, "managed worktrees"))
 	if err != nil {
 		t.Fatal(err)
 	}

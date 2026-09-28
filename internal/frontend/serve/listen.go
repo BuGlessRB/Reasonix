@@ -15,6 +15,7 @@ import (
 // "ask" decisions surface as approval_request events answered via POST /approve.
 func (s *Server) Run(addr string) error {
 	s.ctl().EnableInteractiveApproval()
+	s.auth.hosts.ListenOn(addr)
 	return http.ListenAndServe(addr, s.Handler())
 }
 
@@ -34,6 +35,7 @@ func (s *Server) RunGraceful(ctx context.Context, addr string) error {
 // listen first, record ln.Addr(), then hand the listener here.
 func (s *Server) RunGracefulListener(ctx context.Context, ln net.Listener) error {
 	s.ctl().EnableInteractiveApproval()
+	s.auth.hosts.ListenOn(ln.Addr().String())
 	return runGracefulListener(ctx, ln, s.Handler())
 }
 

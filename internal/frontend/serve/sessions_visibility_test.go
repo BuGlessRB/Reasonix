@@ -18,7 +18,7 @@ import (
 
 func listSessionNames(t *testing.T, ctrl *control.Controller) []string {
 	t.Helper()
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 	resp, err := http.Get(srv.URL + "/sessions")
 	if err != nil {
@@ -141,7 +141,7 @@ func TestSessionsExcludesSubagentTranscripts(t *testing.T) {
 	defer ctrl.Close()
 	ctrl.SetSessionPath(filepath.Join(dir, "20260813-235122-deepseek-v4-flash.jsonl"))
 
-	srv := httptest.NewServer(New(ctrl, NewBroadcaster(), config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, NewBroadcaster(), config.ServeConfig{})))
 	defer srv.Close()
 	resp, err := http.Get(srv.URL + "/sessions")
 	if err != nil {

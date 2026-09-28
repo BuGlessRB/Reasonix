@@ -30,7 +30,7 @@ func TestDropAnswersWithAReferenceToTheFileItself(t *testing.T) {
 	}
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	resp := postJSON(t, srv.URL+"/drop", map[string][]string{"paths": {file}})
@@ -63,7 +63,7 @@ func TestDropReportsOnePathWithoutLosingTheRest(t *testing.T) {
 	}
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	resp := postJSON(t, srv.URL+"/drop", map[string][]string{
@@ -91,7 +91,7 @@ func TestAttachmentStoresNamedBytesThatAreNotAnImage(t *testing.T) {
 	dir := testenv.TempDir(t)
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	resp := postJSON(t, srv.URL+"/attachments", map[string]string{
@@ -126,7 +126,7 @@ func TestDropSaysNotAnImageInsteadOfSayingNothing(t *testing.T) {
 	}
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: dir})
-	srv := httptest.NewServer(New(ctrl, bc, config.ServeConfig{}).Handler())
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
 	defer srv.Close()
 
 	resp := postJSON(t, srv.URL+"/drop", map[string][]string{"paths": {doc}})
