@@ -36,7 +36,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
 
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import type { PluginExport, PluginInstallRequest, PluginPackage, PluginPlan } from "./plugin";
-import type { MarketDetail, MarketList, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission } from "./market";
+import type { MarketDetail, MarketList, MarketOwnRequest, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission } from "./market";
 import type { Appearance, ThemeImport, ThemePack } from "./look";
 import type { BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
@@ -177,6 +177,12 @@ export interface AgentPort {
   // Publishing spends the account session; both refuse when signed out.
   publishMarket(sub: MarketSubmission): Promise<MarketPublished>;
   myMarket(): Promise<MarketPackage[]>;
+  // The account's own package in any state, installed against the digest its
+  // own preview showed; the kernel reads the package from the registry as the
+  // account, never from what the window sends.
+  planOwnMarket(req: MarketOwnRequest): Promise<MarketPlan>;
+  installOwnMarket(req: MarketOwnRequest): Promise<MarketPlan>;
+  submitMarket(slug: string): Promise<MarketPackage>;
   // Text the window assembled, put on disk. Returns where it went, or null when
   // the host handled it without a path to report (a browser download).
   saveText(name: string, content: string): Promise<string | null>;

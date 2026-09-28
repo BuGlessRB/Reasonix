@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import type { AccountState, AgentPort, MarketDetail, MarketKind, MarketPackage, MarketPlan } from "../port/port";
-import { Candidate, ORDER, Outcome } from "./AddPlugin";
+import { Outcome } from "./AddPlugin";
 import { Group } from "./Group";
+import { PlanConfirm } from "./MarketConfirm";
 import { MyPackages, PublishForm } from "./MarketPublish";
 import { arrowTabs } from "./tablist";
 
@@ -11,15 +12,6 @@ const KINDS: [MarketKind | "", string][] = [["", "全部"], ["skill", "技能"],
 type Sort = "trending" | "installs" | "new";
 const SORTS: [Sort, string][] = [["trending", "近期热门"], ["installs", "安装最多"], ["new", "最新"]];
 const KIND_NAME: Record<string, string> = { skill: "技能", plugin: "插件", mcp: "MCP 服务", theme: "主题" };
-
-// Titled for what a person has to do with each group, not for what the kernel
-// fears: a high grade here is as often "many skills from one address" as it is
-// "a process starts".
-const GROUP_TITLE: Record<string, string> = {
-  high: "以下项目需要逐项看过再安装",
-  medium: "以下项目会改变可用能力",
-  low: "以下项目仅添加文件",
-};
 
 interface Props {
   port: AgentPort;
@@ -145,7 +137,6 @@ function Entry({ port, slug, onBack, onInstalled }: { port: AgentPort; slug: str
   const [d, setD] = useState<MarketDetail | null>(null);
   const [plan, setPlan] = useState<MarketPlan | null>(null);
   const [done, setDone] = useState<MarketPlan | null>(null);
-  const [seen, setSeen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -159,7 +150,6 @@ function Entry({ port, slug, onBack, onInstalled }: { port: AgentPort; slug: str
     setError("");
     try {
       setPlan(await port.planMarket({ slug, replace: update }));
-      setSeen(false);
     } catch (e) {
       setError(reason(e));
     } finally {
@@ -197,64 +187,7 @@ function Entry({ port, slug, onBack, onInstalled }: { port: AgentPort; slug: str
   }
 
   if (plan) {
-    const actions = plan.actions ?? [];
-    const skills = actions.filter((a) => a.kind === "skill");
-    const many = skills.length > 1;
-    const groups = ORDER.map((level) => ({ level, actions: actions.filter((a) => (a.riskLevel || "low") === level) })).filter(
-      (g) => g.actions.length > 0,
-    );
-    return (
-      <div className="mkt addpkg" data-stage="confirm">
-        <div className="find">
-          <span className="t">{t("{name} {version} 将安装以下内容", { name: slug, version: plan.version })}</span>
-          <span className="why">{t("已按内容摘要核对：与审核时固定的版本一致。")}</span>
-          {/* An MCP entry pins how a server is started, not what it fetches
-              or answers with once running; saying otherwise would be believed. */}
-          {actions.some((a) => a.kind === "mcp") && (
-            <span className="why">{t("MCP 服务只固定了启动方式与连接地址；它启动后自行下载或远端提供的代码不在固定范围内。")}</span>
-          )}
-        </div>
-        {/* One address expanding into several skills is the install that must
-            be read as a list before anything lands, so the button waits for it. */}
-        {many && (
-          <div className="find mkt-many" data-lvl="warn">
-            <span className="t">{t("这个来源包含 {n} 个技能，会全部安装", { n: skills.length })}</span>
-            <ul className="mkt-names">
-              {skills.map((a, i) => (
-                <li key={`${a.name}:${i}`}>{a.name}</li>
-              ))}
-            </ul>
-            <label className="mkt-seen">
-              <input type="checkbox" data-action="market.confirm-many" checked={seen} onChange={(e) => setSeen(e.target.checked)} />
-              {t("我已看过这 {n} 个技能，全部安装", { n: skills.length })}
-            </label>
-          </div>
-        )}
-        {groups.map((g) => (
-          <section className="rgrp" key={g.level} data-lvl={g.level}>
-            <h3>{t(GROUP_TITLE[g.level] ?? g.level)}</h3>
-            {g.actions.map((a, i) => (
-              <Candidate a={a} key={`${a.kind}:${a.name}:${i}`} />
-            ))}
-          </section>
-        ))}
-        {plan.warnings?.map((w) => (
-          <div className="why" key={w}>
-            {w}
-          </div>
-        ))}
-        <div className="acts">
-          <span className="note">{t("安装到「我的」，所有项目均可使用")}</span>
-          <button className="act" data-action="market.cancel" onClick={() => setPlan(null)}>
-            {t("返回")}
-          </button>
-          <button className="act" data-action="market.install" data-primary disabled={busy || (many && !seen)} onClick={() => void install()}>
-            {t(busy ? "安装中…" : "安装")}
-          </button>
-        </div>
-        {error && <div className="why">{error}</div>}
-      </div>
-    );
+    return <PlanConfirm key={plan.planId} slug={slug} plan={plan} busy={busy} error={error} onCancel={() => setPlan(null)} onInstall={() => void install()} />;
   }
 
   if (!d) {
@@ -364,7 +297,7 @@ export function MarketGroup({ port, onInstalled, account, onSignIn }: Props & { 
         )
       )}
       {at === "browse" && <Market port={port} onInstalled={onInstalled} />}
-      {at === "mine" && <MyPackages port={port} />}
+      {at === "mine" && <MyPackages port={port} onInstalled={onInstalled} />}
       {at === "publish" && handle && <PublishForm port={port} handle={handle} onMine={() => setView("mine")} />}
     </Group>
   );

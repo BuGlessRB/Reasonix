@@ -139,7 +139,11 @@ func (s *Server) marketRun(w http.ResponseWriter, r *http.Request, apply bool) {
 		refuseMarket(w, err)
 		return
 	}
-	out.Fields["slug"], _ = json.Marshal(req.Slug)
+	s.writeMarketOutcome(w, r, out, req.Slug, apply)
+}
+
+func (s *Server) writeMarketOutcome(w http.ResponseWriter, r *http.Request, out market.Outcome, slug string, apply bool) {
+	out.Fields["slug"], _ = json.Marshal(slug)
 	out.Fields["version"], _ = json.Marshal(out.Version.Version)
 	if apply && jsonTrue(out.Fields["applied"]) {
 		if err := s.reloadExtensions(r.Context()); err != nil {

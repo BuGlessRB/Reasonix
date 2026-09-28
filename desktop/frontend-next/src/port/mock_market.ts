@@ -1,4 +1,4 @@
-import type { MarketDetail, MarketList, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission } from "./market";
+import type { MarketDetail, MarketList, MarketOwnRequest, MarketPackage, MarketPlan, MarketPublished, MarketQuery, MarketRequest, MarketSubmission } from "./market";
 import { MockLook } from "./mock_look";
 
 const DIGEST = "sha256:5f0c1e9a7b3d2c4e6f8a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e";
@@ -52,6 +52,7 @@ const MINE: MarketPackage[] = [
   { ...PACKAGES[0], handle: "demo", slug: "demo/ship-notes", name: "ship-notes", summary: "发布说明整理技能。", status: "pending", installCount: 0, latestVersion: "0.1.0" },
   { ...PACKAGES[4], handle: "demo", slug: "demo/paper-light", name: "paper-light", summary: "纸面质感的浅色主题。", status: "active", installCount: 37, latestVersion: "1.0.1" },
   { ...PACKAGES[1], handle: "demo", slug: "demo/lint-kit", name: "lint-kit", summary: "代码检查插件。", status: "rejected", installCount: 0, latestVersion: "0.2.0" },
+  { ...PACKAGES[4], handle: "demo", slug: "demo/night-desk", name: "night-desk", summary: "只给自己用的深色主题。", status: "private", installCount: 0, latestVersion: "0.1.0" },
 ].map(({ source: _source, pinned: _pinned, ...rest }) => ({ ...rest, installed: undefined }));
 
 export class MockMarket extends MockLook {
@@ -105,7 +106,7 @@ export class MockMarket extends MockLook {
     const pkg: MarketPackage = {
       kind: sub.kind, handle: "demo", name: sub.name, slug: `demo/${sub.name}`, summary: sub.summary ?? "", description: sub.description ?? "",
       homepage: "", repoUrl: sub.repoUrl ?? "", tags: sub.tags ?? [], latestVersion: sub.version || "0.1.0", installCount: 0, starCount: 0,
-      verified: false, status: "pending", updatedAt: new Date().toISOString(),
+      verified: false, status: sub.visibility === "private" ? "private" : "pending", updatedAt: new Date().toISOString(),
     };
     this.mine.unshift(pkg);
     return { package: pkg, created: true, version: pkg.latestVersion };
@@ -113,6 +114,30 @@ export class MockMarket extends MockLook {
 
   async myMarket(): Promise<MarketPackage[]> {
     return [...this.mine];
+  }
+
+  async planOwnMarket(req: MarketOwnRequest): Promise<MarketPlan> {
+    const p = this.mine.find((x) => x.slug === req.slug);
+    if (!p) throw new Error("market.not_yours");
+    return {
+      ok: true, status: "planned", applied: false, slug: p.slug, version: p.latestVersion, contentDigest: DIGEST, unreviewed: true,
+      planId: "low:sha256:own",
+      actions: [{ kind: p.kind === "theme" ? "plugin" : p.kind, action: "install_plugin_package", status: "planned", riskLevel: "low", name: p.name }],
+    };
+  }
+
+  async installOwnMarket(req: MarketOwnRequest): Promise<MarketPlan> {
+    if (req.digest !== DIGEST) throw new Error("market.unpreviewed");
+    const plan = await this.planOwnMarket(req);
+    this.mine = this.mine.map((p) => (p.slug === req.slug ? { ...p, installed: { version: p.latestVersion, contentHash: DIGEST } } : p));
+    return { ...plan, status: "done", applied: true, actions: plan.actions?.map((a) => ({ ...a, status: "done" })) };
+  }
+
+  async submitMarket(slug: string): Promise<MarketPackage> {
+    const i = this.mine.findIndex((x) => x.slug === slug && x.status === "private");
+    if (i < 0) throw new Error("market.not_private");
+    this.mine[i] = { ...this.mine[i]!, status: "pending" };
+    return this.mine[i]!;
   }
 
   private view(p: (typeof PACKAGES)[number]): MarketPackage {

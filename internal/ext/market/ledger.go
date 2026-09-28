@@ -16,12 +16,14 @@ import (
 // Record is one market install: which approved version, pinned to which
 // digest, and what it put on disk.
 type Record struct {
-	Slug        string      `json:"slug"`
-	Kind        string      `json:"kind"`
-	Version     string      `json:"version"`
-	ContentHash string      `json:"contentHash"`
-	Items       []Installed `json:"items"`
-	At          string      `json:"at"`
+	Slug        string `json:"slug"`
+	Kind        string `json:"kind"`
+	Version     string `json:"version"`
+	ContentHash string `json:"contentHash"`
+	// Unreviewed: the publisher's own install, pinned to their preview's digest.
+	Unreviewed bool        `json:"unreviewed,omitempty"`
+	Items      []Installed `json:"items"`
+	At         string      `json:"at"`
 }
 
 // Installed is one thing an install left behind. Target is a path for a skill

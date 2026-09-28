@@ -29,7 +29,7 @@ var (
 	// ErrBadResponse: the registry answered with something other than the
 	// documented JSON — a non-2xx status, a redirect, or an oversized body.
 	ErrBadResponse = errors.New("market: registry answered unexpectedly")
-	// ErrNotFound: no approved package has that slug.
+	// ErrNotFound: no package the caller may read has that slug.
 	ErrNotFound = errors.New("market: no such package")
 	// ErrBadSlug: the slug is not <handle>/<name>.
 	ErrBadSlug = errors.New("market: not a package slug")

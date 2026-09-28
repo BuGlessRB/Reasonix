@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import type { AgentPort, MarketKind, MarketPackage, MarketPublished } from "../port/port";
+import { OwnInstall } from "./MarketOwn";
 
 const KINDS: [MarketKind, string][] = [["skill", "技能"], ["plugin", "插件"], ["mcp", "MCP 服务"], ["theme", "主题"]];
 
@@ -20,6 +21,7 @@ const STATUS: Record<string, [string, string | undefined]> = {
   active: ["已公开", "ok"],
   rejected: ["未通过", "err"],
   hidden: ["已隐藏", undefined],
+  private: ["私有", undefined],
 };
 
 interface Draft {
@@ -31,9 +33,10 @@ interface Draft {
   repoUrl: string;
   version: string;
   tags: string;
+  private: boolean;
 }
 
-const EMPTY: Draft = { kind: "skill", name: "", source: "", summary: "", description: "", repoUrl: "", version: "", tags: "" };
+const EMPTY: Draft = { kind: "skill", name: "", source: "", summary: "", description: "", repoUrl: "", version: "", tags: "", private: false };
 
 // The form only collects; which sources are publishable and what the registry
 // accepts are the kernel's and the registry's answers, shown as they come back.
@@ -52,6 +55,7 @@ export function PublishForm({ port, handle, onMine }: { port: AgentPort; handle:
         await port.publishMarket({
           kind: d.kind, name: d.name, source: d.source, summary: d.summary, description: d.description,
           repoUrl: d.repoUrl, version: d.version, tags: d.tags.split(/[,，]/).map((x) => x.trim()).filter(Boolean),
+          visibility: d.private ? "private" : "public",
         }),
       );
     } catch (e) {
@@ -65,8 +69,17 @@ export function PublishForm({ port, handle, onMine }: { port: AgentPort; handle:
     return (
       <div className="mkt mkt-pub" data-stage="done">
         <div className="find" data-lvl="ok">
-          <span className="t">{t("已提交 {slug} {version}", { slug: done.package.slug, version: done.version })}</span>
-          <span className="why">{t("审核通过后会在社区市场公开；在「我的发布」里可以看到审核进度。")}</span>
+          {done.package.status === "private" ? (
+            <>
+              <span className="t">{t("已保存 {slug} {version}，仅自己可见", { slug: done.package.slug, version: done.version })}</span>
+              <span className="why">{t("它不会进入审核，也不会在社区市场出现；在「我的发布」里可以安装它，或随时提交审核。")}</span>
+            </>
+          ) : (
+            <>
+              <span className="t">{t("已提交 {slug} {version}", { slug: done.package.slug, version: done.version })}</span>
+              <span className="why">{t("审核通过后会在社区市场公开；在「我的发布」里可以看到审核进度。")}</span>
+            </>
+          )}
         </div>
         <div className="acts">
           <button className="act" data-action="market.publish-again" onClick={() => { setD(EMPTY); setDone(null); }}>
@@ -125,6 +138,10 @@ export function PublishForm({ port, handle, onMine }: { port: AgentPort; handle:
           <input value={d.tags} data-action="market.draft" data-value="tags" placeholder={t("用逗号分隔，最多 8 个")} onChange={set("tags")} />
         </label>
       </div>
+      <label className="mkt-seen">
+        <input type="checkbox" data-action="market.draft" data-value="visibility" checked={d.private} onChange={(e) => setD({ ...d, private: e.target.checked })} />
+        {t("仅自己可见：不提交审核，社区市场里只有你的账号能看到并安装")}
+      </label>
       {error && (
         <div className="find" data-lvl="err">
           <span className="t">{t("没有提交成功")}</span>
@@ -132,24 +149,62 @@ export function PublishForm({ port, handle, onMine }: { port: AgentPort; handle:
         </div>
       )}
       <div className="acts">
-        <span className="note">{t("提交后进入审核队列；审核员会固定审核时的内容，之后只安装那一份。")}</span>
+        <span className="note">
+          {d.private
+            ? t("保存后只有你能看到；要公开时在「我的发布」里提交审核。")
+            : t("提交后进入审核队列；审核员会固定审核时的内容，之后只安装那一份。")}
+        </span>
         <button className="act" data-action="market.publish" data-primary disabled={!ready} onClick={() => void submit()}>
-          {t(busy ? "提交中…" : "提交审核")}
+          {t(busy ? "提交中…" : d.private ? "保存为私有" : "提交审核")}
         </button>
       </div>
     </div>
   );
 }
 
-export function MyPackages({ port }: { port: AgentPort }) {
+// Every row is the account's own package, so each can be installed here in
+// whatever state review has it; a private one can also be sent to review.
+export function MyPackages({ port, onInstalled }: { port: AgentPort; onInstalled: () => void }) {
   const [rows, setRows] = useState<MarketPackage[] | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => {
+  const [open, setOpen] = useState<MarketPackage | null>(null);
+  const [sending, setSending] = useState("");
+  const [sendError, setSendError] = useState<[string, string] | null>(null);
+  const load = () =>
     port.myMarket().then(setRows).catch((e) => {
       setError(reason(e));
       setRows([]);
     });
-  }, [port]);
+  useEffect(() => {
+    void load();
+  }, [port]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submit = async (slug: string) => {
+    setSending(slug);
+    setSendError(null);
+    try {
+      const pkg = await port.submitMarket(slug);
+      setRows((prev) => prev?.map((p) => (p.slug === slug ? { ...p, ...pkg, installed: p.installed } : p)) ?? null);
+    } catch (e) {
+      setSendError([slug, reason(e)]);
+    } finally {
+      setSending("");
+    }
+  };
+
+  if (open) {
+    return (
+      <OwnInstall
+        port={port}
+        pkg={open}
+        onBack={() => setOpen(null)}
+        onInstalled={() => {
+          onInstalled();
+          void load();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="mkt">
@@ -164,18 +219,37 @@ export function MyPackages({ port }: { port: AgentPort }) {
       <ul className="mkt-list">
         {rows?.map((p) => {
           const [label, tone] = STATUS[p.status] ?? [p.status, undefined];
+          const current = !!p.installed && p.installed.version === p.latestVersion;
+          // A copied skill is never overwritten in place; its update starts from removal.
+          const stuck = !!p.installed && !current && p.kind === "skill";
           return (
             <li key={p.slug} className="mkt-row" data-static="">
               <span className="mkt-hd">
                 <span className="nm">{p.name}</span>
                 <span className="mkt-kind">{t(KINDS.find(([k]) => k === p.kind)?.[1] ?? p.kind)}</span>
                 <span className="mkt-badge" data-tone={tone}>{t(label)}</span>
+                {p.installed && <span className="mkt-badge">{current ? t("已安装") : t("可更新")}</span>}
               </span>
               {p.summary && <span className="mkt-sum">{p.summary}</span>}
               <span className="mkt-meta">
                 <span className="mkt-id">{`@${p.handle} · v${p.latestVersion}`}</span>
                 {p.status === "active" && <> · {t("{n} 次安装", { n: p.installCount })}</>}
+                {p.status === "private" && <> · {t("仅你可见，未提交审核")}</>}
               </span>
+              <span className="acts">
+                {stuck && <span className="note">{t("技能不会被原地覆盖：先在「已安装」里移除旧版本，再回来安装")}</span>}
+                {p.status === "private" && (
+                  <button className="act" data-action="market.submit" data-value={p.slug} disabled={sending === p.slug} onClick={() => void submit(p.slug)}>
+                    {t(sending === p.slug ? "提交中…" : "提交审核")}
+                  </button>
+                )}
+                {!current && !stuck && (
+                  <button className="act" data-action="market.own-inspect" data-value={p.slug} onClick={() => setOpen(p)}>
+                    {t(p.installed ? "查看更新内容" : "安装")}
+                  </button>
+                )}
+              </span>
+              {sendError?.[0] === p.slug && <span className="why">{sendError[1]}</span>}
             </li>
           );
         })}

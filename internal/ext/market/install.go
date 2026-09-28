@@ -42,6 +42,8 @@ type Request struct {
 // Service joins the registry to install_source.
 type Service struct {
 	Registry Registry
+	// Owner reads the signed-in account's own packages, for PlanOwn and InstallOwn.
+	Owner Owner
 	// Home is the Reasonix home the ledger lives under.
 	Home string
 	// NewInstaller returns install_source. It must require an approved plan so
@@ -54,6 +56,8 @@ type Service struct {
 type Outcome struct {
 	Fields  map[string]json.RawMessage
 	Version Version
+	// Unreviewed: pinned to the publisher's own preview, not a reviewer's digest.
+	Unreviewed bool
 }
 
 // Plan previews the approved version of slug without writing anything.
@@ -78,25 +82,34 @@ func (s *Service) run(ctx context.Context, req Request, apply bool) (Outcome, er
 	if req.Version != "" && req.Version != v.Version {
 		return Outcome{Version: v}, fmt.Errorf("%w: shown %s, approved now %s", ErrVersionChanged, req.Version, v.Version)
 	}
+	return s.execute(ctx, detail.Package, v, v.ContentHash, false, req, apply)
+}
+
+// execute plans or applies v of pkg through install_source, refusing material
+// whose digest is not expect. Every caller has settled which version and which
+// digest the person may install before reaching here.
+func (s *Service) execute(ctx context.Context, pkg Package, v Version, expect string, own bool, req Request, apply bool) (Outcome, error) {
 	body := map[string]any{
-		"source":       v.Source,
-		"kind":         Installer(detail.Package.Kind),
-		"scope":        "global",
-		"mode":         "copy",
-		"replace":      req.Replace,
-		"apply":        apply,
-		"expectDigest": v.ContentHash,
+		"source":  v.Source,
+		"kind":    Installer(pkg.Kind),
+		"scope":   "global",
+		"mode":    "copy",
+		"replace": req.Replace,
+		"apply":   apply,
+	}
+	if expect != "" {
+		body["expectDigest"] = expect
 	}
 	if apply {
 		body["planId"] = strings.TrimSpace(req.PlanID)
 	}
 	// A planId binds the source and actions, not the listing kind, so a theme's
 	// apply re-plans and checks before anything is written.
-	if detail.Package.Kind == "theme" {
+	if pkg.Kind == "theme" {
 		preview := maps.Clone(body)
 		preview["apply"] = false
 		delete(preview, "planId")
-		if err := s.themeCheck(ctx, preview, detail.Package.Slug); err != nil {
+		if err := s.themeCheck(ctx, preview, pkg.Slug); err != nil {
 			return Outcome{Version: v}, err
 		}
 	}
@@ -111,14 +124,14 @@ func (s *Service) run(ctx context.Context, req Request, apply bool) (Outcome, er
 	}
 	if apply {
 		if items := doneItems(fields["actions"]); len(items) > 0 {
-			rec := Record{Slug: detail.Package.Slug, Kind: detail.Package.Kind, Version: v.Version,
-				ContentHash: v.ContentHash, Items: items, At: s.now().UTC().Format(time.RFC3339)}
+			rec := Record{Slug: pkg.Slug, Kind: pkg.Kind, Version: v.Version, ContentHash: expect,
+				Unreviewed: own, Items: items, At: s.now().UTC().Format(time.RFC3339)}
 			if err := saveRecord(s.Home, rec); err != nil {
 				fields["ledgerError"], _ = json.Marshal(err.Error())
 			}
 		}
 	}
-	return Outcome{Fields: fields, Version: v}, nil
+	return Outcome{Fields: fields, Version: v, Unreviewed: own}, nil
 }
 
 func (s *Service) themeCheck(ctx context.Context, body map[string]any, slug string) error {

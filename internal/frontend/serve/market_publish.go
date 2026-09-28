@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 
+	"reasonix/internal/contract/config"
 	"reasonix/internal/ext/market"
 	"reasonix/internal/platform/account"
 )
@@ -17,6 +18,9 @@ var marketPublisher = func(hc *http.Client) market.Publisher { return market.New
 func (s *Server) registerMarketPublishRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /market/publish", s.marketPublish)
 	mux.HandleFunc("GET /market/mine", s.marketMine)
+	mux.HandleFunc("POST /market/mine/plan", s.marketOwnPlan)
+	mux.HandleFunc("POST /market/mine/install", s.marketOwnInstall)
+	mux.HandleFunc("POST /market/mine/{handle}/{name}/submit", s.marketOwnSubmit)
 }
 
 // marketSession is the gate both routes share. The token is the account's
@@ -61,7 +65,12 @@ func (s *Server) marketMine(w http.ResponseWriter, r *http.Request) {
 		refusePublish(w, err)
 		return
 	}
-	writeJSON(w, map[string]any{"packages": rows})
+	held := market.InstalledRecords(config.ReasonixHomeDir())
+	out := make([]marketEntry, 0, len(rows))
+	for _, p := range rows {
+		out = append(out, marketEntry{Package: p, Installed: installedView(held, p.Slug)})
+	}
+	writeJSON(w, map[string]any{"packages": out})
 }
 
 // refusePublish gives each reason a submission did not land its own code; the

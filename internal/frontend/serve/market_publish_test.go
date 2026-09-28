@@ -14,9 +14,11 @@ import (
 )
 
 type fakePublisher struct {
-	token string
-	sub   market.Submission
-	err   error
+	token     string
+	sub       market.Submission
+	err       error
+	owned     *market.OwnDetail
+	submitted string
 }
 
 func (f *fakePublisher) Publish(_ context.Context, token string, s market.Submission) (market.Published, error) {
@@ -30,6 +32,22 @@ func (f *fakePublisher) Publish(_ context.Context, token string, s market.Submis
 func (f *fakePublisher) Mine(_ context.Context, token string) ([]market.Package, error) {
 	f.token = token
 	return []market.Package{{Slug: "me/dusk", Kind: "theme", Status: "pending"}}, f.err
+}
+
+func (f *fakePublisher) Owned(_ context.Context, token, slug string) (market.OwnDetail, error) {
+	f.token = token
+	if f.owned == nil {
+		return market.OwnDetail{}, market.ErrNotFound
+	}
+	return *f.owned, f.err
+}
+
+func (f *fakePublisher) Submit(_ context.Context, token, slug string) (market.Package, error) {
+	f.token, f.submitted = token, slug
+	if f.err != nil {
+		return market.Package{}, f.err
+	}
+	return market.Package{Slug: slug, Status: "pending"}, nil
 }
 
 func publishServer(t *testing.T, granted bool, token string, pub *fakePublisher) string {
