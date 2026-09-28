@@ -132,15 +132,15 @@ func runTUI(args []string, version string) int {
 // sessions match is not an error here: the UI offers those matches in its
 // picker, unless --copy is set, since the picker resumes in place.
 func tuiResolveResume(workspaceRoot, resume string, cont, copySession bool) (string, *ambiguousSessionQueryError, error) {
-	resumePath, err := tuiResumePath(workspaceRoot, resume, cont)
+	resumePath, startedFresh, err := tuiResumePath(workspaceRoot, resume, cont)
 	var ambiguous *ambiguousSessionQueryError
 	if errors.As(err, &ambiguous) && !copySession {
 		return "", ambiguous, nil
 	}
-	// --copy duplicates a resolved session. A --continue that found nothing
-	// starts fresh (tuiResumePath), so there is nothing to copy and --copy is
-	// skipped; --copy with no --resume/--continue stays a usage error.
-	if err == nil && copySession && (resumePath != "" || !cont) {
+	// --copy duplicates a resolved session. Only a --continue that found nothing
+	// starts fresh (startedFresh), where --copy is skipped; anything else with no
+	// session to duplicate — the picker, or --copy alone — stays a usage error.
+	if err == nil && copySession && !startedFresh {
 		resumePath, err = tuiCopyResume(resumePath)
 	}
 	return resumePath, nil, err
@@ -157,13 +157,14 @@ func ambiguousSessionPaths(e *ambiguousSessionQueryError) []string {
 	return paths
 }
 
-func tuiResumePath(workspaceRoot, resume string, cont bool) (string, error) {
+func tuiResumePath(workspaceRoot, resume string, cont bool) (string, bool, error) {
 	sessionDir := resolveCLISessionDirFor(workspaceRoot)
 	if q := strings.TrimSpace(resume); q != "" {
-		return resolveSessionQuery(sessionDir, q)
+		path, err := resolveSessionQuery(sessionDir, q)
+		return path, false, err
 	}
 	if !cont {
-		return "", nil
+		return "", false, nil
 	}
 	reclaimCLIRecoveryBranches(sessionDir)
 	session, ok := mostRecentSession(sessionDir)
@@ -171,9 +172,9 @@ func tuiResumePath(workspaceRoot, resume string, cont bool) (string, error) {
 		// --continue that found nothing starts a fresh session instead of failing,
 		// so the UI opens with no resumed history.
 		fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResumeStartingNew)
-		return "", nil
+		return "", true, nil
 	}
-	return session.Path, nil
+	return session.Path, false, nil
 }
 
 // routeLogsAwayFromTerminal sends the kernel's logging to a file for as long

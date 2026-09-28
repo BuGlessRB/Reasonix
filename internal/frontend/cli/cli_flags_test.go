@@ -292,3 +292,18 @@ func TestTUICopyWithoutResumeIsUsageError(t *testing.T) {
 		t.Fatalf("path=%q ambiguous=%v err=%v, want the --copy usage error", path, ambiguous, gotErr)
 	}
 }
+
+// A bare -r opens the picker, and the picker resumes its choice in place, so
+// --copy cannot duplicate it: --continue alongside the picker must not be read
+// as the fresh-start fallback that skips --copy.
+func TestTUIPickerContinueCopyWithCopyIsRefused(t *testing.T) {
+	isolateCLIConfigHome(t)
+	ws, err := filepath.EvalSymlinks(testenv.TempDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, ambiguous, gotErr := tuiResolveResume(ws, resumePickerSentinel, true, true)
+	if gotErr == nil || !strings.Contains(gotErr.Error(), "--copy requires --resume or --continue") {
+		t.Fatalf("path=%q ambiguous=%v err=%v, want the --copy usage error", path, ambiguous, gotErr)
+	}
+}

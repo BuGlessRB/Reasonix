@@ -321,11 +321,11 @@ func registerContinueFlag(fs *pflag.FlagSet) *bool {
 // applyRunCopy applies --copy to a resolved resume path: it duplicates the
 // session and prints where the copy lives, returning the path to continue in
 // and a non-zero exit code to stop the run. A --continue that found no session
-// starts fresh, so there is nothing to duplicate and --copy is skipped; --copy
-// with neither --resume nor --continue is a usage error.
-func applyRunCopy(resumePath string, cont, copySession bool, format runOutputFormat, printOnly bool) (string, int) {
+// starts fresh (startedFresh), so there is nothing to duplicate and --copy is
+// skipped; --copy with no session to duplicate is a usage error.
+func applyRunCopy(resumePath string, startedFresh, copySession bool, format runOutputFormat, printOnly bool) (string, int) {
 	if !copySession || resumePath == "" {
-		if copySession && !cont {
+		if copySession && !startedFresh {
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--copy requires --resume or --continue")
 			return "", 2
 		}
@@ -435,7 +435,7 @@ func runAgent(args []string, version string) int {
 	// handled before any heavy assembly. --resume takes precedence over
 	// --continue, matching the Resume call below. Accept file paths, branch
 	// IDs, preview text, and opaque machine session IDs (#7429).
-	resumePath := strings.TrimSpace(*f.resume)
+	resumePath, startedFresh := strings.TrimSpace(*f.resume), false
 	if resumePath != "" {
 		resolved, err := resolveSessionQuery(resolveCLISessionDirFor(workspaceRoot), resumePath)
 		if err != nil {
@@ -447,14 +447,14 @@ func runAgent(args []string, version string) int {
 	if resumePath == "" && *f.cont {
 		sessionDir := resolveCLISessionDirFor(workspaceRoot)
 		reclaimCLIRecoveryBranches(sessionDir)
-		session, ok := mostRecentSession(sessionDir)
-		if !ok {
+		if session, ok := mostRecentSession(sessionDir); !ok {
 			fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResumeStartingNew)
+			startedFresh = true
 		} else {
 			resumePath = session.Path
 		}
 	}
-	resumePath, rc := applyRunCopy(resumePath, *f.cont, *f.copySession, format, *f.printOnly)
+	resumePath, rc := applyRunCopy(resumePath, startedFresh, *f.copySession, format, *f.printOnly)
 	if rc != 0 {
 		return rc
 	}
