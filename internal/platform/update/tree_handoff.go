@@ -22,6 +22,10 @@ const treeHandoffArg = "--reasonix-tree-handoff"
 // release says it is, found at the last moment before it would be installed.
 var ErrStagedTreeChanged = errors.New("update: a staged file changed before it was installed")
 
+// ErrTreeNotSwappable is an install the swap could not move a file out of:
+// one this user cannot write, or one on another volume than its backup.
+var ErrTreeNotSwappable = errors.New("update: the swap cannot move files out of this install")
+
 // TreeHandoff is everything the swap needs once the application is gone. It is
 // written beside the staged tree and read back by the copied helper, so the
 // helper trusts nothing it was not told in this one file.
@@ -95,6 +99,28 @@ func ApplyTree(h TreeHandoff) error {
 		done = append(done, m)
 	}
 	return nil
+}
+
+// CheckTreeSwap proves, before anything is fetched, the one move every swap
+// starts with: a new entry in installDir renamed into backupParent. Rename
+// never crosses a volume, and an all-users install grants its users no writes,
+// so either would only reach ApplyTree to be rolled back.
+func CheckTreeSwap(installDir, backupParent string) error {
+	if err := os.MkdirAll(backupParent, 0o755); err != nil {
+		return err
+	}
+	probe, err := os.CreateTemp(installDir, ".reasonix-swap-probe-*")
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrTreeNotSwappable, err)
+	}
+	name := probe.Name()
+	_ = probe.Close()
+	aside := filepath.Join(backupParent, filepath.Base(name))
+	if err := os.Rename(name, aside); err != nil {
+		_ = os.Remove(name)
+		return fmt.Errorf("%w: %w", ErrTreeNotSwappable, err)
+	}
+	return os.Remove(aside)
 }
 
 func checkStaged(path, want string) error {
