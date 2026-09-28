@@ -128,7 +128,7 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	globalDesktopLanguage := cfg.Desktop.Language
 	globalPricingCurrency := cfg.Desktop.Currency
 	globalBillingDisplayCurrency := cfg.Billing.DisplayCurrency
-	globalTelemetry, globalStatusline, globalProgressWatch := cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch
+	globalTelemetry, globalStatusline, globalProgressWatch, globalUICommandMode := cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch, cfg.UI.CommandMode
 
 	tomlSources = append(tomlSources, projectTOML)
 	projectMeta, err := mergeTOML(cfg, projectTOML)
@@ -163,10 +163,10 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.Desktop.Language = globalDesktopLanguage
 	cfg.Desktop.Currency = globalPricingCurrency
 	cfg.Billing.DisplayCurrency = globalBillingDisplayCurrency
-	// Telemetry is a user-global privacy choice and a statusline a command the TUI
-	// runs unprompted: project config sets neither, even with no global value.
-	// The progress watch decides when the user's own runs pause, so it is theirs.
-	cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch = globalTelemetry, globalStatusline, globalProgressWatch
+	// Telemetry, statusline and progress watch are user-global: a project sets
+	// none, even with no global value. The composer's key bindings are the user's
+	// too, so a cloned repo cannot rebind Esc through a project [ui] commandmode.
+	cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch, cfg.UI.CommandMode = globalTelemetry, globalStatusline, globalProgressWatch, globalUICommandMode
 	// TOML decoding replaces [[plugins]] wholesale, so cfg.Plugins now holds
 	// only the last file's. Re-merge by name across all sources (later wins) so a
 	// project reasonix.toml doesn't drop the global config's MCP servers.

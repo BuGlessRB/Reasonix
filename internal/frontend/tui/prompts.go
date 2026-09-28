@@ -24,9 +24,9 @@ type approvalChoice struct {
 
 // approvalChoices lists the answers the host said it will honour, in the
 // catalog's order, labelled from the catalog.
-func approvalChoices(a *eventwire.Approval) []approvalChoice {
+func (m *model) approvalChoices(a *eventwire.Approval) []approvalChoice {
 	if a.Kind == "plan" {
-		l := choiceLabels(i18n.M.PlanApprovalChoices, 3)
+		l := choiceLabels(m.viHint(i18n.M.PlanApprovalChoices, i18n.M.PlanApprovalChoicesVi), 3)
 		return []approvalChoice{
 			{label: l[0], key: "y", verdict: "start_execution"},
 			{label: l[1], key: "n", verdict: "revise_plan"},
@@ -87,7 +87,7 @@ func (m *model) approvalRow(it *Item) int {
 // answerApproval takes the keys an approval panel owns: the cursor, enter,
 // a row's number, and each row's shortcut. Esc answers as the last row does.
 func (m *model) answerApproval(it *Item, k string) (tea.Cmd, bool) {
-	choices := approvalChoices(it.Approval)
+	choices := m.approvalChoices(it.Approval)
 	row := m.approvalRow(it)
 	switch {
 	case k == "up":
@@ -99,6 +99,11 @@ func (m *model) answerApproval(it *Item, k string) (tea.Cmd, bool) {
 	case k == "enter":
 		return m.decideApproval(it, choices[row]), true
 	case k == "esc":
+		// vi mode ignores Esc on the approval card: a user hitting it out of
+		// habit must not reject the call. A row key or ^C decides instead.
+		if m.viActive() {
+			return nil, true
+		}
 		if it.Approval.Kind == "plan" {
 			return m.decideApproval(it, choices[1]), true
 		}
@@ -160,7 +165,7 @@ func (m *model) approvalPanel(it *Item) []string {
 		}
 	}
 	row := m.approvalRow(it)
-	for i, c := range approvalChoices(a) {
+	for i, c := range m.approvalChoices(a) {
 		text = append(text, rowLine(i == row, i+1, "", c.label, false))
 	}
 	text = append(text, termrender.Dim(i18n.M.ApprovalChoiceHint))

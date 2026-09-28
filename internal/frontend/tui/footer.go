@@ -29,7 +29,12 @@ func footerMetric(label, value string) string {
 // model on the right, a quiet rule, then the session's telemetry.
 func (m *model) statusBlock() []string {
 	width := max(m.width-1, 1)
-	first := layoutSides(footerIndent+m.modeTag()+" · "+m.stateText(), m.modelGroup(), width)
+	left := m.modeTag()
+	if vi := m.viModeTag(); vi != "" {
+		left += " · " + vi
+	}
+	left += " · " + m.stateText()
+	first := layoutSides(footerIndent+left, m.modelGroup(), width)
 	rows := strings.Split(first, "\n")
 	groups := m.telemetry()
 	if m.statusline != "" {
@@ -88,11 +93,11 @@ func (m *model) stateText() string {
 	case m.flashText() != "":
 		return termrender.Green(m.flashText()) + tag
 	case open != nil && open.Kind == ItemAsk:
-		return footerLabel(i18n.M.ChatStatusQuestion)
+		return footerLabel(m.viHint(i18n.M.ChatStatusQuestion, i18n.M.ChatStatusQuestionVi))
 	case open != nil && open.Approval.Kind == "plan":
-		return footerLabel(i18n.M.ChatStatusPlanApproval)
+		return footerLabel(m.viHint(i18n.M.ChatStatusPlanApproval, i18n.M.ChatStatusPlanApprovalVi))
 	case open != nil:
-		return footerLabel(i18n.M.ChatStatusToolApproval)
+		return footerLabel(m.viHint(i18n.M.ChatStatusToolApproval, i18n.M.ChatStatusToolApprovalVi))
 	case !m.quitArmedAt.IsZero() && time.Since(m.quitArmedAt) < quitArmWindow:
 		return i18n.M.CtrlCQuitHint
 	case m.shell:
