@@ -1082,6 +1082,21 @@ body { background: var(--page) !important; }
 .compose textarea { min-height: 48px; color: var(--text); font-size: var(--read); line-height: 1.65; }
 @media (pointer: coarse) { .compose textarea { font-size: max(16px, var(--read)); } }
 .compose textarea::placeholder { color: var(--ghost); }
+.compose .fmain { position: relative; timeline-scope: --draft; }
+:root .compose .fmain textarea[data-chips] { color: transparent; caret-color: var(--text); scroll-timeline: --draft block; }
+.chipmirror {
+  position: absolute; margin: 0; border: 0; overflow: hidden; pointer-events: none;
+  color: var(--text); white-space: pre-wrap; overflow-wrap: break-word; box-sizing: content-box;
+}
+.chipflow { animation: chipfollow linear both; animation-timeline: --draft; }
+@keyframes chipfollow { to { transform: translateY(calc(-1 * var(--travel, 0px))); } }
+.chipmirror .skillchip {
+  color: var(--net); background: var(--net-wash);
+  border-radius: 4px; box-shadow: 0 0 0 2px var(--net-wash);
+}
+.chipmirror .skillchip[data-kind="subagent"] {
+  color: var(--deleg); background: var(--deleg-wash); box-shadow: 0 0 0 2px var(--deleg-wash);
+}
 .compose .row {
   margin: 8px 0 -3px; padding: 3px 0 0; border-top: 0;
   border-radius: 0; background: transparent; gap: 6px;

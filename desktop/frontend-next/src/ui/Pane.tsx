@@ -5,7 +5,7 @@ import { t } from "../i18n";
 import { hasPendingDecision, posture, runState } from "./decisions";
 import { createPortal } from "react-dom";
 import { HttpError } from "../port/port";
-import type { AgentPort, Checkpoint, ContextBreakdown, JobEntry, McpEntry, SessionStatus, WorkspaceChanges } from "../port/port";
+import type { AgentPort, Checkpoint, ChipCall, ContextBreakdown, JobEntry, McpEntry, SessionStatus, WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import type { TrajectoryRead } from "../port/wire";
 import { currentStep, fromHistory, initialState, localId, quoteAmount, reduce, stepDone, stepLabel } from "../state/session";
@@ -410,7 +410,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // not enough on its own: the transcript would keep showing a turn that never
   // happened, and the composer was emptied on the way in.
   const submit = useCallback(
-    async (text: string) => {
+    async (text: string, chips?: ChipCall) => {
       const steering = running;
       const id = localId();
       dispatch({ kind: "__user", text, pending: steering, id } as never);
@@ -419,10 +419,10 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
         if (steering) {
           // The row is already on screen; the receipt is what gives it a name
           // to be taken back by while it waits at the tool boundary.
-          const queued = await port.steer(text);
-          if (queued?.itemId) dispatch({ kind: "__queued", id, itemId: queued.itemId, queued: "steer" } as never);
+          const queued = chips ? await port.queueFollowup(text, chips) : await port.steer(text);
+          if (queued?.itemId) dispatch({ kind: "__queued", id, itemId: queued.itemId, queued: chips ? "followup" : "steer" } as never);
         } else {
-          await submitOrQueue(text, id);
+          await submitOrQueue(text, id, chips);
         }
         return true;
       } catch (e) {
@@ -448,13 +448,13 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   // "the turn is done" on screen and the turn actually landing became an error
   // nobody could act on.
   const submitOrQueue = useCallback(
-    async (text: string, id: string) => {
+    async (text: string, id: string, chips?: ChipCall) => {
       try {
-        await port.submit(text);
+        await port.submit(text, chips);
         refreshStatus();
       } catch (e) {
         if (!(e instanceof HttpError) || e.reason?.code !== "busy.session_running") throw e;
-        const queued = await port.queueFollowup(text);
+        const queued = await port.queueFollowup(text, chips);
         if (queued?.itemId) dispatch({ kind: "__queued", id, itemId: queued.itemId, queued: "followup" } as never);
       }
     },

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
-import type { AgentPort, ModelEntry, SessionStatus, Attachment } from "../port/port";
+import type { AgentPort, ChipCall, ModelEntry, SessionStatus, Attachment } from "../port/port";
 import { Picker } from "./Menu";
 import { Policy } from "./Policy";
 import { modelMenu } from "./modelmenu";
 import { effortMenu, effortReading, effortsFor } from "./effort";
 import { CompletionMenu, useCompletion } from "./Completion";
+import { ChipMirror, useSkillChips } from "./ChipMirror";
 import { useIme } from "./ime";
 import { countLines, pasteIsLong, planTone, planVerb } from "./intake";
 import { useIntake } from "./useIntake";
@@ -29,7 +30,7 @@ interface Props {
   // Bumped when something outside asks for the cursor — answering a plan card
   // with "revise" is a request to say what to change, and the saying happens here.
   focus?: number;
-  onSubmit: (text: string) => Promise<boolean>;
+  onSubmit: (text: string, chips?: ChipCall) => Promise<boolean>;
   onChanged: () => void;
   onError: (e: unknown) => void;
   onSettings?: (section?: string) => void;
@@ -169,11 +170,15 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
     queueMicrotask(() => box.current?.focus());
   }, [quote?.n]);
 
-  const menu = useCompletion(port, text, caret, (next, at) => {
+  const moveTo = useCallback((next: string, at: number) => {
     pending.current = at;
     type(next, at);
+  }, []);
+  const chips = useSkillChips(box, text, moveTo);
+  const menu = useCompletion(port, text, caret, (next, at) => {
+    moveTo(next, at);
     box.current?.focus();
-  });
+  }, chips);
   const ime = useIme();
 
   // A counter, not a boolean: asking twice in a row has to move the cursor twice.
@@ -237,25 +242,29 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
     // A quote is what the question is about, so it leads; a held-back paste is
     // the material the answer needs and follows what was typed.
     const quotes = shots.flatMap((c) => (c.k === "quote" ? [quoteBlock(c)] : []));
-    const line = [...quotes, [...refs, v].filter(Boolean).join(" "), ...pastes].filter(Boolean).join("\n\n");
-    const draft = { text, shots, caret: caretRef.current };
+    const compose = (t: string) => [...quotes, [...refs, t.trim()].filter(Boolean).join(" "), ...pastes].filter(Boolean).join("\n\n");
+    const line = compose(v);
+    const call = chips.call(compose);
+    const draft = { text, shots, caret: caretRef.current, chips: chips.held() };
     submittingRef.current = true;
     setSubmitting(true);
     type("", 0);
     setShots([]);
     void (async () => {
       try {
-        const sent = await onSubmit(line);
+        const sent = await (call ? onSubmit(line, call) : onSubmit(line));
         if (sent) draft.shots.forEach(releaseChip);
         else {
           pending.current = draft.caret;
           type(draft.text, draft.caret);
+          chips.restore(draft.chips);
           setShots((current) => [...draft.shots, ...current]);
           queueMicrotask(() => box.current?.focus());
         }
       } catch (e) {
         pending.current = draft.caret;
         type(draft.text, draft.caret);
+        chips.restore(draft.chips);
         setShots((current) => [...draft.shots, ...current]);
         queueMicrotask(() => box.current?.focus());
         onError(e);
@@ -509,6 +518,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
           ref={box}
           rows={1}
           value={text}
+          data-chips={chips.list.length > 0 ? "" : undefined}
           placeholder={t("描述任务、问题或要改的内容…")}
           role="combobox"
           aria-label={t("任务输入")}
@@ -524,8 +534,8 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
           onBlur={() => menu.dismiss()}
           // Arrow keys and clicks move the caret without changing the text, and
           // the caret is what decides which token the menu is completing.
-          onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
-          onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+          onKeyUp={(e) => setCaret(chips.snap(e.currentTarget, caret))}
+          onClick={(e) => setCaret(chips.snap(e.currentTarget, caret))}
           data-action-paste="session.attach"
           // Dropping is the pane's job — a one-row box is 40px to aim at, and the
           // handler that used to live here prevented the default and then did
@@ -592,6 +602,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
             }
           }}
         />
+        <ChipMirror box={box} text={text} chips={chips.list} />
       </div>
       <div className="composeguide" id={guide}>
         <span className="composecaps" aria-hidden="true">

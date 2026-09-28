@@ -154,6 +154,23 @@ rules are written in.
   hover yields. Held arrows outrun a .13s fade and light three rows at once, so
   the transition drops under `data-kb`.
 
+## Skill chips in the composer
+
+- A chip is text the textarea holds (`/name`) drawn by `.chipmirror`, a copy of
+  the line laid exactly over it. While a chip is present the textarea's glyphs
+  are transparent and the mirror's are the ones read, so caret, selection, IME
+  and undo stay the native control's. The mirror copies the textarea's computed
+  metrics rather than restating them, because the composer's font, zoom and
+  line height are set in several places and one missed rule shifts every chip.
+- The chip's wash is a `box-shadow` spread, not padding: padding changes the
+  width of the run and the caret lands a few pixels beside the letter it is on.
+  Weight is left alone for the same reason.
+- Scrolling follows the textarea's scroll timeline (`--draft`), with `--travel`
+  set to its scroll range. A scroll listener would be a user-input registration
+  the action census has to name, and scrolling a draft is not an action.
+- Skills take `--net`, subagents `--deleg`: the same split the rest of the
+  product uses between work done here and work handed off.
+
 ## Composer shelf
 
 - A mode is this turn's capability, not a preference, which is why it lives on
