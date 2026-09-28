@@ -25,11 +25,7 @@ func (r Roots) MigrateLegacyAgentStepLimitsForRoot(root string) (bool, error) {
 	if userPath := r.userConfigLoadPath(); userPath != "" {
 		paths = append(paths, userPath)
 	}
-	projectPath := "reasonix.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "reasonix.toml")
-	}
-	paths = append(paths, projectPath)
+	paths = append(paths, ProjectConfigPath(root))
 
 	changedAny := false
 	seen := make(map[string]struct{}, len(paths))
@@ -75,11 +71,7 @@ func (r Roots) MigrateLegacyRedactToolOutputForRoot(root string) (bool, error) {
 	if userPath := r.userConfigLoadPath(); userPath != "" {
 		paths = append(paths, userPath)
 	}
-	projectPath := "reasonix.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "reasonix.toml")
-	}
-	paths = append(paths, projectPath)
+	paths = append(paths, ProjectConfigPath(root))
 
 	changedAny := false
 	seen := make(map[string]struct{}, len(paths))
@@ -122,11 +114,7 @@ func (r Roots) MigrateLegacyMemoryCompilerForRoot(root string) (bool, error) {
 	if userPath := r.userConfigLoadPath(); userPath != "" {
 		paths = append(paths, userPath)
 	}
-	projectPath := "reasonix.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "reasonix.toml")
-	}
-	paths = append(paths, projectPath)
+	paths = append(paths, ProjectConfigPath(root))
 
 	changedAny := false
 	seen := make(map[string]struct{}, len(paths))
@@ -196,11 +184,7 @@ func (r Roots) MigrateLegacyMultiThresholdCompactionForRoot(root string) (bool, 
 	if userPath := r.userConfigLoadPath(); userPath != "" {
 		paths = append(paths, userPath)
 	}
-	projectPath := "reasonix.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "reasonix.toml")
-	}
-	paths = append(paths, projectPath)
+	paths = append(paths, ProjectConfigPath(root))
 
 	changedAny := false
 	seen := make(map[string]struct{}, len(paths))
