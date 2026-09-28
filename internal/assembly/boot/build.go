@@ -355,6 +355,7 @@ func (b *builder) executor() *agent.Agent {
 		MaxStepsKey:    b.opts.MaxStepsKey,
 		Temperature:    cfg.Agent.Temperature,
 		TaskBudget:     taskBudgetFromConfig(cfg),
+		ProgressWatch:  control.ProgressWatchFromConfig(cfg),
 		Pricing:        entry.Price,
 		ModelRef:       b.model.ref,
 		TriageProvider: triageProv, TriageModelRef: triageRef, TriagePricing: triagePrice,

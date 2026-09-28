@@ -75,6 +75,8 @@ type turnRuntime struct {
 	// uncountedCheckNoted marks that the model was told this turn why a command
 	// it ran was not a check; once a turn is enough to be learned.
 	uncountedCheckNoted bool
+	// watch counts rounds since this run last did something observable.
+	watch progressRun
 }
 
 // pendingTurn is what someone outside the Run arms for the next one: a

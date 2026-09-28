@@ -29,6 +29,7 @@ type Config struct {
 	Billing          BillingConfig       `toml:"billing"`
 	Telemetry        TelemetryConfig     `toml:"telemetry"`
 	Notifications    NotificationsConfig `toml:"notifications"`
+	ProgressWatch    ProgressWatchConfig `toml:"progress_watch"`
 	Agent            AgentConfig         `toml:"agent"`
 	Providers        []ProviderEntry     `toml:"providers"`
 	Tools            ToolsConfig         `toml:"tools"`

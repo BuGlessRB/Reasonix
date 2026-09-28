@@ -211,6 +211,8 @@ type Options struct {
 	// (or cloned for) sub-agents. nil disables v2 capture. Does not affect
 	// provider-visible tool schemas or prompts.
 	MutationObserver *checkpoint.MutationObserver
+
+	ProgressWatch ProgressWatch // zero watches nothing, which is what a sub-agent gets
 }
 
 func (o Options) observeRoot() string {

@@ -276,4 +276,6 @@ export const EN_KERNEL: Record<string, string> = {
   "写入目标不在工作区可写范围内。这是文件工具的写入范围，不是操作系统沙箱；要允许写入，请在 设置 → 沙箱 → 额外可写目录 中添加目标文件夹": "The target is outside the workspace write scope. This is the file tools' write scope, not an OS sandbox; to allow the write, add the target folder under Settings → Sandbox → Also writable",
   "无法读取工作区文件列表": "The workspace file list could not be read",
   "该文件不是可编辑文本或超过大小限制": "The file is not editable text or exceeds the size limit",
+  "无进展设置未能保存：{detail}": "The progress settings were not saved: {detail}",
+  "该数值超出允许范围，未做任何修改：{detail}": "That value is out of range; nothing was changed: {detail}",
 };

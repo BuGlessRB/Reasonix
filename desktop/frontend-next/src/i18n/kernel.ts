@@ -252,6 +252,8 @@ const SAID: Record<string, string> = {
   "compaction.no_soft_limit": "本次请求未包含阈值，未做任何修改",
   "browser_tools.save_failed": "内置浏览器设置未能保存：{detail}",
   "browser_tools.no_enabled": "本次请求未说明开关状态，未做任何修改",
+  "progress_watch.save_failed": "无进展设置未能保存：{detail}",
+  "progress_watch.out_of_range": "该数值超出允许范围，未做任何修改：{detail}",
   "mcp.bad_declaration": "无法解析该服务器声明：{detail}",
   "mcp.install_failed": "未能安装该服务器：{detail}",
   "mcp.remove_failed": "未能移除该服务器：{detail}",

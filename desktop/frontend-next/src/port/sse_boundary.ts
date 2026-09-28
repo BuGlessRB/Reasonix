@@ -1,5 +1,6 @@
 import { SseShell } from "./sse_shell";
 import type { Adjudications, BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, SandboxSettings } from "./port";
+import type { ProgressWatchSettings } from "./boundary";
 
 // Where the agent may reach: the permission rules a call is matched against and
 // the sandbox the shell runs in.
@@ -27,6 +28,12 @@ export class SseBoundary extends SseShell {
   }
   saveBrowserTools(enabled: boolean) {
     return this.post0<BrowserToolsSettings>("/browser-tools", { enabled });
+  }
+  progressWatch() {
+    return this.get<ProgressWatchSettings>("/progress-watch");
+  }
+  saveProgressWatch(s: Pick<ProgressWatchSettings, "pause" | "rounds" | "tokenMultiple">) {
+    return this.post0<ProgressWatchSettings>("/progress-watch", s);
   }
   configProblem() {
     return this.get<ConfigProblem | null>("/config/problem");

@@ -35,6 +35,7 @@ export type Kind =
   | "adjudications_changed"
   | "browser_tabs_changed"
   | "graph_delta"
+  | "progress_watch"
   // Transport frames, not kernel events: the stream describing itself. Handled
   // in the port and never reaching the reducer.
   | "stream_gap"
@@ -401,6 +402,20 @@ export interface ExtensionSurface {
 // One task-list transition. kind is the structural verdict; the three revisions
 // count writes, plan changes, and execution movement separately, because a turn
 // can produce any number of the first two without the third ever moving.
+/** The host's reading of whether the run still moves: rounds since the last
+ *  effect it could observe, and input spent against the backstop. Advisory —
+ *  only pausing, which the user switched on, ends the run. */
+export interface ProgressWatch {
+  stalled: boolean;
+  cause?: "rounds" | "tokens";
+  idleRounds: number;
+  roundLimit?: number;
+  promptTokens?: number;
+  tokenLimit?: number;
+  tokenMultiple?: number;
+  pausing?: boolean;
+}
+
 export interface TodoProgress {
   kind: string;
   steps?: number;
@@ -646,6 +661,7 @@ export interface WireEvent {
   compaction?: Compaction;
   maintenance?: ContextMaintenance;
   todoProgress?: TodoProgress;
+  progressWatch?: ProgressWatch;
   workspaceLease?: WorkspaceLease;
   streamAttempt?: StreamAttempt;
   completion?: CompletionSummary;
@@ -682,7 +698,7 @@ export interface WireEvent {
   hostAuthored?: boolean;
   // recovery_paused is no longer emitted; sessions recorded before the retry
   // budgets were removed still carry it, so a reader has to render it.
-  outcome?: "final_readiness" | "recovery_paused";
+  outcome?: "final_readiness" | "recovery_paused" | "no_progress";
   phase?: string;
   retryAttempt?: number;
   retryMax?: number;

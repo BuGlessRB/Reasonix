@@ -30,6 +30,7 @@ type Event struct {
 	Compaction      *Compaction         `json:"compaction,omitempty"`
 	Maintenance     *ContextMaintenance `json:"maintenance,omitempty"`
 	TodoProgress    *TodoProgress       `json:"todoProgress,omitempty"`
+	ProgressWatch   *ProgressWatch      `json:"progressWatch,omitempty"`
 	WorkspaceLease  *WorkspaceLease     `json:"workspaceLease,omitempty"`
 	Guardian        *Guardian           `json:"guardian,omitempty"`
 	DecisionReceipt *DecisionReceipt    `json:"decisionReceipt,omitempty"`
@@ -167,6 +168,8 @@ func ToWire(e event.Event) Event {
 		}
 	case event.TodoProgressEvent:
 		w.TodoProgress = toWireTodoProgress(e.TodoProgress)
+	case event.ProgressWatchEvent:
+		w.ProgressWatch = toWireProgressWatch(e.ProgressWatch)
 	case event.WorkspaceLeaseEvent:
 		w.WorkspaceLease = toWireWorkspaceLease(e.WorkspaceLease)
 	case event.GuardianAssessment:
@@ -734,6 +737,7 @@ var kindNames = map[event.Kind]string{
 	event.BrowserTabsChanged:      "browser_tabs_changed",
 	event.InboxChanged:            "inbox_changed",
 	event.GraphDelta:              "graph_delta",
+	event.ProgressWatchEvent:      "progress_watch",
 }
 
 func toWireTodoProgress(p *event.TodoProgress) *TodoProgress {

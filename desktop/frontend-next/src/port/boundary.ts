@@ -78,3 +78,14 @@ export interface BrowserToolsSettings {
   effective: boolean;
   path: string;
 }
+
+// When a run reads as no longer moving. Only the user file holds it: a
+// project file cannot pause the user's runs.
+export interface ProgressWatchSettings {
+  pause: boolean;
+  rounds: number;
+  tokenMultiple: number;
+  defaultRounds: number;
+  defaultTokenMultiple: number;
+  path: string;
+}

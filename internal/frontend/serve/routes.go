@@ -48,6 +48,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /effort", s.effort)
 	mux.HandleFunc("POST /compact", s.compact)
 	s.registerCompactionRoutes(mux)
+	s.registerProgressWatchRoutes(mux)
 	mux.HandleFunc("POST /new", s.newSession)
 	mux.HandleFunc("POST /rewind", s.rewind)
 	mux.HandleFunc("POST /rewind/prepare", s.rewindPrepare)

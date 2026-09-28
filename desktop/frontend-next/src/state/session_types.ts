@@ -154,6 +154,16 @@ export type TurnTerminal =
   | { kind: "unread" }
   | null;
 
+export interface Stall {
+  cause: "rounds" | "tokens";
+  idleRounds: number;
+  roundLimit: number;
+  promptTokens: number;
+  tokenMultiple: number;
+  // The user's pause setting ended the run on this reading.
+  paused: boolean;
+}
+
 export interface SessionState {
   error: string;
   // What the tool calls of this session did, keyed by wire id. Held apart from
@@ -168,6 +178,10 @@ export interface SessionState {
   // surface, they hold their own place instead of scrolling away in the
   // transcript as if they had been said by someone.
   runtime: RuntimeNotice[];
+  // The kernel's reading that the run stopped producing observable effects,
+  // and whether this window was asked to stop saying so while it runs.
+  stall?: Stall;
+  stallMuted?: boolean;
   items: Item[];
   // Which cards have not yet had their one entrance, and how far this
   // projection has already let in. Motion describes a state transition, and
