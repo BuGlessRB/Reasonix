@@ -787,8 +787,8 @@
     background: var(--raised); color: var(--text); font: var(--w-reg) var(--fs-meta) var(--ui);
   }
   .baddr input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
-  .bview { flex: 1; min-height: 0; display: grid; place-items: center; background: var(--surface) }
-  .bhint { margin: 0; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
+  .bview { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; background: var(--surface) }
+  .bframe { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left top; user-select: none; pointer-events: none }
   .bfail { max-width: 460px; padding: 24px; display: grid; gap: 8px; justify-items: start; color: var(--muted) }
   .bfail b { font: var(--w-med) var(--fs-lead) var(--ui); color: var(--text) }
   .bfail p { margin: 0; font: var(--w-reg) var(--fs-ui)/1.7 var(--ui) }

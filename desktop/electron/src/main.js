@@ -284,6 +284,7 @@ ipcMain.handle("browser:show", (event, targetId, rect) => {
 ipcMain.handle("browser:hide", (event) => {
   if (fromWindow(event)) browserViews?.hide();
 });
+ipcMain.handle("browser:freeze", (event) => (fromWindow(event) ? (browserViews?.freeze() ?? "") : ""));
 ipcMain.handle("browser:control", (event, targetId, action) => {
   if (fromWindow(event)) browserViews?.control(String(targetId), String(action));
 });

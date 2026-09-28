@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { t } from "../i18n";
 import type { AgentPort, BrowserTab } from "../port/port";
-import { host, type BrowserControl, type BrowserLoadFailure, type ViewRect } from "../port/host";
+import { host, type BrowserControl, type BrowserLoadFailure } from "../port/host";
 import { SWAP_MARK } from "./swap";
+import { occluded, visibleBox } from "./occlusion";
 import { BrowserFailure } from "./BrowserFailure";
 
 const START = "reasonix://start";
@@ -164,18 +165,6 @@ export function useBrowserTabs(port: AgentPort, moved: number): BrowserTab[] {
   return tabs;
 }
 
-type Probe = (x: number, y: number) => Element | null;
-
-export function covered(slot: Element, rect: ViewRect, probe: Probe): boolean {
-  for (const fx of [0.08, 0.5, 0.92]) {
-    for (const fy of [0.08, 0.5, 0.92]) {
-      const hit = probe(rect.x + rect.width * fx, rect.y + rect.height * fy);
-      if (hit !== slot && !(hit && slot.contains(hit))) return true;
-    }
-  }
-  return false;
-}
-
 export function AgentBrowserPanel({ tabs, shown, showTabs = true }: { tabs: BrowserTab[]; shown: boolean; showTabs?: boolean }) {
   const slot = useRef<HTMLDivElement>(null);
   const [picked, setPicked] = useState("");
@@ -183,6 +172,7 @@ export function AgentBrowserPanel({ tabs, shown, showTabs = true }: { tabs: Brow
   const [address, setAddress] = useState(current?.url ?? "");
   const [failures, setFailures] = useState<Record<string, BrowserLoadFailure>>({});
   const [refused, setRefused] = useState(false);
+  const [frame, setFrame] = useState("");
   const target = current?.target ?? "";
   const failure = failures[target];
 
@@ -201,34 +191,63 @@ export function AgentBrowserPanel({ tabs, shown, showTabs = true }: { tabs: Brow
     [],
   );
   // A page that did not load is put away, so the reason drawn in its slot is
-  // not hidden under the native view.
+  // not hidden under the native view. One the page covers is put away too, and
+  // its last picture stands in the slot until nothing covers it any more.
   useLayoutEffect(() => {
     const el = slot.current;
     const shell = host();
+    setFrame("");
     if (!el || !shown || !target || failure) {
       shell.hideBrowserView();
       return;
     }
-    let frame = 0;
+    let timer = 0;
+    let live = true;
+    // Which freeze is current: a picture answering an older one is stale.
+    let frozen = 0;
+    let freezes = 0;
     const place = () => {
-      frame = 0;
-      const box = el.getBoundingClientRect();
-      const rect = { x: box.left, y: box.top, width: box.width, height: box.height };
-      if (rect.width < 1 || rect.height < 1 || covered(el, rect, (x, y) => document.elementFromPoint(x, y))) shell.hideBrowserView();
-      else shell.showBrowserView(target, rect);
+      timer = 0;
+      const box = visibleBox(el);
+      if (!box) {
+        frozen = 0;
+        shell.hideBrowserView();
+        return;
+      }
+      if (document.documentElement.hasAttribute(SWAP_MARK) || occluded(el, box)) {
+        if (frozen) return;
+        const turn = (frozen = ++freezes);
+        void shell.freezeBrowserView().then((picture) => {
+          if (live && frozen === turn) setFrame(picture);
+        });
+        return;
+      }
+      if (frozen) setFrame("");
+      frozen = 0;
+      shell.showBrowserView(target, box);
     };
-    const schedule = () => { if (!frame) frame = window.setTimeout(place, 16); };
+    const schedule = () => { if (!timer) timer = window.setTimeout(place, 48); };
     place();
     const resize = new ResizeObserver(schedule);
     resize.observe(el);
     const overlays = new MutationObserver(schedule);
-    overlays.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "class", "style", "open", "data-prefs"] });
-    overlays.observe(document.documentElement, { attributes: true, attributeFilter: [SWAP_MARK] });
+    overlays.observe(document.body, { childList: true, subtree: true, attributes: true });
+    overlays.observe(document.documentElement, { attributes: true, attributeFilter: [SWAP_MARK, "style", "class"] });
+    // A layer can leave without touching the DOM: a transition or an animation
+    // ending, a hover, a scroll. The two events catch most of it; the poll is what
+    // makes a page that is no longer covered come back whatever moved.
+    document.addEventListener("transitionend", schedule, true);
+    document.addEventListener("animationend", schedule, true);
     addEventListener("resize", schedule);
+    const poll = window.setInterval(schedule, 400);
     return () => {
-      if (frame) clearTimeout(frame);
+      live = false;
+      if (timer) clearTimeout(timer);
+      clearInterval(poll);
       resize.disconnect();
       overlays.disconnect();
+      document.removeEventListener("transitionend", schedule, true);
+      document.removeEventListener("animationend", schedule, true);
       removeEventListener("resize", schedule);
       shell.hideBrowserView();
     };
@@ -274,7 +293,7 @@ export function AgentBrowserPanel({ tabs, shown, showTabs = true }: { tabs: Brow
             onTrust={() => void host().trustBrowserCertificate(target)}
           />
         ) : (
-          <p className="bhint">{t("页面被遮住时暂停显示")}</p>
+          frame && <img className="bframe" src={frame} alt="" draggable={false} />
         )}
       </div>
     </div>
