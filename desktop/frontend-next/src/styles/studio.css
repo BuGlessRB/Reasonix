@@ -2069,7 +2069,7 @@ body { font-size: 14px; line-height: 1.75; }
   background: var(--float);
   box-shadow: 0 14px 38px rgb(0 0 0 / .38);
 }
-.session-pop-head { padding: 9px 9px 11px; }
+.session-pop-head { min-width: 0; padding: 9px 9px 11px; }
 .session-pop-head b {
   display: -webkit-box;
   overflow: hidden;
@@ -2080,6 +2080,7 @@ body { font-size: 14px; line-height: 1.75; }
   -webkit-line-clamp: 2;
 }
 .session-pop-head small { display: block; margin-top: 5px; overflow: hidden; color: var(--faint); font: 400 9px/1.4 var(--ui); text-overflow: ellipsis; white-space: nowrap; }
+.session-pop-head .session-pop-path { overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
 .session-pop-group { display: flex; flex-direction: column; gap: 1px; }
 .session-pop-group > button {
   min-height: 35px;
