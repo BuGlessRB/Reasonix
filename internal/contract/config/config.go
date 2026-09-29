@@ -478,29 +478,6 @@ func NormalizeToolApprovalMode(mode string) string {
 	}
 }
 
-// DesktopDefaultToolApprovalMode is the Ask/Auto/YOLO posture the person named
-// for new desktop sessions, or "" when they never named one and the session
-// follows the sandbox claim and folder trust instead.
-func (c *Config) DesktopDefaultToolApprovalMode() string {
-	if c == nil || strings.TrimSpace(c.Desktop.DefaultToolApprovalMode) == "" {
-		return ""
-	}
-	return NormalizeToolApprovalMode(c.Desktop.DefaultToolApprovalMode)
-}
-
-// UnrecognizedDesktopToolApprovalMode is the file's default_tool_approval_mode
-// when it names no posture this build knows, so it loads as ask; else "".
-func (c *Config) UnrecognizedDesktopToolApprovalMode() string {
-	raw := ""
-	if c != nil {
-		raw = strings.TrimSpace(c.Desktop.DefaultToolApprovalMode)
-	}
-	if raw == "" || strings.EqualFold(raw, "ask") || NormalizeToolApprovalMode(raw) != "ask" {
-		return ""
-	}
-	return raw
-}
-
 // DesktopStatusBarStyle normalizes the desktop status bar metric label style.
 // Default is "text"; explicit "icon" preserves the user's compact choice.
 func (c *Config) DesktopStatusBarStyle() string {

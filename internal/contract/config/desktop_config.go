@@ -51,6 +51,39 @@ func (c *Config) SetDesktopTray(mode string) error {
 	return nil
 }
 
+// DesktopDefaultToolApprovalMode is the Ask/Auto/YOLO posture the person named
+// for new desktop sessions, or "" when they never named one and the session
+// follows the sandbox claim and folder trust instead.
+func (c *Config) DesktopDefaultToolApprovalMode() string {
+	if c == nil || strings.TrimSpace(c.Desktop.DefaultToolApprovalMode) == "" {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Desktop.DefaultToolApprovalMode)) {
+	case "workspace-write":
+		return ""
+	case "danger-full-access":
+		return "yolo"
+	}
+	return NormalizeToolApprovalMode(c.Desktop.DefaultToolApprovalMode)
+}
+
+// UnrecognizedDesktopToolApprovalMode is the file's default_tool_approval_mode
+// when it names no posture this build knows, so it loads as ask; else "".
+func (c *Config) UnrecognizedDesktopToolApprovalMode() string {
+	raw := ""
+	if c != nil {
+		raw = strings.TrimSpace(c.Desktop.DefaultToolApprovalMode)
+	}
+	switch strings.ToLower(raw) {
+	case "", "ask", "workspace-write", "danger-full-access", "read-only":
+		return ""
+	}
+	if NormalizeToolApprovalMode(raw) != "ask" {
+		return ""
+	}
+	return raw
+}
+
 // DesktopConfig controls desktop-only UI preferences. It is intentionally
 // separate from top-level language and [ui] so desktop choices do not affect CLI
 // language, terminal colours, or provider-visible prompt/request data.

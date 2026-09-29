@@ -24,17 +24,17 @@ import (
 // shown to load as c, the whole render. The prior bytes are kept beside it
 // whenever an entry Config does not decode is not carried; a body that does
 // not load is never returned.
-func (c *Config) userConfigBody(logicalPath, resolved string) (string, error) {
+func (c *Config) userConfigBody(logicalPath, resolved string) (string, bool, error) {
 	full := RenderTOMLForScope(c, RenderScopeUser)
 	fullLoaded, fullErr := loadUserConfigBytes(logicalPath, full)
 	raw, err := fileencoding.ReadFileUTF8(resolved)
 	if err != nil || strings.TrimSpace(string(raw)) == "" {
-		return full, renderLoadError(resolved, fullErr)
+		return full, errors.Is(err, os.ErrNotExist), renderLoadError(resolved, fullErr)
 	}
 	text := string(fileencoding.DecodeToUTF8(raw))
 	base, err := loadUserConfigBytes(logicalPath, text)
 	if err != nil {
-		return full, renderLoadError(resolved, fullErr)
+		return full, false, renderLoadError(resolved, fullErr)
 	}
 	patched, ok, lossy := patchUserConfig(text, base, c, full)
 	for _, strip := range retiredUserConfigKeys {
@@ -46,14 +46,14 @@ func (c *Config) userConfigBody(logicalPath, resolved string) (string, error) {
 			if lossy {
 				keepPriorUserConfig(logicalPath, resolved, raw, "config: saved in place without entries it could not carry")
 			}
-			return patched, nil
+			return patched, false, nil
 		}
 	}
 	if fullErr != nil {
-		return "", renderLoadError(resolved, fullErr)
+		return "", false, renderLoadError(resolved, fullErr)
 	}
 	keepPriorUserConfig(logicalPath, resolved, raw, "config: saved by full rewrite")
-	return full, nil
+	return full, false, nil
 }
 
 func keepPriorUserConfig(logicalPath, resolved string, raw []byte, msg string) {
@@ -67,11 +67,19 @@ func keepPriorUserConfig(logicalPath, resolved string, raw []byte, msg string) {
 // writeUserConfig hands write the body a save puts in the user config, and
 // writes nothing when there is no body that loads.
 func (c *Config) writeUserConfig(logicalPath, resolved string, write func(body string) error) error {
-	body, err := c.userConfigBody(logicalPath, resolved)
+	body, newFile, err := c.userConfigBody(logicalPath, resolved)
 	if err != nil {
 		return err
 	}
-	return write(body)
+	if err := write(body); err != nil {
+		return err
+	}
+	if newFile {
+		if err := markDesktopPostureReleased(logicalPath); err != nil {
+			slog.Warn("config: record desktop posture release", "path", logicalPath, "err", err)
+		}
+	}
+	return nil
 }
 
 func renderLoadError(path string, err error) error {

@@ -236,18 +236,22 @@ func ApplyUserConfigUpgradesOnStartup(path string) (bool, error) {
 	if path == "" {
 		return false, nil
 	}
+	_, exists, err := statConfigPath(path)
+	if err != nil || !exists {
+		return false, err
+	}
 	unlock, err := LockConfigFileEdits(path)
 	if err != nil {
 		return false, err
 	}
 	defer unlock()
 
-	_, exists, err := statConfigPath(path)
+	_, exists, err = statConfigPath(path)
 	if err != nil {
 		return false, err
 	}
 	if !exists {
-		return false, markDesktopPostureReleased(path)
+		return false, nil
 	}
 	var header Config
 	if _, err := decodeTOMLFile(path, &header); err != nil {
