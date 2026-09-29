@@ -377,7 +377,13 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 			"--glob", "!.ssh/**",
 		)
 	}
-	args = append(args, "--regexp", pattern, "--", path)
+	target := path
+	if directory {
+		// An absolute symlink alias may differ from ripgrep's physical cwd,
+		// breaking root-relative globs even when cmd.Dir names that same alias.
+		target = "."
+	}
+	args = append(args, "--regexp", pattern, "--", target)
 
 	var lease *sessiontemp.Lease
 	sessionDir := ""
@@ -397,8 +403,7 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	}
 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	// Ripgrep anchors slash-containing globs to its process directory on Windows.
-	// Search from the requested root so both engines keep the same glob contract.
+	// Keep glob anchoring local to this subprocess, never the host process.
 	if directory {
 		cmd.Dir = path
 	}
@@ -419,7 +424,13 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
-		out = append(out, displayRipgrepLine(sc.Text(), rp))
+		line := sc.Text()
+		if directory {
+			if relative, ok := strings.CutPrefix(line, "."+string(filepath.Separator)); ok {
+				line = strings.TrimSuffix(path, string(filepath.Separator)) + string(filepath.Separator) + relative
+			}
+		}
+		out = append(out, displayRipgrepLine(line, rp))
 		if len(out) >= grepMaxMatches {
 			truncated = true
 			break

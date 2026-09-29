@@ -64,6 +64,34 @@ func TestGrepGlobWithSlashMatchesPath(t *testing.T) {
 	}
 }
 
+func TestGrepSlashGlobThroughSymlinkedParent(t *testing.T) {
+	root := grepGlobTree(t)
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(filepath.Dir(root), alias); err != nil {
+		t.Skipf("directory symlinks unavailable: %v", err)
+	}
+	searchRoot := filepath.Join(alias, filepath.Base(root))
+	for _, engine := range grepEnginesUnderTest(t) {
+		t.Run(engine.name, func(t *testing.T) {
+			for _, wide := range []bool{false, true} {
+				rp := ResolvedPath{Path: searchRoot, Root: searchRoot, DisplayRoot: "external/source", External: true}
+				if engine.tool.rg != "" {
+					out, _, _, err := engine.tool.ripgrepPass(t.Context(), "needle", searchRoot, "internal/**/*_test.go", true, rp, wide)
+					want := "external/source/internal/deep/nested_test.go:1:needle in a test"
+					if err != nil || len(out) != 1 || out[0] != want {
+						t.Fatalf("wide=%v: matches=%q, err=%v; want %q", wide, out, err, want)
+					}
+				}
+			}
+			out := runTool(t, engine.tool, map[string]any{"pattern": "needle", "path": searchRoot, "glob": "internal/**/*_test.go"})
+			want := filepath.Join(searchRoot, "internal", "deep", "nested_test.go") + ":1:needle in a test"
+			if out != want {
+				t.Fatalf("matches=%q, want original path %q", out, want)
+			}
+		})
+	}
+}
+
 // An omitted glob keeps the unfiltered behavior every existing caller relies on.
 func TestGrepWithoutGlobSearchesEverything(t *testing.T) {
 	dir := grepGlobTree(t)
