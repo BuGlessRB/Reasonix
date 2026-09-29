@@ -132,28 +132,28 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
 
   const reloadExt = useCallback(() => {
     const refresh = ++extRefresh.current;
+    const current = () => extRefresh.current === refresh;
     setExtRefreshing(true);
     const where = scopeAt || undefined;
-    port.capabilityScopes().then(setScopes).catch(() => setScopes([]));
-    const mcpRead = port.mcp(where)
-      .then((c) => {
-        setMcp(c.servers);
-        setScope(c.scope);
-        setLive(c.live !== false);
-      })
-      .catch(() => setMcp([]));
-    const packageRead = port.plugins().then(setPackages).catch(() => setPackages([]));
-    port.hooks().then((c) => setHookCount(c.hooks.length)).catch(() => setHookCount(0));
-    port.network().then((n) => setNetMode(t(NET_MODE[n.mode] ?? n.mode))).catch(() => setNetMode(""));
-    port.memories().then((c) => setMemCount(c.memories.length)).catch(() => setMemCount(0));
-    port.permissions().then((p) => setRuleCount(p.deny.length + p.ask.length + p.allow.length)).catch(() => setRuleCount(0));
-    const skillRead = port.skills(where)
-      .then((c) => {
-        setSkills(c.skills);
-        setImplicit(c.implicit);
-      })
-      .catch(() => setSkills([]));
-    void Promise.allSettled([mcpRead, packageRead, skillRead]).then(() => { if (extRefresh.current === refresh) setExtRefreshing(false); });
+    port.capabilityScopes().then((c) => { if (current()) setScopes(c); }).catch(() => { if (current()) setScopes([]); });
+    const mcpRead = port.mcp(where).then((c) => {
+      if (!current()) return;
+      setMcp(c.servers);
+      setScope(c.scope);
+      setLive(c.live !== false);
+    }).catch(() => { if (current()) setMcp([]); });
+    const packageRead = port.plugins().then((c) => { if (current()) setPackages(c); }).catch(() => { if (current()) setPackages([]); });
+    port.hooks().then((c) => { if (current()) setHookCount(c.hooks.length); }).catch(() => { if (current()) setHookCount(0); });
+    port.network().then((n) => { if (current()) setNetMode(t(NET_MODE[n.mode] ?? n.mode)); }).catch(() => { if (current()) setNetMode(""); });
+    port.memories().then((c) => { if (current()) setMemCount(c.memories.length); }).catch(() => { if (current()) setMemCount(0); });
+    port.permissions().then((p) => { if (current()) setRuleCount(p.deny.length + p.ask.length + p.allow.length); }).catch(() => { if (current()) setRuleCount(0); });
+    const skillRead = port.skills(where).then((c) => {
+      if (!current()) return;
+      setSkills(c.skills);
+      setImplicit(c.implicit);
+    })
+      .catch(() => { if (current()) setSkills([]); });
+    void Promise.allSettled([mcpRead, packageRead, skillRead]).then(() => { if (current()) setExtRefreshing(false); });
   }, [port, scopeAt]);
 
   // An extension switch moves the metrics rail too, so the change has to leave
