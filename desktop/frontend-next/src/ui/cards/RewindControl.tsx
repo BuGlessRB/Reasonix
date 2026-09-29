@@ -1,9 +1,9 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../i18n";
 import type { Checkpoint, RewindPlan, RewindResult, RewindScope } from "../../port/port";
 import { useDismiss } from "../dismiss";
-import { pinToViewport } from "../place";
+import { pinToViewport, useFollow } from "../place";
 
 // Gap between the trigger and the menu. It lives here rather than in CSS because
 // a portaled menu is placed by measurement, so no rule owns the offset any more.
@@ -64,17 +64,7 @@ export function RewindControl({
     pinToViewport(el, to.right - box.width, fits || above < 6 ? to.bottom + GAP : above);
   }, []);
 
-  // The menu is fixed, so anything that moves the trigger leaves it behind.
-  useLayoutEffect(() => {
-    if (!open) return;
-    place();
-    addEventListener("scroll", place, true);
-    addEventListener("resize", place);
-    return () => {
-      removeEventListener("scroll", place, true);
-      removeEventListener("resize", place);
-    };
-  }, [open, stage, place]);
+  useFollow(open, place, stage);
 
   const fail = (e: unknown) => setStage({ at: "failed", why: e instanceof Error ? e.message : String(e) });
 

@@ -830,8 +830,8 @@ body { background: var(--page) !important; }
 }
 .acts-menu { position: relative; display: inline-grid; }
 .acts-pop {
-  position: absolute; z-index: 40; bottom: calc(100% + 5px); inset-inline-start: 0;
-  width: max-content; min-width: 190px; padding: 5px;
+  position: fixed; z-index: 60; top: 0; left: 0;
+  width: max-content; min-width: 190px; max-height: calc(100vh / var(--zoom, 1) - 12px); overflow-y: auto; padding: 5px;
   border: 1px solid var(--border); border-radius: 9px; background: var(--float);
   box-shadow: var(--shadow-float); animation: palette-in var(--m-card) both;
 }
