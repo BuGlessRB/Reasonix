@@ -457,7 +457,8 @@ export function WorkbenchPanel({
     }
   };
   // The column folds only when its last tab goes, whatever kind that tab is: a
-  // page opened with + or a file still open is a reason to keep it.
+  // page opened with + or a file still open is a reason to keep it, and so is
+  // an explorer someone has open.
   const close = (surface: Surface) => {
     const key = keyOf(surface);
     if (surface.kind === "manual") setBrowsers((v) => v.filter((id) => id !== surface.id));
@@ -465,7 +466,7 @@ export function WorkbenchPanel({
       setOpenFiles((v) => v.filter((p) => p !== surface.path));
     else setDismissed((v) => new Set(v).add(key));
     if (selected === key) setSelected("");
-    if (surfaces.every((s) => keyOf(s) === key)) onCloseManual();
+    if (!showFiles && surfaces.every((s) => keyOf(s) === key)) onCloseManual();
   };
   const save = async () => {
     if (!file || draft === file.content) return;

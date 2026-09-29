@@ -100,6 +100,17 @@ describe("WorkbenchPanel", () => {
     expect(onCloseManual).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the column when its last tab closes while the explorer is open", async () => {
+    const user = userEvent.setup();
+    const onCloseManual = vi.fn();
+    const page = { id: "b1", target: "t1", url: "https://example.com", title: "My page", active: true };
+    const { container } = render(<WorkbenchPanel port={new MockPort()} tabs={[page]} manual shown={false} scheme="dark" changes={[]} onCloseManual={onCloseManual} onSurfaces={vi.fn()} onExternal={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "文件" }));
+    await user.click(screen.getByRole("button", { name: "关闭 My page" }));
+    expect(onCloseManual).not.toHaveBeenCalled();
+    expect(container.querySelector(".workbench-body")?.hasAttribute("data-files")).toBe(true);
+  });
+
   it("shows a page the person opened beside the agent's, while the agent's tab stays active", () => {
     const props = { port: new MockPort(), manual: true, shown: false, scheme: "dark" as const, changes: [], onCloseManual: vi.fn(), onSurfaces: vi.fn(), onExternal: vi.fn() };
     const agent = { id: "b1", target: "t1", url: "https://top.baidu.com", title: "百度热搜", active: true };
