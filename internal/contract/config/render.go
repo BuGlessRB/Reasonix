@@ -644,7 +644,7 @@ func RenderTOMLProjectDelta(c *Config) string {
 
 	// [[providers]] — include user-defined providers that aren't built-in
 	proj := projectScopedConfigForRender(c)
-	if proj != nil && len(proj.Providers) > 0 && !reflect.DeepEqual(proj.Providers, d.Providers) {
+	if proj != nil && len(proj.Providers) > 0 && projectProvidersDifferFromDefaults(proj.Providers, d) {
 		for _, p := range proj.Providers {
 			b.WriteString("[[providers]]\n")
 			fmt.Fprintf(&b, "name        = %q\n", p.Name)
@@ -989,7 +989,19 @@ func shouldRenderProviders(c, defaults *Config, scope RenderScope) bool {
 	if scope != RenderScopeProject {
 		return true
 	}
-	return !reflect.DeepEqual(c.Providers, defaults.Providers)
+	return projectProvidersDifferFromDefaults(c.Providers, defaults)
+}
+
+func projectProvidersDifferFromDefaults(providers []ProviderEntry, defaults *Config) bool {
+	if reflect.DeepEqual(providers, defaults.Providers) {
+		return false
+	}
+	// Project edits normalize the shipped provider before rendering. Compare
+	// against the same normalized baseline so pricing/catalog backfills do not
+	// turn an unrelated edit into an explicit project provider override.
+	normalized := Default()
+	normalizeConfigForEdit(normalized)
+	return !reflect.DeepEqual(providers, normalized.Providers)
 }
 
 func projectScopedConfigForRender(c *Config) *Config {
