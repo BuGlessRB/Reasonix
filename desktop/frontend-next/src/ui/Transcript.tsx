@@ -40,7 +40,7 @@ interface Props {
   // node you clicked. The nonce, not the id, is what makes asking twice land
   // twice; null while nothing has been asked for.
   focus: { call: string; n: number } | null;
-  find?: { id: string; n: number } | null;
+  find?: { id: string; nth: number; n: number } | null;
   query?: string;
   onApprove: (itemId: string, id: string, v: ApprovalVerdict) => Promise<void>;
   onFullAccess: (itemId: string) => Promise<void>;
@@ -130,7 +130,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
     });
   }, [scroll]);
 
-  useFindPaint(flow, hidden, query ?? "", find?.id ?? null);
+  useFindPaint(flow, hidden, query ?? "", find?.id ?? null, find?.nth ?? 0);
 
   useEffect(() => {
     const onSelect = () => {
@@ -310,11 +310,14 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   // pass then puts the message itself under the reader. Marked as a gesture,
   // or the follow would read this scroll as the transcript moving and stay
   // pinned to the bottom the reader just left.
+  const landing = useRef(0);
   const land = useCallback(
-    (block: number, into: number, selector: string, clear = 12) => {
+    (block: number, into: number, selector: string, clear = 12, then?: (found: HTMLElement, root: HTMLElement) => boolean) => {
       const root = scroll.current;
       const inner = flow.current;
       if (!root || !inner) return;
+      // A newer landing owns the scroll; an older one still settling stops.
+      const mine = ++landing.current;
       gesture.current = 0;
       at.current = false;
       setPinned(false);
@@ -324,9 +327,13 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
       // ancestor is .pane, which does not scroll, so offsetTop answers "where
       // in the window" — writing that back as scrollTop barely moves anything.
       const topOf = (el: HTMLElement) => el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
+      // A caller that can place a mounted target itself spares the row-top hop.
+      const ready = then && inner.querySelector<HTMLElement>(selector);
+      if (ready && then(ready, root)) return;
       const chunk = inner.querySelectorAll<HTMLElement>(".chunk")[block];
       if (chunk) root.scrollTop = topOf(chunk) + into * chunk.offsetHeight - clear;
       const settle = (tries: number, last = NaN) => {
+        if (mine !== landing.current) return;
         const found = inner.querySelector<HTMLElement>(selector);
         if (found) {
           const el = landingBox(found);
@@ -340,6 +347,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
           }
           el.setAttribute("data-hit", "");
           setTimeout(() => el.removeAttribute("data-hit"), 1200);
+          then?.(found, root);
           return;
         }
         if (tries > 0) requestAnimationFrame(() => settle(tries - 1));
@@ -387,7 +395,7 @@ export function Transcript({ items, entering, onEntered, revision, waiting, scro
   const live = last?.t === "say" && !last.done ? last : undefined;
   const blocks = useBlocks(items, live ? items.length - 1 : items.length, revision);
 
-  useFindLanding(find, hidden, blocks, live, land);
+  useFindLanding(find, query ?? "", hidden, blocks, live, land);
 
   // Which block holds a given call, so the graph can land on one the way the
   // rail lands on a message: the card may sit in a block that is not mounted

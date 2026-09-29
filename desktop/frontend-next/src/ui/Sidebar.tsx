@@ -8,6 +8,7 @@ import { AccountRow } from "./AccountRow";
 import { RailSearch } from "./railsearch";
 import { RemoteHosts } from "./RemoteHosts";
 import { StudioIcon } from "./StudioIcon";
+import { chord } from "./keys";
 import { Palette, type Command } from "./Palette";
 import { Workspaces } from "./Workspaces";
 import { MASK, useHidesAmounts } from "./wallet";
@@ -49,6 +50,7 @@ interface Props {
   accountUnread: string;
   wallet: string;
   onSettings: (section?: string) => void;
+  onFind: () => void;
   onError: (e: unknown) => void;
 }
 
@@ -87,6 +89,7 @@ export function Sidebar({
   accountUnread,
   wallet,
   onSettings,
+  onFind,
   onError,
 }: Props) {
   const [railScope, setRailScope] = useState<"all" | "live" | "pinned" | "archived">("all");
@@ -113,6 +116,8 @@ export function Sidebar({
     () => [
       { id: "new", label: t("新建会话"), icon: "plus", keywords: "new session chat 新建",
         run: () => void onOpen({ root: newSessionRoot }).catch(onError) },
+      { id: "find", label: t("在这段对话里查找"), icon: "search", keywords: "find search conversation 查找 搜索 对话",
+        keys: chord("F"), run: onFind },
       { id: "storage", label: t("文件"), icon: "file", keywords: "files storage 文件 存储",
         run: () => onSettings("storage") },
       { id: "ext", label: t("工具与集成"), icon: "plug", keywords: "tools mcp skills 工具 集成",
@@ -126,7 +131,7 @@ export function Sidebar({
       { id: "settings", label: t("设置"), icon: "settings", keywords: "settings preferences 设置 偏好",
         run: () => onSettings() },
     ],
-    [newSessionRoot, onOpen, onSettings, onError],
+    [newSessionRoot, onOpen, onSettings, onFind, onError],
   );
   const sessionCount = tree.reduce((n, ws) => n + ws.sessions.filter((session) => !session.archived).length, 0);
   const archivedCount = tree.reduce((n, ws) => n + ws.sessions.filter((session) => session.archived).length, 0);

@@ -10,7 +10,7 @@ import { useLinkRouting } from "./links";
 import { Pane, type PaneReport } from "./Pane";
 import { clearDraftForSession } from "./drafts";
 import { DOCK, Gutter, RAIL, dockMax, keepWidth, widthOf } from "./Gutter";
-import { listenAction } from "./listen";
+import { useWindowKeys, type Shortcut } from "./windowkeys";
 import { folded as roomGaveUp, onRoomWidth } from "./viewport";
 import { useFoldAway } from "./foldaway";
 import { useDrawerCloses } from "./drawer";
@@ -397,49 +397,28 @@ export function App({ hub }: { hub: HubPort }) {
 
   useLinkRouting(activePort, useCallback(() => setBrowser(true), []), fail);
 
+  // Settings cover the conversation, so a find opened under them is one nobody
+  // sees: asking for it leaves them.
+  const openFind = useCallback(() => {
+    setSettings(false);
+    setFindPulse((n) => n + 1);
+  }, []);
+
   // The window's shortcuts, named by the action each one performs — the same
   // identity the control on screen carries, because they are the same thing
   // asked for two ways. Written out rather than branched so the census can read
   // the set: a chain of ifs is a set nothing can enumerate.
-  const shortcuts: { chord: string; shift?: boolean; action: string; run: () => void }[] = useMemo(
+  const shortcuts: Shortcut[] = useMemo(
     () => [
-      { chord: "\\", action: "rail.toggle", run: () => setRail((v) => !v) },
-      { chord: ",", action: "chrome.settings", run: showPrefs },
-      { chord: "f", action: "transcript.find", run: () => setFindPulse((n) => n + 1) },
+      { chord: "\\", fields: true, action: "rail.toggle", run: () => setRail((v) => !v) },
+      { chord: ",", fields: true, action: "chrome.settings", run: showPrefs },
+      { chord: "f", action: "transcript.find", run: openFind },
     ],
-    [showPrefs],
+    [showPrefs, openFind],
   );
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      // A control that answered the press itself — the code editor's own find
-      // on Ctrl+F, or its Escape closing that — has spent it.
-      if (e.defaultPrevented) return;
-      if (e.metaKey || e.ctrlKey) {
-        const hit = shortcuts.find((s) => s.chord === e.key && !!s.shift === e.shiftKey);
-        if (hit) {
-          e.preventDefault();
-          hit.run();
-        }
-      }
-      // Escape stops the turn you are looking at, not every live turn in the
-      // window — the other panes are someone else's work in progress. A pane
-      // over that turn owns the press first: closing it is not stopping it.
-      // Anything transient above this — a menu, a picker, the overflow bubble —
-      // takes the press in the capture phase and stops it there (see
-      // useDismiss), so a press that reaches this listener is one nothing else
-      // wanted.
-      if (e.key === "Escape" && browser) {
-        setBrowser(false);
-      } else if (e.key === "Escape" && !settings && running) {
-        activePort?.cancel();
-      }
-    };
-    return listenAction(window, "keydown", {
-      action: browser ? "browser.open" : "session.stop",
-      listener: onKey as EventListener,
-    });
-  }, [activePort, browser, running, settings, shortcuts]);
+  const closeBrowser = useCallback(() => setBrowser(false), []);
+  const stopTurn = useCallback(() => activePort?.cancel(), [activePort]);
+  useWindowKeys(shortcuts, { browser, settings: !!settings, running, closeBrowser, stop: stopTurn });
 
   // A setting changed in the pane is a fact about the session behind it, and
   // the pane is what holds that fact. Without a nudge it keeps polling only
@@ -616,6 +595,7 @@ export function App({ hub }: { hub: HubPort }) {
         theme={scheme}
         onRail={() => setRail((v) => !v)}
         onTheme={() => setTheme(scheme === "dark" ? "light" : "dark")}
+        onFind={openFind}
         hub={hub} onError={fail}
       />
 
@@ -658,6 +638,7 @@ export function App({ hub }: { hub: HubPort }) {
           accountUnread={accountUnread}
           wallet={report.wallet}
           onSettings={showPrefs}
+          onFind={openFind}
           onError={fail}
         />
 

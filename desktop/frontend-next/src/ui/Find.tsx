@@ -25,6 +25,8 @@ function Bar({ find }: { find: Finding }) {
       <input
         ref={box}
         type="search"
+        data-window-keys=""
+        aria-keyshortcuts="Enter Shift+Enter ArrowDown ArrowUp Escape"
         data-action-change="transcript.find"
         data-action-keydown="transcript.find"
         data-value="query"
@@ -33,9 +35,10 @@ function Bar({ find }: { find: Finding }) {
         aria-label={t("在这段对话里查找")}
         onChange={(ev) => onQuery(ev.target.value)}
         onKeyDown={(ev) => {
-          if (ev.key === "Enter") {
+          if (ev.nativeEvent.isComposing) return;
+          if (ev.key === "Enter" || ev.key === "ArrowDown" || ev.key === "ArrowUp") {
             ev.preventDefault();
-            onStep(ev.shiftKey ? -1 : 1);
+            onStep(ev.key === "ArrowUp" || (ev.key === "Enter" && ev.shiftKey) ? -1 : 1);
           } else if (ev.key === "Escape") {
             ev.preventDefault();
             ev.stopPropagation();
