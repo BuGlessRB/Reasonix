@@ -2726,7 +2726,7 @@ func TestSubmitClearDiscardsCurrentContextWithoutSavingTranscript(t *testing.T) 
 	path := filepath.Join(dir, "session.jsonl")
 	cleared := make(chan struct{})
 	sink := event.FuncSink(func(e event.Event) {
-		if e.Kind == event.Notice && e.Text == "context cleared" {
+		if e.Kind == event.Notice && e.Text == i18n.M.SlashClearDone {
 			close(cleared)
 		}
 	})

@@ -94,14 +94,7 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+s":
 		return m, m.send(true)
 	case "esc":
-		if m.tr.Running {
-			m.cancelling = true
-			return m, m.call("cancel", m.client.Cancel)
-		}
-		if m.shell && empty {
-			m.shell = false
-		}
-		return m, nil
+		return m, m.escape(empty)
 	case "ctrl+c":
 		switch {
 		case m.tr.Running:
@@ -173,6 +166,12 @@ func (m *model) screenKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if cmd, handled := m.pickerKey(msg); handled {
 		return cmd, true
 	}
+	if cmd, handled := m.rewindKey(msg.String()); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.clearKey(msg.String()); handled {
+		return cmd, true
+	}
 	return m.promptKey(msg)
 }
 
@@ -229,6 +228,14 @@ func (m *model) send(steer bool) tea.Cmd {
 	case display == "/resume":
 		m.composer.Reset()
 		return m.openPicker()
+	case display == "/rewind" && !m.tr.Running:
+		m.composer.Reset()
+		m.tr.AddEcho(display)
+		return tea.Batch(m.commit(), m.openRewind())
+	case display == "/clear" && !m.tr.Running:
+		m.composer.Reset()
+		m.tr.AddEcho(display)
+		return tea.Batch(m.commit(), m.askClear())
 	case display == "/version":
 		m.composer.Reset()
 		version := m.opts.Version
@@ -260,6 +267,29 @@ func (m *model) send(steer bool) tea.Cmd {
 	}
 	m.tr.AddUser(display)
 	return tea.Batch(m.commit(), m.call("send", func(ctx context.Context) error { return m.client.Submit(ctx, text) }))
+}
+
+// escape backs out of the most specific thing in progress: the running turn,
+// then what is typed, then shell mode. On an empty idle composer a second Esc
+// soon after the first opens the rewind picker.
+func (m *model) escape(empty bool) tea.Cmd {
+	switch {
+	case m.tr.Running:
+		m.cancelling = true
+		return m.call("cancel", m.client.Cancel)
+	case !empty:
+		m.composer.Reset()
+		m.pastes = pasteStore{}
+		return nil
+	case m.shell:
+		m.shell = false
+		return nil
+	case time.Since(m.lastEsc) < escArmWindow:
+		m.lastEsc = time.Time{}
+		return m.openRewind()
+	}
+	m.lastEsc = time.Now()
+	return nil
 }
 
 // recall walks the composer through what was sent in this session. The

@@ -275,9 +275,9 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 	case trimmed == "/context":
 		c.noticeDetail(c.ContextReport())
 	case trimmed == "/new":
-		c.runSessionVerb(c.NewSession, "new session", "new session failed: ")
+		c.runSessionVerb(c.NewSession, i18n.M.SlashNewDone, i18n.M.SlashNewFailed+": ")
 	case trimmed == "/clear":
-		c.runSessionVerb(c.ClearSession, "context cleared", "clear context failed: ")
+		c.runSessionVerb(c.ClearSession, i18n.M.SlashClearDone, i18n.M.SlashClearFailed+": ")
 	case strings.HasPrefix(trimmed, "/mcp__"):
 		c.runGuarded(func(ctx context.Context) error {
 			sent, found, err := c.MCPPrompt(ctx, trimmed)

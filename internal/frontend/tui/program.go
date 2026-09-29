@@ -53,6 +53,7 @@ func Run(ctx context.Context, opts Options) error {
 const (
 	statusEvery    = time.Second
 	quitArmWindow  = time.Second
+	escArmWindow   = 600 * time.Millisecond
 	composerMaxRow = 8
 )
 
@@ -90,6 +91,9 @@ type model struct {
 	compaction    Compaction
 	scr           *screen
 	picker        *sessionPicker
+	rewind        *rewindPicker
+	clearing      *clearConfirm
+	lastEsc       time.Time // an idle Esc on an empty composer, arming the second
 	// frameRows is how tall the last inline frame was: a print has only the
 	// rows above it to land in.
 	frameRows int
@@ -309,6 +313,12 @@ func (m *model) onScreenMsg(msg tea.Msg) (tea.Cmd, bool) {
 		return m.onSessions(msg), true
 	case resumedMsg:
 		return m.onResumed(msg), true
+	case checkpointsMsg:
+		return m.onCheckpoints(msg), true
+	case rewindPlanMsg:
+		return m.onRewindPlan(msg), true
+	case rewoundMsg:
+		return m.onRewound(msg), true
 	case bannerMsg:
 		return m.emit(func(int, bool) string { return banner(msg.s) }), true
 	case tea.MouseMsg:
