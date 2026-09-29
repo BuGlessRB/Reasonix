@@ -179,10 +179,10 @@ func (m *model) pickerPanel() []string {
 	width := max(m.width-8, 12)
 	lines := []string{termrender.Accent(i18n.M.ResumePickTitle)}
 	if p.query != "" {
-		lines = append(lines, "  "+termrender.Dim("Search: ")+p.query)
+		lines = append(lines, "  "+termrender.Dim(i18n.M.ResumePickSearch)+p.query)
 	}
 	if len(items) == 0 {
-		lines = append(lines, termrender.Dim("  No matches"))
+		lines = append(lines, termrender.Dim("  "+i18n.M.ResumePickNoMatch))
 	}
 	start := max(min(p.sel-pickerRows/2, len(items)-pickerRows), 0)
 	end := min(start+pickerRows, len(items))
@@ -203,6 +203,6 @@ func (m *model) pickerPanel() []string {
 	if end < len(items) {
 		lines = append(lines, termrender.Dim("  ↓ more"))
 	}
-	lines = append(lines, termrender.Dim("Type to filter · "+i18n.M.ResumePickHint))
+	lines = append(lines, termrender.Dim(i18n.M.ResumePickFilter+" · "+i18n.M.ResumePickHint))
 	return panel(lines, m.width, accentEdge)
 }

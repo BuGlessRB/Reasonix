@@ -184,8 +184,9 @@ func (m *model) menuLines() []string {
 		}
 		lines = append(lines, row)
 	}
-	if len(items) > menuRows {
-		lines = append(lines, termrender.Dim("    tab/↑↓ to move · enter to choose · esc to close"))
+	hint := i18n.M.CompHintSlash
+	if m.menu.c.Kind == "ref" {
+		hint = i18n.M.CompHintFile
 	}
-	return lines
+	return append(lines, termrender.Dim("    "+hint))
 }

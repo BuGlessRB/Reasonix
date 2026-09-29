@@ -54,9 +54,9 @@ func renderItem(it *Item, width, shown int, hideRail bool) string {
 		if it.Verdict != "deny" && it.Verdict != "revise_plan" && it.Verdict != "exit_plan" {
 			return ""
 		}
-		return termrender.Dim(fmt.Sprintf("  ✗ declined %s %s", it.Approval.Tool, oneLine(it.Approval.Subject, width-20)))
+		return termrender.Dim("  ✗ " + fmt.Sprintf(i18n.M.TUIDeclinedFmt, it.Approval.Tool, oneLine(it.Approval.Subject, width-20)))
 	case ItemAsk:
-		prompt := "question"
+		prompt := i18n.M.TUIQuestion
 		if len(it.Ask.Questions) > 0 {
 			prompt = it.Ask.Questions[0].Prompt
 		}
@@ -140,7 +140,7 @@ func renderTool(it *Item, width int) string {
 		lines = append(lines, outputSummary(t.Name, t.Output, avail, it.Fold)...)
 	}
 	if n := len(it.Children); n > 0 {
-		lines = append(lines, termrender.Dim(connector+fmt.Sprintf("%d sub-agent call(s)", n)))
+		lines = append(lines, termrender.Dim(connector+fmt.Sprintf(i18n.M.TUISubagentCallsFmt, n)))
 	}
 	return "\n" + strings.Join(lines, "\n")
 }
