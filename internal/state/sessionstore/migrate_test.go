@@ -80,7 +80,11 @@ func TestMigrateLegacySessionsWithholdsMarkerWhenACopyFails(t *testing.T) {
 	if err := writeFile(filepath.Join(src, "chat-1.jsonl"), []byte(`{"role":"user","content":"hi"}`+"\n")); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeFile(filepath.Join(src, "chat-1.meta.json"), []byte(`{"workspace":"`+workspace+`","summary":"chat"}`)); err != nil {
+	meta, err := json.Marshal(map[string]string{"workspace": workspace, "summary": "chat"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(src, "chat-1.meta.json"), meta); err != nil {
 		t.Fatal(err)
 	}
 	// projectDir names a file, so the routed copy cannot create its directory.
