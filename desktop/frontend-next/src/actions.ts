@@ -399,6 +399,9 @@ export const ACTIONS: UIAction[] = [
   { id: "plan.fold", kind: "view", target: "none", proof: "interaction" },
   { id: "workbench.file", kind: "view", target: "entity", proof: "interaction" },
   { id: "tool-approval.mode", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  // The folder-trust question and the no-sandbox note beside the composer.
+  { id: "workspace.trust", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "posture-note.dismiss", kind: "view", target: "none", proof: "interaction" },
   { id: "storage.move", kind: "kernel-mutation", target: "none", proof: "interaction" },
   { id: "session.import-legacy", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "network.diagnose", kind: "repeatable", target: "none", proof: "interaction" },
