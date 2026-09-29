@@ -291,7 +291,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     port.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([]));
     // Two reads, the same way the first mount takes them: the record does not
     // wait behind the numbers over it.
-    port.history().then((msgs) => {
+    const history = port.history().then((msgs) => {
       const r = fromHistory(msgs);
       dispatch({ kind: "__restore", ...r });
     });
@@ -301,6 +301,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
     });
     refreshWallet();
     onSessionChanged();
+    return history;
   }, [port, applyStatus, refreshWallet, onSessionChanged, replayTrajectory]);
 
   const { onPrepareRewind, onCommitRewind, onUndoRewind, onPrepareFileRevert, onCommitFileRevert } = useRewindActions(port, reloadSession);
@@ -491,7 +492,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
   );
   const find = useFind(s.items, findPulse, active, useCallback(() => showView("flow"), [showView]));
 
-  const { quote, reply, onResend } = useReplyActions({ port, items: s.items, checkpoints, running, model: status?.label, submit, onSettings, onRunDetail: () => showView("analysis"), onError: fail });
+  const { quote, reply, onResend } = useReplyActions({ port, items: s.items, checkpoints, running, model: status?.label, submit, reloadSession, onSettings, onRunDetail: () => showView("analysis"), onError: fail });
 
   // Where the bottom is moves as blocks mount under it, so this only asks the
   // transcript to follow again and lets it scroll itself into place.
