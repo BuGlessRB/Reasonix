@@ -11,14 +11,17 @@ export interface PermissionLists {
   deny: string[];
 }
 
-// What an editor needs beyond the lists: the file a save lands in, and — only
-// when a project config declares its own — the merge actually in force, which
-// an edit here cannot move.
+// Editable user lists and separate project rules that are in force. shadowedBy
+// names a project config that outranks the edited file; effective is the
+// merged boundary the controller actually loaded.
 export interface PermissionRules extends PermissionLists {
   path: string;
   // What was allowed on a prompt for this session alone. Nothing wrote it down,
   // so the file on screen is less than the agent may currently do.
   granted?: string[];
+  remembered?: string[];
+  rememberedPath?: string;
+  rememberedErrorCode?: string;
   shadowedBy?: string;
   effective?: PermissionLists;
 }

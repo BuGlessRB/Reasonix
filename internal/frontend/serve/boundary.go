@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"reasonix/internal/session/control"
 )
@@ -14,6 +15,7 @@ func (s *Server) registerBoundaryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /permissions", s.permissions)
 	mux.HandleFunc("POST /permissions", s.savePermissions)
 	mux.HandleFunc("POST /permissions/revoke", s.revokeSessionGrant)
+	mux.HandleFunc("POST /permissions/remembered/revoke", s.revokeRememberedProjectRule)
 	mux.HandleFunc("GET /sandbox", s.sandboxSettings)
 	mux.HandleFunc("POST /sandbox", s.saveSandboxSettings)
 	mux.HandleFunc("GET /browser-tools", s.browserToolsSettings)
@@ -65,6 +67,43 @@ func (s *Server) revokeSessionGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.ctl().RevokeSessionGrant(body.Rule)
+	writeJSON(w, s.ctl().PermissionRules())
+}
+
+// A remembered project approval is read by boot when it builds the permission
+// gate. Serialize its removal with rebuilds and refuse while a turn is active.
+func (s *Server) revokeRememberedProjectRule(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Rule string `json:"rule"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
+		badBody(w)
+		return
+	}
+	if strings.TrimSpace(body.Rule) == "" {
+		refuse(w, http.StatusBadRequest, "permissions.rule_required", "rule is required", nil)
+		return
+	}
+	s.bindMu.Lock()
+	defer s.bindMu.Unlock()
+	ctrl := s.ctl()
+	if controllerHasActiveRuntimeWork(ctrl) {
+		refuse(w, http.StatusConflict, "permissions.busy", "finish the current work before revoking a remembered rule", nil)
+		return
+	}
+	model := currentModelRef(ctrl)
+	if model == "" {
+		refuse(w, http.StatusConflict, "permissions.rebuild_unavailable", "no current model to rebuild", nil)
+		return
+	}
+	if err := ctrl.RevokeRememberedProjectRule(body.Rule); err != nil {
+		refuse(w, http.StatusConflict, "project_grants.unavailable", "remembered project rules could not be updated", nil)
+		return
+	}
+	if err := s.switchModelLocked(r.Context(), model); err != nil {
+		rebuildFailed(w, err)
+		return
+	}
 	writeJSON(w, s.ctl().PermissionRules())
 }
 

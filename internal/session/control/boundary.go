@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"reasonix/internal/contract/config"
@@ -35,6 +36,10 @@ type PermissionRules struct {
 	// than in the file. Nothing wrote it down, so a reader with only the file
 	// in front of them is looking at less than the agent may currently do.
 	Granted []string `json:"granted,omitempty"`
+	// Remembered rules are stored per workspace outside project configuration.
+	Remembered          []string `json:"remembered,omitempty"`
+	RememberedPath      string   `json:"rememberedPath,omitempty"`
+	RememberedErrorCode string   `json:"rememberedErrorCode,omitempty"`
 }
 
 // SandboxSettings is where an approved write may land, and whether bash runs
@@ -77,6 +82,17 @@ func (c *Controller) PermissionRules() PermissionRules {
 		ShadowedBy:      shadowingConfig(path, c.WorkspaceRoot()),
 		Granted:         c.approval.sessionGrants(),
 	}
+	if root := c.WorkspaceRoot(); root != "" {
+		store := config.NewProjectGrantStore(config.Roots{}.Home())
+		out.RememberedPath = store.Path()
+		if grant, err := store.Grant(root); err != nil {
+			if errors.Is(err, config.ErrProjectGrantsUnavailable) {
+				out.RememberedErrorCode = "project_grants.unavailable"
+			}
+		} else {
+			out.Remembered = grant.Allow
+		}
+	}
 	if out.ShadowedBy == "" {
 		return out
 	}
@@ -94,6 +110,27 @@ func (c *Controller) PermissionRules() PermissionRules {
 // back is to close it, which costs them the work as well as the grant.
 func (c *Controller) RevokeSessionGrant(rule string) int {
 	return c.approval.revokeSessionGrant(rule)
+}
+
+// RevokeRememberedProjectRule removes one persistent allow rule for this
+// workspace. The store resolves its fingerprint and preserves other grants.
+// The host rebuilds the runtime after this write so the active gate follows it.
+// A successful revoke also drops a matching same-session grant before the
+// rebuild snapshots authorizations for the replacement controller.
+func (c *Controller) RevokeRememberedProjectRule(rule string) error {
+	root := c.WorkspaceRoot()
+	if root == "" || strings.TrimSpace(rule) == "" {
+		return fmt.Errorf("%w: workspace and rule are required", config.ErrProjectGrantsUnavailable)
+	}
+	store := config.NewProjectGrantStore(config.Roots{}.Home())
+	if err := store.Update(root, func(grant config.ProjectGrant) (config.ProjectGrant, error) {
+		grant.Allow = slices.DeleteFunc(grant.Allow, func(saved string) bool { return saved == rule })
+		return grant, nil
+	}); err != nil {
+		return err
+	}
+	c.approval.revokeSessionGrant(rule)
+	return nil
 }
 
 // SavePermissionRules replaces the three lists wholesale after validating every

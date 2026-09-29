@@ -252,6 +252,7 @@ type RuntimeSettings interface {
 	PermissionRules() PermissionRules
 	SavePermissionRules(in PermissionLists) error
 	RevokeSessionGrant(rule string) int
+	RevokeRememberedProjectRule(rule string) error
 	SandboxSettings() SandboxSettings
 	SaveSandboxSettings(in SandboxSettings) error
 	BrowserToolsSettings() BrowserToolsSettings

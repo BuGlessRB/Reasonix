@@ -242,6 +242,7 @@ export interface AgentPort {
   savePermissions(lists: PermissionLists): Promise<PermissionRules>;
   /** Take back what a prompt allowed for this session — one rule, or all of them when rule is "". */
   revokeSessionGrant(rule: string): Promise<PermissionRules>;
+  revokeRememberedProjectRule(rule: string): Promise<PermissionRules>;
   sandbox(): Promise<SandboxSettings>;
   saveSandbox(s: SandboxSettings): Promise<SandboxSettings>;
   browserTools(): Promise<BrowserToolsSettings>;

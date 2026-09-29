@@ -131,6 +131,13 @@ export const EN_SETTINGS: Record<string, string> = {
     "The setting above decides whether you are asked; this one decides what is never allowed and what never needs asking. Changes rebuild the runtime and cannot be made while a task is running.",
   "无法读取权限配置。": "Cannot read the permission config.",
   "当前项目自带权限配置": "This project ships its own permissions",
+  "当前项目记住的放行规则": "Remembered allow rules for this project",
+  "已记住的权限规则无法读取": "Could not read remembered permission rules",
+  "请检查或修复用户目录中的授权记录文件。": "Check or repair the grant record in your user directory.",
+  "请选择要收回的授权规则": "Select an approval rule to revoke",
+  "任务正在运行，请先停止再收回已记住的授权": "Stop the running task before revoking a remembered approval",
+  "当前会话无法重建，授权未更改": "This session cannot rebuild; the approval was not changed",
+  "无法更新当前项目的授权记录，请检查用户目录中的授权文件": "Could not update this project's approvals; check the grant record in your user directory",
   "{path} 中同样声明了 permissions，实际生效的是该文件。此处的修改会被保存，但需待其不再声明后才会生效。":
     "{path} declares permissions too, and that is what is in force. Edits here are saved, but only take effect once it stops declaring them.",
   "禁止访问 .env": "Keep .env off limits",
