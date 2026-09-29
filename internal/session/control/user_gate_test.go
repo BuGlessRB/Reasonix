@@ -3,7 +3,9 @@ package control
 import (
 	"context"
 	"reasonix/internal/state/sessionstore"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"reasonix/internal/contract/event"
@@ -91,7 +93,7 @@ func TestGatedTurnIsNotContinued(t *testing.T) {
 		// Nothing past here should run: reaching it means the host continued.
 		textTurn("item two, item three, item four"),
 	}}
-	c, done := readinessGatedController(t, prov)
+	c, done, _ := readinessGatedController(t, prov)
 
 	c.Submit("walk the list with me, one at a time")
 	<-done
@@ -101,10 +103,39 @@ func TestGatedTurnIsNotContinued(t *testing.T) {
 	}
 }
 
+// The model wrote `need`, so a frontend that renders model text renders it; the
+// code is what tells it the detail is model-authored rather than a diagnostic.
+func TestGateNoticeCarriesTheNeedAsItsDetail(t *testing.T) {
+	prov := &scriptedTurns{turns: [][]provider.Chunk{
+		{toolCallChunk("t0", "todo_write", `{"todos":[{"step_id":"n1","content":"item one","status":"in_progress"}]}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("w1", "write_file", `{"path":"notes/item-one.md"}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("g1", "await_user", `{"step_id":"n1","need":"**Batch** the rest,\nor stop here?"}`), {Type: provider.ChunkDone}},
+		textTurn("Here is item one."),
+	}}
+	c, done, notices := readinessGatedController(t, prov)
+
+	c.Submit("walk the list with me")
+	<-done
+
+	for _, n := range notices() {
+		if n.Code != event.NoticeCodeAwaitUser {
+			continue
+		}
+		if n.Detail != "**Batch** the rest,\nor stop here?" {
+			t.Fatalf("detail = %q, want the need verbatim", n.Detail)
+		}
+		if !strings.Contains(n.Text, "stop here") {
+			t.Fatalf("text = %q, want the form a text frontend prints", n.Text)
+		}
+		return
+	}
+	t.Fatalf("no await_user notice among %+v", notices())
+}
+
 // readinessGatedController wires the same scripted-agent harness the other
 // readiness tests use, plus the two things a hand-back needs: the tool itself,
 // and somebody to hand back to.
-func readinessGatedController(t *testing.T, prov provider.Provider) (*Controller, chan event.Event) {
+func readinessGatedController(t *testing.T, prov provider.Provider) (*Controller, chan event.Event, func() []event.Event) {
 	t.Helper()
 	reg := tool.NewRegistry()
 	for _, name := range []string{"todo_write", "complete_step"} {
@@ -119,16 +150,27 @@ func readinessGatedController(t *testing.T, prov provider.Provider) (*Controller
 	ag := agent.New(prov, reg, sessionstore.NewSession(""), agent.Options{}, event.Discard)
 	ag.SetAsker(stubAsker{})
 	done := make(chan event.Event, 4)
+	var mu sync.Mutex
+	var notices []event.Event
 	c := New(Options{
 		Runner: ag, Executor: ag,
 		Sink: event.FuncSink(func(e event.Event) {
-			if e.Kind == event.TurnDone {
+			switch e.Kind {
+			case event.Notice:
+				mu.Lock()
+				notices = append(notices, e)
+				mu.Unlock()
+			case event.TurnDone:
 				done <- e
 			}
 		}),
 	})
 	t.Cleanup(c.Close)
-	return c, done
+	return c, done, func() []event.Event {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(notices)
+	}
 }
 
 type stubAsker struct{}
