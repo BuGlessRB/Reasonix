@@ -538,13 +538,25 @@ func TestUpsertProvider(t *testing.T) {
 		t.Fatalf("multi-model add: %v", err)
 	}
 
+	// idle_timeout_seconds is bounded to [1s, 32767s]; 0 means "use the default".
+	for _, secs := range []int{0, 1, 32767} {
+		if err := c.UpsertProvider(ProviderEntry{
+			Name: "idle", Kind: "openai", BaseURL: "http://localhost:7777/v1", Model: "m",
+			IdleTimeoutSeconds: secs,
+		}); err != nil {
+			t.Fatalf("idle_timeout_seconds=%d rejected: %v", secs, err)
+		}
+	}
+
 	// Missing required fields error.
 	for _, bad := range []ProviderEntry{
-		{Kind: "openai", BaseURL: "u", Model: "m"},                                   // no name
-		{Name: "a", BaseURL: "u", Model: "m"},                                        // no kind
-		{Name: "a", Kind: "openai", Model: "m"},                                      // no base_url
-		{Name: "a", Kind: "openai", BaseURL: "u"},                                    // no model
-		{Name: "a", Kind: "openai", BaseURL: "u", Model: "m", APIKeyEnv: "grok-4.5"}, // invalid credential variable name
+		{Kind: "openai", BaseURL: "u", Model: "m"},                                       // no name
+		{Name: "a", BaseURL: "u", Model: "m"},                                            // no kind
+		{Name: "a", Kind: "openai", Model: "m"},                                          // no base_url
+		{Name: "a", Kind: "openai", BaseURL: "u"},                                        // no model
+		{Name: "a", Kind: "openai", BaseURL: "u", Model: "m", APIKeyEnv: "grok-4.5"},     // invalid credential variable name
+		{Name: "a", Kind: "openai", BaseURL: "u", Model: "m", IdleTimeoutSeconds: -1},    // below the floor
+		{Name: "a", Kind: "openai", BaseURL: "u", Model: "m", IdleTimeoutSeconds: 32768}, // above the ceiling
 	} {
 		if err := c.UpsertProvider(bad); err == nil {
 			t.Errorf("expected validation error for %+v", bad)

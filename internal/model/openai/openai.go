@@ -254,7 +254,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		effort:             effort,
 		requestEfforts:     requestEfforts,
 		http:               httpClient,
-		idleTimeout:        defaultStreamIdleTimeout,
+		idleTimeout:        provider.IdleTimeoutFromExtra(cfg.Extra),
 		openCodeSession:    provider.NewOpenCodeSessionID(),
 	}, nil
 }
@@ -265,7 +265,7 @@ func newHTTPClient(cfg provider.Config) (*http.Client, error) {
 		DialTimeout:           30 * time.Second,
 		KeepAlive:             30 * time.Second,
 		TLSHandshakeTimeout:   15 * time.Second,
-		ResponseHeaderTimeout: provider.StreamIdleTimeout,
+		ResponseHeaderTimeout: provider.IdleTimeoutFromExtra(cfg.Extra),
 	})
 }
 
@@ -294,7 +294,7 @@ type client struct {
 	autoMaxOutput      bool          // true when max_output_tokens=0 (automatic ladder)
 	effort             string        // reasoning_effort for OpenAI; thinking.type for MiniMax; "" = auto/provider default
 	requestEfforts     []string      // depth levels a per-request EffortOverride may take; empty = overrides ignored
-	idleTimeout        time.Duration // SSE stall watchdog window; defaultStreamIdleTimeout unless a test overrides
+	idleTimeout        time.Duration // SSE stall watchdog window; per-provider idle_timeout_seconds, else defaultStreamIdleTimeout
 	openCodeSession    string        // x-opencode-session this client presents to OpenCode Go
 	learned            endpointFacts
 }

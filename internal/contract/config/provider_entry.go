@@ -97,6 +97,10 @@ type ProviderEntry struct {
 	// CacheTTLMinutes overrides the vendor-default prefix-cache retention used by
 	// cold-resume prune. Zero uses the vendor default (DeepSeek/unknown 24h, DashScope/Anthropic 5m).
 	CacheTTLMinutes int `toml:"cache_ttl_minutes"`
+	// IdleTimeoutSeconds overrides the stream idle watchdog: how long a call may
+	// send nothing — before headers or between events — before it is dropped.
+	// Zero keeps the 300s default; a silent pre-header wait is retried once.
+	IdleTimeoutSeconds int `toml:"idle_timeout_seconds"`
 }
 
 type ProviderModelOverride struct {
@@ -149,6 +153,8 @@ func validateProvider(e ProviderEntry) error {
 		return fmt.Errorf("provider %q: model is required", e.Name)
 	case strings.TrimSpace(e.APIKeyEnv) != "" && !IsValidCredentialKey(e.APIKeyEnv):
 		return fmt.Errorf("provider %q: api_key_env %q is not a valid environment variable name", e.Name, e.APIKeyEnv)
+	case e.IdleTimeoutSeconds != 0 && (e.IdleTimeoutSeconds < provider.MinIdleTimeoutSeconds || e.IdleTimeoutSeconds > provider.MaxIdleTimeoutSeconds):
+		return fmt.Errorf("provider %q: idle_timeout_seconds must be 0 (use the default) or between %d and %d", e.Name, provider.MinIdleTimeoutSeconds, provider.MaxIdleTimeoutSeconds)
 	}
 	return nil
 }

@@ -70,6 +70,11 @@ func renderProviderEntryAnnotatedTuning(b *strings.Builder, p ProviderEntry) {
 		b.WriteString("# max_output_tokens = 65536   # heavy reasoning / long tool loops\n")
 		b.WriteString("# max_output_tokens = 131072  # only after repeated finish_reason=length\n")
 	}
+	if p.IdleTimeoutSeconds > 0 {
+		fmt.Fprintf(b, "idle_timeout_seconds = %d   # how long this provider may send nothing before the call is read as dropped\n", p.IdleTimeoutSeconds)
+	} else {
+		b.WriteString("# idle_timeout_seconds = 300   # per-provider stream idle watchdog; default 300s\n")
+	}
 	if p.Price != nil {
 		fmt.Fprintf(b, "price       = %s   # provider-wide fallback, per 1M tokens\n", renderPricingInline(p.Price))
 	}
@@ -174,6 +179,9 @@ func renderProviderEntryPlainTuning(b *strings.Builder, p ProviderEntry) {
 	}
 	if p.MaxOutputTokens != 0 {
 		fmt.Fprintf(b, "max_output_tokens = %d\n", p.MaxOutputTokens)
+	}
+	if p.IdleTimeoutSeconds > 0 {
+		fmt.Fprintf(b, "idle_timeout_seconds = %d\n", p.IdleTimeoutSeconds)
 	}
 	renderPerseverationRetries(b, p.PerseverationRetries, nil)
 	if p.Price != nil {

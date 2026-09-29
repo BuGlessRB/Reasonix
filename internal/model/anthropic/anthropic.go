@@ -148,13 +148,13 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		authHeader:       authHeader,
 		defaultMaxTokens: maxOutputTokens,
 		http:             httpClient, // no overall timeout; lifecycle is ctx-driven
-		idleTimeout:      defaultStreamIdleTimeout,
+		idleTimeout:      provider.IdleTimeoutFromExtra(cfg.Extra),
 	}, nil
 }
 
 func newHTTPClient(cfg provider.Config) (*http.Client, error) {
 	spec, _ := cfg.Extra["proxy_spec"].(netclient.ProxySpec)
-	return netclient.NewHTTPClient(spec, netclient.TransportOptions{ResponseHeaderTimeout: provider.StreamIdleTimeout})
+	return netclient.NewHTTPClient(spec, netclient.TransportOptions{ResponseHeaderTimeout: provider.IdleTimeoutFromExtra(cfg.Extra)})
 }
 
 type client struct {
@@ -176,7 +176,7 @@ type client struct {
 	authHeader       bool // send Authorization: Bearer instead of Anthropic's x-api-key header
 	defaultMaxTokens int
 	http             *http.Client
-	idleTimeout      time.Duration // SSE stall watchdog window; defaultStreamIdleTimeout unless a test overrides
+	idleTimeout      time.Duration // SSE stall watchdog window; per-provider idle_timeout_seconds, else defaultStreamIdleTimeout
 	authed           atomic.Bool   // a request has succeeded — gate transient-401 retry
 }
 
@@ -691,7 +691,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		return
 	}
 	if stalled.Load() {
-		err := fmt.Errorf("%s: stream stalled — no data for %s, connection likely dropped", c.name, idleTimeout)
+		err := fmt.Errorf("%s: stream stalled — no data for %s, connection likely dropped; raise idle_timeout_seconds to allow a longer silence", c.name, idleTimeout)
 		send(provider.Chunk{Type: provider.ChunkError, Err: provider.StreamInterrupt(err, provider.StreamInterruptIdleTimeout)})
 		return
 	}
