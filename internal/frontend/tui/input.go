@@ -94,14 +94,7 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+s":
 		return m, m.send(true)
 	case "esc":
-		if m.tr.Running {
-			m.cancelling = true
-			return m, m.call("cancel", m.client.Cancel)
-		}
-		if m.shell && empty {
-			m.shell = false
-		}
-		return m, nil
+		return m, m.escape(empty)
 	case "ctrl+c":
 		switch {
 		case m.tr.Running:
@@ -173,6 +166,12 @@ func (m *model) screenKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if cmd, handled := m.pickerKey(msg); handled {
 		return cmd, true
 	}
+	if cmd, handled := m.rewindKey(msg.String()); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.clearKey(msg.String()); handled {
+		return cmd, true
+	}
 	return m.promptKey(msg)
 }
 
@@ -223,12 +222,24 @@ func (m *model) send(steer bool) tea.Cmd {
 		return nil
 	}
 	switch {
+	case isHelp(display):
+		m.composer.Reset()
+		m.tr.AddEcho(display)
+		return tea.Batch(m.commit(), m.showHelp())
 	case display == "/mouse" && m.scr != nil:
 		m.composer.Reset()
 		return m.toggleMouse()
 	case display == "/resume":
 		m.composer.Reset()
 		return m.openPicker()
+	case display == "/rewind" && !m.tr.Running:
+		m.composer.Reset()
+		m.tr.AddEcho(display)
+		return tea.Batch(m.commit(), m.openRewind())
+	case display == "/clear" && !m.tr.Running:
+		m.composer.Reset()
+		m.tr.AddEcho(display)
+		return tea.Batch(m.commit(), m.askClear())
 	case display == "/version":
 		m.composer.Reset()
 		version := m.opts.Version
@@ -245,11 +256,12 @@ func (m *model) send(steer bool) tea.Cmd {
 	m.viCmd = false
 	if m.shell {
 		m.shell = false
-		display, text = "! "+display, "!"+text
 		if m.tr.Running {
 			m.tr.AddNotice("warn", i18n.M.ShellWaitsForTurn)
 			return m.commit()
 		}
+		m.tr.AddEcho("! " + display)
+		return tea.Batch(m.commit(), m.call("send", func(ctx context.Context) error { return m.client.RunShell(ctx, text) }))
 	}
 	if m.tr.Running {
 		row := m.tr.AddQueued(display, steer)
@@ -260,6 +272,29 @@ func (m *model) send(steer bool) tea.Cmd {
 	}
 	m.tr.AddUser(display)
 	return tea.Batch(m.commit(), m.call("send", func(ctx context.Context) error { return m.client.Submit(ctx, text) }))
+}
+
+// escape backs out of the most specific thing in progress: the running turn,
+// then what is typed, then shell mode. On an empty idle composer a second Esc
+// soon after the first opens the rewind picker.
+func (m *model) escape(empty bool) tea.Cmd {
+	switch {
+	case m.tr.Running:
+		m.cancelling = true
+		return m.call("cancel", m.client.Cancel)
+	case !empty:
+		m.composer.Reset()
+		m.pastes = pasteStore{}
+		return nil
+	case m.shell:
+		m.shell = false
+		return nil
+	case time.Since(m.lastEsc) < escArmWindow:
+		m.lastEsc = time.Time{}
+		return m.openRewind()
+	}
+	m.lastEsc = time.Now()
+	return nil
 }
 
 // recall walks the composer through what was sent in this session. The
@@ -284,39 +319,4 @@ func (m *model) recall(back bool) bool {
 		m.composer.SetValue(m.history[m.histAt])
 	}
 	return true
-}
-
-// cycleMode steps ask → auto → plan → ask, the order the footer names them.
-// Plan is its own switch on the kernel, so entering it leaves the approval
-// mode where it was and leaving it returns to ask.
-func (m *model) cycleMode() tea.Cmd {
-	s := &m.status
-	var step func(context.Context) error
-	switch {
-	case s.Plan:
-		s.Plan, s.ToolApprovalMode = false, "ask"
-		step = func(ctx context.Context) error {
-			if err := m.client.SetPlan(ctx, false); err != nil {
-				return err
-			}
-			return m.client.SetApprovalMode(ctx, "ask")
-		}
-	case s.ToolApprovalMode == "auto":
-		s.Plan = true
-		step = func(ctx context.Context) error { return m.client.SetPlan(ctx, true) }
-	default:
-		s.ToolApprovalMode = "auto"
-		step = func(ctx context.Context) error { return m.client.SetApprovalMode(ctx, "auto") }
-	}
-	return tea.Sequence(m.call("mode", step), m.fetchStatus())
-}
-
-// toggleYolo flips between skipping approvals and asking for them.
-func (m *model) toggleYolo() tea.Cmd {
-	next := "yolo"
-	if m.status.ToolApprovalMode == "yolo" {
-		next = "ask"
-	}
-	m.status.ToolApprovalMode = next
-	return tea.Sequence(m.call("mode", func(ctx context.Context) error { return m.client.SetApprovalMode(ctx, next) }), m.fetchStatus())
 }

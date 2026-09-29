@@ -39,6 +39,10 @@ type Options struct {
 	// Statusline, when set, turns the footer's context JSON into one line
 	// that replaces the telemetry row; "" keeps the built-in row.
 	Statusline func(ctx context.Context, stdin string) string
+	// YoloConfirmed says the one-time YOLO notice was already accepted, and
+	// ConfirmYolo records it when a second Ctrl+Y accepts it here.
+	YoloConfirmed bool
+	ConfirmYolo   func() error
 }
 
 // Run drives the terminal until the user quits or ctx ends.
@@ -53,6 +57,7 @@ func Run(ctx context.Context, opts Options) error {
 const (
 	statusEvery    = time.Second
 	quitArmWindow  = time.Second
+	escArmWindow   = 600 * time.Millisecond
 	composerMaxRow = 8
 )
 
@@ -90,10 +95,17 @@ type model struct {
 	compaction    Compaction
 	scr           *screen
 	picker        *sessionPicker
+	rewind        *rewindPicker
+	clearing      *clearConfirm
+	lastEsc       time.Time // an idle Esc on an empty composer, arming the second
 	// frameRows is how tall the last inline frame was: a print has only the
 	// rows above it to land in.
 	frameRows int
 	glyphs    *glyphFit // console-measured stand-ins for runes drawn wider than counted
+	// yoloRestore is the posture Ctrl+Y leaves YOLO for; yoloArmedAt is a
+	// first, unconfirmed Ctrl+Y waiting for the second.
+	yoloRestore string
+	yoloArmedAt time.Time
 }
 
 type (
@@ -305,10 +317,18 @@ func (m *model) onScreenMsg(msg tea.Msg) (tea.Cmd, bool) {
 		return m.onClipImage(msg), true
 	case clipTextMsg:
 		return m.onClipText(msg), true
+	case helpMsg:
+		return m.onHelp(msg), true
 	case sessionsMsg:
 		return m.onSessions(msg), true
 	case resumedMsg:
 		return m.onResumed(msg), true
+	case checkpointsMsg:
+		return m.onCheckpoints(msg), true
+	case rewindPlanMsg:
+		return m.onRewindPlan(msg), true
+	case rewoundMsg:
+		return m.onRewound(msg), true
 	case bannerMsg:
 		return m.emit(func(int, bool) string { return banner(msg.s) }), true
 	case tea.MouseMsg:
@@ -389,10 +409,11 @@ func (m *model) commit() tea.Cmd {
 	return m.publish(out)
 }
 
-// hidden is a row the configuration keeps off the screen. It still folds into
-// the transcript: a later frame of the same request restates it in place.
+// hidden is a row kept off the screen: one the configuration hides, or task
+// bookkeeping that settled cleanly. It still folds into the transcript: a later
+// frame of the same request restates it in place.
 func (m *model) hidden(it *Item) bool {
-	return it.Kind == ItemUsage && m.opts.HideTurnUsage
+	return (it.Kind == ItemUsage && m.opts.HideTurnUsage) || (it.bookkeeping() && !it.Running)
 }
 
 // settledChunk draws the part of a streaming answer that has become final

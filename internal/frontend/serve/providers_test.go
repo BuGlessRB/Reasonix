@@ -20,7 +20,7 @@ import (
 
 // newProviderEditServer is a server with one configured provider, its config
 // and credential store redirected into the test's own home.
-func newProviderEditServer(t *testing.T) *Server {
+func newProviderEditServer(t *testing.T, workspaceRoot ...string) *Server {
 	t.Helper()
 	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
 	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
@@ -42,8 +42,12 @@ api_key_env = "EXISTING_API_KEY"
 		t.Fatal(err)
 	}
 	bc := NewBroadcaster()
+	root := ""
+	if len(workspaceRoot) > 0 {
+		root = workspaceRoot[0]
+	}
 	ctrl := control.New(control.Options{
-		Sink: bc, Label: "model-a", ModelRef: "existing/model-a", SessionDir: testenv.TempDir(t),
+		Sink: bc, Label: "model-a", ModelRef: "existing/model-a", SessionDir: testenv.TempDir(t), WorkspaceRoot: root,
 	})
 	t.Cleanup(ctrl.Close)
 	closeSharedCatalogsOnCleanup(t)

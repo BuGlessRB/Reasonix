@@ -8,7 +8,9 @@ import (
 	"sync"
 	"testing"
 
+	"reasonix/internal/base/i18n"
 	"reasonix/internal/base/testenv"
+	"reasonix/internal/contract/event"
 	"reasonix/internal/state/memory"
 )
 
@@ -230,5 +232,20 @@ func TestRestoreMemoryQueuesAuditedRevisionForNextTurn(t *testing.T) {
 	composed := c.Compose("continue")
 	if !strings.Contains(composed, "Restored memory") || !strings.Contains(composed, "revision 3") {
 		t.Fatalf("restore note did not ride next turn: %q", composed)
+	}
+}
+
+// "# note" answers in the UI language, the way 1.x's quick-add does.
+func TestQuickRememberNoticeIsTranslated(t *testing.T) {
+	was := i18n.M
+	i18n.M = i18n.Chinese
+	t.Cleanup(func() { i18n.M = was })
+	dir := testenv.TempDir(t)
+	events := make(chan event.Event, 8)
+	c := New(Options{Memory: memory.Load(memory.Options{CWD: dir}), Sink: event.FuncSink(func(e event.Event) { events <- e })})
+	c.Submit("# prefer tabs over spaces")
+	e := <-events
+	if want := strings.SplitN(i18n.Chinese.QuickRememberDoneFmt, "%", 2)[0]; !strings.HasPrefix(e.Text, want) {
+		t.Fatalf("notice = %q, want it to start %q", e.Text, want)
 	}
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeInViewport } from "./place";
+import { beside, placeInViewport } from "./place";
 
 const VIEW = { width: 1000, height: 800 };
 
@@ -43,5 +43,25 @@ describe("placeInViewport", () => {
   it("clamps the top edge too", () => {
     const at = placeInViewport({ x: 100, y: -40 }, bubble(1.5), VIEW, 1.5);
     expect(at.top * 1.5).toBe(6);
+  });
+});
+
+describe("beside", () => {
+  const H = 800;
+  const at = (top: number) => ({ top, bottom: top + 28 });
+
+  it("keeps the preferred side while the whole box fits there", () => {
+    expect(beside(at(400), 120, H, "above", 5)).toBe(400 - 5 - 120);
+    expect(beside(at(100), 120, H, "below", 5)).toBe(128 + 5);
+  });
+
+  it("opens on the other side when the preferred one would cut it off", () => {
+    expect(beside(at(40), 120, H, "above", 5)).toBe(68 + 5);
+    expect(beside(at(700), 120, H, "below", 5)).toBe(700 - 5 - 120);
+  });
+
+  it("takes the roomier side when neither fits", () => {
+    expect(beside(at(300), 600, H, "above", 5)).toBe(328 + 5);
+    expect(beside(at(500), 600, H, "below", 5)).toBe(500 - 5 - 600);
   });
 });

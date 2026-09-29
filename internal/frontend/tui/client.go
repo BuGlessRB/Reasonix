@@ -99,8 +99,16 @@ func decodeRefusal(resp *http.Response) error {
 
 // Submit starts a turn, or runs a `!` shell command where the transport allows
 // it. A running turn refuses it with CodeSessionBusy; Queue is the way in then.
+// A slash command nothing answers is refused rather than sent as prose, which
+// is what a terminal typing one means.
 func (c *Client) Submit(ctx context.Context, input string) error {
-	return c.do(ctx, http.MethodPost, "/submit", map[string]string{"input": input}, nil)
+	return c.do(ctx, http.MethodPost, "/submit", map[string]any{"input": input, "refuseUnknownSlash": true}, nil)
+}
+
+// RunShell runs a `!` command on this machine. It stays local, as in 1.x: the
+// output is shown and the model is not asked to answer it.
+func (c *Client) RunShell(ctx context.Context, command string) error {
+	return c.do(ctx, http.MethodPost, "/submit", map[string]any{"input": "!" + command, "localShell": true}, nil)
 }
 
 // Queue hands input to the running turn: steer lands at its next tool
@@ -249,6 +257,8 @@ type Completion struct {
 	To    int              `json:"to"`
 	Query string           `json:"query,omitempty"`
 	Items []CompletionItem `json:"items"`
+	// Typed is the command the line already spells in full, kept out of Items.
+	Typed *CompletionItem `json:"typed,omitempty"`
 }
 
 type CompletionItem struct {

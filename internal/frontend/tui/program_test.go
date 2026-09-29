@@ -31,6 +31,15 @@ func (k *recordingKernel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	k.mu.Unlock()
 	switch r.URL.Path {
 	case "/complete":
+		if r.URL.Query().Get("line") == "/" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"kind": "slash", "from": 0, "to": 1, "items": []map[string]any{
+				{"label": "/compact", "insert": "/compact ", "hint": "fold the conversation", "kind": "builtin"},
+				{"label": "/deploy", "insert": "/deploy ", "hint": "ship it", "kind": "command"},
+				{"label": "/review", "insert": "/review ", "hint": "review the diff", "kind": "subagent"},
+				{"label": "/mcp__docs__search", "insert": "/mcp__docs__search ", "kind": "prompt"},
+			}})
+			return
+		}
 		// "看 @no": the token starts after one CJK rune and a space, two UTF-16 units.
 		_ = json.NewEncoder(w).Encode(map[string]any{"kind": "ref", "from": 2, "to": 5,
 			"items": []map[string]any{{"label": "notes.md", "insert": "@notes.md "}, {"label": "notes/", "insert": "@notes/"}}})
@@ -50,6 +59,14 @@ func (k *recordingKernel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode([]map[string]any{{"role": "user", "content": "write the docs"}})
 	case "/inbox/items":
 		_ = json.NewEncoder(w).Encode(map[string]string{"itemId": "q-7"})
+	case "/checkpoints":
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"turn": 0, "prompt": "read the code"}, {"turn": 1, "prompt": "fix the bug", "files": 2},
+		})
+	case "/rewind/prepare":
+		_ = json.NewEncoder(w).Encode(map[string]any{"planId": "p-1", "canFiles": true, "canConversation": true})
+	case "/rewind/commit":
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "conversationOk": true})
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -193,7 +210,7 @@ func TestEnterSubmitsWhenIdleAndQueuesWhileRunning(t *testing.T) {
 	run(m, press(m, "ctrl+s"))
 	calls := strings.Join(k.seen(), "\n")
 	for _, want := range []string{
-		`POST /submit {"input":"hello"}`,
+		`POST /submit {"input":"hello","refuseUnknownSlash":true}`,
 		`POST /inbox/items {"input":"and tests","intent":"followup"}`,
 		`POST /inbox/items {"input":"stop, use make","intent":"steer"}`,
 	} {
@@ -253,7 +270,7 @@ func TestLargePasteFoldsAndExpandsOnSend(t *testing.T) {
 	}
 	run(m, press(m, "enter"))
 	raw, _ := json.Marshal(map[string]string{"input": big})
-	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, string(raw)) {
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, strings.TrimSuffix(string(raw), "}")) {
 		t.Fatalf("the paste did not go whole:\n%s", calls)
 	}
 }
@@ -455,7 +472,7 @@ func TestPastedImageSendsItsReference(t *testing.T) {
 		t.Fatalf("composer = %q", got)
 	}
 	run(m, press(m, "enter"))
-	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, `{"input":"what is this @.reasonix/attachments/shot.png"}`) {
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, `{"input":"what is this @.reasonix/attachments/shot.png",`) {
 		t.Fatalf("submit missing the reference:\n%s", calls)
 	}
 }
@@ -477,5 +494,20 @@ func TestHiddenTurnUsageNeverReachesTheScreen(t *testing.T) {
 				t.Errorf("hide=%v %s: receipt shown = %v\n%s", hide, when, got, screen)
 			}
 		}
+	}
+}
+
+// A `!` command is the user's own: it goes to the kernel marked to stay local,
+// and no turn is waiting to be named after it.
+func TestShellModeRunsTheCommandLocally(t *testing.T) {
+	m, k := testModel(t)
+	typeText(m, "!")
+	typeText(m, "ls -la")
+	run(m, press(m, "enter"))
+	if !strings.Contains(strings.Join(k.seen(), "\n"), `POST /submit {"input":"!ls -la","localShell":true}`) {
+		t.Fatalf("calls:\n%s", strings.Join(k.seen(), "\n"))
+	}
+	if len(m.tr.awaiting) != 0 {
+		t.Fatalf("the command waits to be named by a turn: %v", m.tr.awaiting)
 	}
 }

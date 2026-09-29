@@ -79,6 +79,11 @@ export class MockBoundary extends MockShell {
     return { ...this.rules };
   }
 
+  async revokeRememberedProjectRule(rule: string): Promise<PermissionRules> {
+    this.rules = { ...this.rules, remembered: (this.rules.remembered ?? []).filter((saved) => saved !== rule) };
+    return { ...this.rules };
+  }
+
   async sandbox(): Promise<SandboxSettings> {
     return { ...this.jail };
   }

@@ -38,6 +38,7 @@ const PATHS = {
   download: "M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4",
   list: "M9 5h12M9 12h12M9 19h12M3 5h.01M3 12h.01M3 19h.01",
   edit: "m4 16 12-12 4 4L8 20H4v-4zM13 7l4 4",
+  rewind: "M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-4",
   pin: "M9 3h6l-1 6 4 4H6l4-4-1-6zM12 13v8",
   trash: "M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6",
   archive: "M4 4h16v5H4V4zm2 5v11h12V9M9 13h6",

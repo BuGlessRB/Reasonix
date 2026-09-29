@@ -39,12 +39,18 @@ const (
 	NoticeCodePermissionSaved, NoticeCodePermissionCovered, NoticeCodePermissionSaveFailed = "permission_saved", "permission_covered", "permission_save_failed"
 	// An external tool result a screening model judged to address the agent.
 	NoticeCodeSuspectedInjection = "suspected_injection"
+	// /context's report; Detail is the breakdown under its one-line summary.
+	NoticeCodeContextReport = "context_report"
 	// Programs a project file names (hooks, language servers) held back until approved.
 	NoticeCodeProjectProgramsAwaitingApproval = "project_programs_awaiting_approval"
 	// An approved workspace program whose files changed; the host did not run it.
 	NoticeCodeProjectProgramChanged = "project_program_changed"
 	// A conversation opened from a 1.x log went on in a new session of its own.
 	NoticeCodeSessionContinuedFrom1x = "session_continued_from_1x"
+	// The user config names a default approval mode this build does not know; it loads as ask.
+	NoticeCodeApprovalModeUnrecognized = "approval_mode_unrecognized"
 	// A turn handed its open list back to the user; Detail is the model's `need`, as it wrote it.
 	NoticeCodeAwaitUser = "await_user"
+	// A slash command nothing resolves, refused rather than sent as prose.
+	NoticeCodeUnknownCommand = "unknown_command"
 )

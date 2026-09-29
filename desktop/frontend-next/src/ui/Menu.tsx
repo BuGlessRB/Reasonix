@@ -1,7 +1,7 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n";
-import { placeInViewport, zoom } from "./place";
+import { placeInViewport, useFollow, zoom } from "./place";
 
 export interface MenuItem {
   value: string;
@@ -135,18 +135,7 @@ export function Picker({
     el.style.top = `${at.top}px`;
   }, [align, place]);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    put();
-    const again = () => put();
-    // Capture, because the scroller that moves the trigger is not the window.
-    addEventListener("scroll", again, true);
-    addEventListener("resize", again);
-    return () => {
-      removeEventListener("scroll", again, true);
-      removeEventListener("resize", again);
-    };
-  }, [open, put, shown.length]);
+  useFollow(open, put, shown.length);
 
   // Headings are divs and never take focus, so walking the buttons is what
   // keeps one arrow press from landing on nothing.

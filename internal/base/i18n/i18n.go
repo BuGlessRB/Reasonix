@@ -14,11 +14,6 @@
 // language-stable.
 package i18n
 
-import (
-	"os"
-	"strings"
-)
-
 // Messages is the catalogue of translatable CLI strings. Plain fields are
 // printed verbatim; *Fmt fields are fmt format strings the caller passes to
 // fmt.Sprintf. Catalogue values do not include trailing newlines — call sites
@@ -80,6 +75,17 @@ type Messages struct {
 	ResumePickTitle        string // header in the interactive resume picker
 	ResumePickHint         string // keyboard hint in the interactive resume picker
 	ResumeRecoveryBadgeFmt string // recovery-copy badge — %s = short parent session id
+	ResumePickFilter       string // resume picker: typing narrows the list
+	ResumePickSearch       string // resume picker: label before the typed query
+	ResumePickNoMatch      string // resume picker: the query matches no session
+
+	// terminal transcript rows the kernel does not word.
+	TUIDeclinedFmt      string // an approval the user refused — %s tool, %s subject
+	TUIQuestion         string // an answered question that carried no prompt
+	TUISubagentCallsFmt string // calls a sub-agent made under its task — %d count
+	TUIStallTokensFmt   string // progress watch: %d context windows (%d tokens) with nothing observable
+	TUIStallRepeating   string // progress watch: the model repeats itself
+	TUIStallIdleFmt     string // progress watch: %d tool rounds with nothing observable
 
 	// chat TUI status line / approval banner.
 	ChatThinking                    string // live reasoning marker label, e.g. "thinking…"
@@ -109,6 +115,7 @@ type Messages struct {
 	ChatStatusCancellingViFmt       string // "%s stopping… (%ds)" — vi mode: Ctrl+C re-cancels instead of exiting, so the hint drops the exit key
 	ChatStatusIdle                  string // shortcuts hint when idle
 	ChatStatusYoloIdle              string // shortcuts hint when idle in YOLO/bypass mode
+	YoloConfirmHint                 string // Ctrl+Y before YOLO was ever confirmed: what it skips, press again
 	ChatStatusCycleHint             string // plan-toggle shortcut hint shown when no modal prompt owns the status row
 	ChatStatusCycleHintCompact      string // readable shortcut hint used by the persistent footer
 	ChatTurnReceiptLabel            string // compact per-turn usage receipt attached to the completed assistant response
@@ -218,14 +225,13 @@ type Messages struct {
 	CompactionUnit    string // the noun counted, e.g. "messages"
 	CompactionAuto    string // trigger label: reached the window threshold
 	CompactionManual  string // trigger label: user ran /compact
-	// quality line: how many of the fold's changes the digest carried, and
-	// whether it took a second summarizer call to get there.
-	CompactionChangesKept string
-	CompactionBackstopped string
+	// tokens before → after the fold; changes the digest kept; a second summarizer call
+	CompactionEstimatedTokens string
+	CompactionChangesKept     string
+	CompactionBackstopped     string
 
 	// shown when a turn ends owing requirements and the host runs them itself
 	ReadinessContinuing string
-
 	// extension structured-UI surfaces (ExtensionSurface / ExtensionStatus events).
 	ExtFormFieldsHint string // form card: field values are collected through the usual prompts
 	ExtRunActionFmt   string // card action hint, one %s = the /<plugin>:<action> slash name
@@ -732,69 +738,4 @@ func CatalogFor(pref string) Messages {
 // re-reading the environment and accidentally ignoring an explicit override.
 func CurrentLanguage() string {
 	return currentLanguage
-}
-
-// DetectLanguage selects a catalogue from override (e.g. cfg.Language) or the
-// environment and installs it as M. Returns the resolved tag ("en", "zh") so
-// callers can log or expose it.
-//
-// Priority: override > REASONIX_LANG > LC_ALL > LC_MESSAGES > LANG > "en".
-func DetectLanguage(override string) string {
-	for _, c := range append([]string{override}, envCandidates()...) {
-		if tag := normalize(c); tag != "" {
-			return setLanguage(tag)
-		}
-	}
-	return setLanguage("en")
-}
-
-// osLanguage is the machine probe behind a variable, so the priority between it
-// and the environment is testable on a machine that answers either way.
-var osLanguage = detectOSLanguage
-
-func envCandidates() []string {
-	keys := []string{"REASONIX_LANG", "LC_ALL", "LC_MESSAGES", "LANG"}
-	out := make([]string, 0, len(keys)+1)
-	for _, k := range keys {
-		out = append(out, os.Getenv(k))
-	}
-	// Last, so an explicit variable still wins: it is what someone set on
-	// purpose, and this is only what the machine was installed as.
-	return append(out, osLanguage())
-}
-
-func setLanguage(tag string) string {
-	switch tag {
-	case "zh-tw", "zh-TW":
-		M = ChineseTraditional
-		currentLanguage = "zh-TW"
-	case "zh":
-		M = Chinese
-		currentLanguage = "zh"
-	default:
-		M = English
-		currentLanguage = "en"
-	}
-	return currentLanguage
-}
-
-// normalize maps a locale string (e.g. "zh_CN.UTF-8", "zh-Hans-CN", "Chinese
-// (China)") to a short tag this package knows about. Returns "" for empty or
-// unrecognised input so DetectLanguage can fall through to the next candidate.
-func normalize(s string) string {
-	s = strings.ToLower(strings.TrimSpace(s))
-	s = strings.ReplaceAll(s, "_", "-") // zh_TW.UTF-8 → zh-tw.utf-8 (POSIX locales use underscores)
-	if s == "" {
-		return ""
-	}
-	if strings.HasPrefix(s, "zh-tw") || strings.HasPrefix(s, "zh-hant") || strings.Contains(s, "chinese traditional") || strings.Contains(s, "繁體") {
-		return "zh-TW"
-	}
-	if strings.HasPrefix(s, "zh") || strings.Contains(s, "chinese") || strings.Contains(s, "中文") {
-		return "zh"
-	}
-	if strings.HasPrefix(s, "en") || strings.Contains(s, "english") {
-		return "en"
-	}
-	return ""
 }

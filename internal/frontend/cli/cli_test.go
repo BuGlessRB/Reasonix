@@ -401,7 +401,7 @@ func TestParsePermissionModeClaudeAliases(t *testing.T) {
 		// 1.x's names, so a 1.x command line keeps working.
 		"workspace-write":    {approval: control.ToolApprovalAuto},
 		"danger-full-access": {approval: control.ToolApprovalYolo},
-		"read-only":          {approval: control.ToolApprovalAsk},
+		"read-only":          {approval: control.ToolApprovalReadOnly},
 	}
 	for input, want := range tests {
 		got, err := parsePermissionMode(input)
@@ -452,7 +452,7 @@ command = "legacy-bin"
 	if err != nil {
 		t.Fatalf("read migrated user config: %v", err)
 	}
-	for _, want := range []string{`config_version = 6`, `[desktop]`, `name    = "legacy-cli"`} {
+	for _, want := range []string{`config_version = 12`, `[desktop]`, `name    = "legacy-cli"`} {
 		if !strings.Contains(string(body), want) {
 			t.Fatalf("migrated config missing %q:\n%s", want, body)
 		}

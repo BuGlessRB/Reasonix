@@ -1,9 +1,10 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../i18n";
 import type { Checkpoint, RewindPlan, RewindResult, RewindScope } from "../../port/port";
 import { useDismiss } from "../dismiss";
-import { pinToViewport } from "../place";
+import { pinToViewport, useFollow } from "../place";
+import { StudioIcon } from "../StudioIcon";
 
 // Gap between the trigger and the menu. It lives here rather than in CSS because
 // a portaled menu is placed by measurement, so no rule owns the offset any more.
@@ -35,11 +36,13 @@ type Stage =
 
 export function RewindControl({
   cp,
+  compact = false,
   onPrepare,
   onCommit,
   onUndo,
 }: {
   cp: Checkpoint;
+  compact?: boolean;
   onPrepare: (turn: number, scope: RewindScope) => Promise<RewindPlan>;
   onCommit: (planId: string) => Promise<RewindResult>;
   onUndo: (transactionId: string) => Promise<void>;
@@ -64,17 +67,7 @@ export function RewindControl({
     pinToViewport(el, to.right - box.width, fits || above < 6 ? to.bottom + GAP : above);
   }, []);
 
-  // The menu is fixed, so anything that moves the trigger leaves it behind.
-  useLayoutEffect(() => {
-    if (!open) return;
-    place();
-    addEventListener("scroll", place, true);
-    addEventListener("resize", place);
-    return () => {
-      removeEventListener("scroll", place, true);
-      removeEventListener("resize", place);
-    };
-  }, [open, stage, place]);
+  useFollow(open, place, stage);
 
   const fail = (e: unknown) => setStage({ at: "failed", why: e instanceof Error ? e.message : String(e) });
 
@@ -118,9 +111,10 @@ export function RewindControl({
           aria-haspopup="menu"
           aria-expanded={open}
           title={t("将工作区与对话回退至该消息之前")}
+          aria-label={compact ? t("回到这里") : undefined}
           onClick={() => setStage(stage.at === "closed" ? { at: "menu" } : { at: "closed" })}
         >
-          {t("↩ 回到这里")}
+          <StudioIcon name="rewind" />{!compact && t("回到这里")}
         </button>
         {open &&
           createPortal(

@@ -477,7 +477,7 @@ func (c *Controller) rememberProjectNote(note string) {
 	if path, err := c.QuickAdd(memory.ScopeProject, note); err != nil {
 		c.notice("memory: " + err.Error())
 	} else {
-		c.notice("remembered → " + path)
+		c.notice(fmt.Sprintf(i18n.M.QuickRememberDoneFmt, path))
 	}
 }
 

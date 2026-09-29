@@ -37,8 +37,8 @@ is configured.
 | `-r`, `--resume [QUERY]` | Open the session picker, or resume a matching session. |
 | `--copy` | Continue in a writable copy of the resumed session. |
 | `--allowed-tools RULES` | Add session-only permission allow rules. Repeatable; `--allowedTools` is an alias. |
-| `--permission-mode MODE` | Start with a specific permission posture: `ask`, `auto`, `acceptEdits`, `dontAsk`, `plan` or `bypassPermissions`. 1.x's `workspace-write`, `danger-full-access` and `read-only` also work, as Auto, Yolo and Ask. |
-| `--yolo` | Start in YOLO mode; alias for `--dangerously-skip-permissions`. |
+| `--permission-mode MODE` | Start with a specific permission posture: `read-only`, `ask`, `auto`, `acceptEdits`, `dontAsk`, `plan` or `bypassPermissions`. 1.x's `workspace-write` and `danger-full-access` also work, as Auto and Yolo. Without it, see [Default posture](#default-posture). |
+| `--yolo` | Start in YOLO mode; alias for `--dangerously-skip-permissions`. It skips approval prompts only: the sandbox, network policy and deny rules still apply. The first interactive use asks once. |
 | `--inline` | Write the conversation into the terminal's scrollback instead of taking the full screen. |
 
 Flags may appear before or after the prompt where applicable.
@@ -196,6 +196,10 @@ same care as a session transcript.
 reasonix run --metrics run.json --trajectory run.trajectory.jsonl "fix the failing test"
 ```
 
+A clean `run` or `-p` writes nothing to stderr except warnings the user has to
+act on. `--debug` adds diagnostic logs such as assembly timing and the resumed
+session's cache state.
+
 ### Output formats
 
 | Format | Behavior |
@@ -209,6 +213,16 @@ reasonix -p "list the risky changes" --output-format text
 reasonix -p "summarize the diff" --output-format json
 reasonix run "run the tests" --output-format stream-json
 ```
+
+`stream-json` lines before the result follow the 1.x contract:
+
+- Each carries `sessionId`, `turnId`, `seq` (from 1) and `status`.
+- The turn opens with `turn_status` (`status: "queued"`) and `user_message`.
+- A call that cleared every gate and ran reports `tool_started` before its
+  `tool_result`.
+- The turn closes with `turn_done`: `completed`, `failed` or `interrupted`.
+- Only kinds 1.x emitted appear; host-internal state such as workspace leases
+  stays off the stream.
 
 The final structured object has this shape:
 
@@ -229,9 +243,27 @@ The final structured object has this shape:
     "output_tokens": 0,
     "cache_read_input_tokens": 0,
     "cache_creation_input_tokens": 0
-  }
+  },
+  "permission_denials": [
+    {"tool_name": "write_file", "tool_use_id": "call_1", "code": "permission.unattended"}
+  ],
+  "permission_mode": "ask"
 }
 ```
+
+`permission_denials` lists the calls the run's permission gate refused; it is
+empty when nothing was, and a refusal never changes the exit code. The same
+`code` rides the refused tool result: `refusalCode` in `stream-json`,
+`refusal_code` in `--events-jsonl`.
+
+`permission_mode` is the posture the run settled on, named or defaulted.
+
+| `code` | Cause |
+| --- | --- |
+| `permission.unattended` | It needed an approval and nobody could give one. |
+| `permission.read_only` | The session is in `read-only`. |
+| `permission.deny_rule` | A deny rule matched. |
+| `permission.declined` | A person answered no. |
 
 `total_cost` is present only when a single `selected` display amount exists (ISO
 code in `currency`). Prefer the structured `cost_quote` field when present: it
@@ -255,6 +287,25 @@ Execution failures use `subtype: "error_during_execution"` and
 `is_error: true`. Structured modes keep runtime errors in JSON instead of also
 printing a duplicate human-readable error.
 
+What the host decided about the answer rides beside it and does not change the
+exit status:
+
+- `-p` names the calls listed in `permission_denials` on stderr.
+- `readiness` (`attempts`, `missing`) appears when the model finished but the
+  host's final-readiness check stayed unmet, for example no check ran after
+  the last write. The run still counts as a success.
+- `completion` repeats the turn's `completion_summary` when there was one.
+- `--events-jsonl`'s `run_done` carries the denial count and `readiness`.
+
+Exit statuses of `reasonix run`:
+
+| Status | Meaning |
+| --- | --- |
+| `0` | The model finished, including with refused calls or unmet readiness. |
+| `1` | The run failed: provider, configuration, limit, or cancellation. |
+| `2` | The command line was invalid. |
+| `3` | `--fail-on-unverified` was given and final readiness stayed unmet. |
+
 ### Redacted machine interfaces
 
 Use the dedicated event flag when an automation needs lifecycle telemetry but
@@ -269,6 +320,9 @@ Every line has `schema_version`, `sequence`, and `kind`; the final line is
 `kind: "run_done"`. `--events-jsonl` is intentionally separate from the richer
 `--output-format stream-json` contract and cannot be combined with
 `--output-format`.
+
+Its lifecycle records match `stream-json`'s (`turn_status`, `user_message`,
+`tool_started`, `turn_done`) without their content.
 
 The following read-only commands expose persisted state without transcript,
 label, command, output, path, PID, or host-name content. Here, read-only means
@@ -355,12 +409,49 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 
 | Mode | Behavior |
 | --- | --- |
+| `read-only` | Refuse every call that is not a read — file writes, shell commands not known to be reads, tools not declared read-only — whatever allow rules say. Nothing is asked. An installed extension's permission hook can still overrule it. |
 | `manual`, `ask` | Ask for ordinary approval decisions. |
 | `auto` | Automatically approve normal fallback operations while preserving explicit ask and deny rules. |
 | `acceptEdits` | Allow file-editing tools; this is not full Auto mode. |
 | `dontAsk` | Deny unapproved requests without opening an approval prompt. |
 | `plan` | Start the plan-first workflow; tool calls still use the active permissions and sandbox. |
-| `bypassPermissions` | Bypass approval prompts; equivalent to YOLO. |
+| `bypassPermissions` | Bypass approval prompts; equivalent to YOLO. The sandbox, network policy and deny rules still apply, and a project file cannot select it. |
+
+Shell commands that read — `git status`, `ls`, `grep`, `git -C dir log` and the
+like, decided from the parsed command rather than its wording — run without a
+prompt in every mode.
+
+### Default posture
+
+With no mode named, a session opens in `auto` only when both hold:
+
+- the OS sandbox confines shell writes on this host (Seatbelt on macOS,
+  bubblewrap on Linux) and `[sandbox] bash` is not `off`;
+- you trusted the workspace folder.
+
+Otherwise it opens in `ask`; on Windows, which has no OS sandbox, always.
+
+What `auto` then allows without asking is bounded by that sandbox, not by the
+folder alone:
+
+- shell commands may also write your `allow_write` and `--add-dir`
+  directories, temp, and toolchain caches (`~/go`, `~/.cargo`, `~/.cache` and
+  the like), and what lands in `~/.cargo/bin` or `~/go/bin` runs later outside
+  the sandbox;
+- they reach the network unless `[sandbox] network = false`.
+
+- The terminal UI asks once per folder whether to trust it, never for a home
+  directory or a filesystem root, and keeps the answer in your Reasonix home.
+- `reasonix trust` trusts the current folder; `reasonix trust --revoke`
+  forgets it. A project's own files cannot record trust.
+- Trust belongs to the folder's path, not its contents: whatever is checked out
+  there later is trusted too.
+- Headless runs never ask. In `ask` they refuse writes and list them in
+  `permission_denials`.
+
+In the terminal UI, Shift+Tab cycles read-only → ask → auto → YOLO → plan
+(YOLO joins once confirmed). Ctrl+Y toggles YOLO and returns to the posture it
+left.
 
 For unattended execution with ordinary writer fallback enabled, use
 `reasonix run --auto ...` (or `-y`). Neither it nor `--yolo` can be combined
@@ -376,8 +467,8 @@ filter. Rules may be comma- or space-separated, and the flag is repeatable.
 Configured deny rules always win over command-line allow rules.
 
 In non-interactive runs (`reasonix run` / `-p`) there is no prompt to answer, so
-approval modes resolve without blocking. The default `ask` / `manual` posture
-fails closed for explicit Ask decisions and ordinary writer fallback; readers
+approval modes resolve without blocking. The `ask` / `manual` posture fails
+closed for explicit Ask decisions and ordinary writer fallback; readers
 still run. `acceptEdits` allows its named file-edit tools, while other Ask
 decisions fail closed. `auto` allows ordinary writer fallback but still denies
 an explicit ask rule; select it with `--permission-mode auto`, `--auto`, or

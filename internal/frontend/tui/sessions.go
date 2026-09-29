@@ -163,14 +163,20 @@ func (m *model) onResumed(msg resumedMsg) tea.Cmd {
 		m.tr.AddNotice("error", "resume: "+msg.err.Error())
 		return m.commit()
 	}
+	m.resetScreen()
+	title := m.emit(func(int, bool) string { return termrender.Accent("◆ ") + termrender.Bold(i18n.M.ResumedTitle) })
+	return tea.Sequence(title, m.fetchHistory(true), tea.Batch(m.fetchStatus(), m.fetchTodos(), m.fetchMeters()))
+}
+
+// resetScreen drops the transcript this screen drew, for a conversation that
+// is about to be drawn again from its record.
+func (m *model) resetScreen() {
 	m.tr = Transcript{next: m.tr.next}
 	m.committed, m.sayShown = map[int]bool{}, map[int]int{}
 	m.todos, m.ask, m.menu = nil, nil, nil
 	if m.scr != nil {
 		m.scr.blocks, m.scr.sel, m.scr.follow = nil, selection{}, true
 	}
-	title := m.emit(func(int, bool) string { return termrender.Accent("◆ ") + termrender.Bold(i18n.M.ResumedTitle) })
-	return tea.Sequence(title, m.fetchHistory(true), tea.Batch(m.fetchStatus(), m.fetchTodos(), m.fetchMeters()))
 }
 
 func (m *model) pickerPanel() []string {
@@ -179,10 +185,10 @@ func (m *model) pickerPanel() []string {
 	width := max(m.width-8, 12)
 	lines := []string{termrender.Accent(i18n.M.ResumePickTitle)}
 	if p.query != "" {
-		lines = append(lines, "  "+termrender.Dim("Search: ")+p.query)
+		lines = append(lines, "  "+termrender.Dim(i18n.M.ResumePickSearch)+p.query)
 	}
 	if len(items) == 0 {
-		lines = append(lines, termrender.Dim("  No matches"))
+		lines = append(lines, termrender.Dim("  "+i18n.M.ResumePickNoMatch))
 	}
 	start := max(min(p.sel-pickerRows/2, len(items)-pickerRows), 0)
 	end := min(start+pickerRows, len(items))
@@ -203,6 +209,6 @@ func (m *model) pickerPanel() []string {
 	if end < len(items) {
 		lines = append(lines, termrender.Dim("  ↓ more"))
 	}
-	lines = append(lines, termrender.Dim("Type to filter · "+i18n.M.ResumePickHint))
+	lines = append(lines, termrender.Dim(i18n.M.ResumePickFilter+" · "+i18n.M.ResumePickHint))
 	return panel(lines, m.width, accentEdge)
 }

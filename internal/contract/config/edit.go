@@ -1268,8 +1268,8 @@ func validatePlugin(e PluginEntry) error {
 //
 // For project configs (./reasonix.toml) the write is incremental: only sections
 // and fields that differ from built-in defaults are written, so the file never
-// accumulates fields that override the user's global config. User configs still
-// write the full annotated template since they are the user's own settings store.
+// accumulates fields that override the user's global config. An existing user
+// config is rewritten only at the keys the save changed; see userConfigBody.
 func (c *Config) SaveTo(path string) error {
 	if c == nil {
 		return fmt.Errorf("save config: nil config")
@@ -1289,6 +1289,9 @@ func (c *Config) SaveTo(path string) error {
 	}
 	if scope == RenderScopeProject {
 		return c.saveProjectIncrementalResolved(path, resolved)
+	}
+	if scope == RenderScopeUser {
+		return c.writeUserConfig(path, resolved, func(body string) error { return writeConfigFileResolved(resolved, body, configFilePerm(path)) })
 	}
 	return writeConfigFileResolved(resolved, RenderTOMLForScope(c, scope), configFilePerm(path))
 }
@@ -1312,6 +1315,9 @@ func (c *Config) SaveToScope(path string, scope RenderScope) error {
 	resolved, err := resolveConfigAccessPath(path, userConfig)
 	if err != nil {
 		return err
+	}
+	if scope == RenderScopeUser {
+		return c.writeUserConfig(path, resolved, func(body string) error { return writeConfigFileResolved(resolved, body, configFilePerm(path)) })
 	}
 	return writeConfigFileResolved(resolved, RenderTOMLForScope(c, scope), configFilePerm(path))
 }

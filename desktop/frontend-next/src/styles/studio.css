@@ -283,7 +283,7 @@ body { background: var(--page); }
 
 /* Composer */
 .compose {
-  width: min(760px, calc(100% - var(--srail-w) - 34px));
+  width: min(var(--column), calc(100% - var(--srail-w) - 34px));
   max-width: none;
   margin: 0 auto 14px;
   padding: 14px 15px 11px;
@@ -739,7 +739,7 @@ body { background: var(--page) !important; }
 .srail-m[data-on] > i { background: #91a7df; }
 .srail-peek { right: 42px; width: min(300px, calc(100vw - var(--rail-w) - 78px)); }
 .flow {
-  width: min(var(--measure, 760px), calc(100% - var(--srail-w) - 44px));
+  width: min(var(--doc), calc(100% - var(--srail-w) - 44px));
   margin-inline: auto;
   position: relative;
   left: 0;
@@ -748,7 +748,7 @@ body { background: var(--page) !important; }
 .flow[data-empty] { display: flex; align-items: center; justify-content: center; }
 .flow:not([data-empty]) {
   flex: 0 0 auto;
-  width: min(var(--measure, 760px), calc(100% - var(--srail-w) - 34px));
+  width: min(var(--doc), calc(100% - var(--srail-w) - 34px));
   margin: 0 auto;
   padding: 28px 0 36px;
   box-sizing: border-box;
@@ -830,8 +830,8 @@ body { background: var(--page) !important; }
 }
 .acts-menu { position: relative; display: inline-grid; }
 .acts-pop {
-  position: absolute; z-index: 40; bottom: calc(100% + 5px); inset-inline-start: 0;
-  width: max-content; min-width: 190px; padding: 5px;
+  position: fixed; z-index: 60; top: 0; left: 0;
+  width: max-content; min-width: 190px; max-height: calc(100vh / var(--zoom, 1) - 12px); overflow-y: auto; padding: 5px;
   border: 1px solid var(--border); border-radius: 9px; background: var(--float);
   box-shadow: var(--shadow-float); animation: palette-in var(--m-card) both;
 }
@@ -857,11 +857,11 @@ body { background: var(--page) !important; }
 .flow .call[data-k="me"]:hover { background: transparent; border-color: transparent; }
 .flow .call[data-k="me"]::before { display: none; }
 .flow .call[data-k="me"] > .c { width: auto; max-width: 70%; padding: 0; }
-.flow .call[data-k="me"] .user-hl { min-height: 0; margin: 0 3px 4px; justify-content: flex-end; }
+.flow .call[data-k="me"] .user-hl { min-height: 0; margin: 0 3px 4px; justify-content: flex-end; flex-wrap: nowrap; contain: inline-size; }
 .flow .call[data-k="me"] .user-hl > .nm { display: none; }
 .flow .call[data-k="me"] .out { margin-top: 0; }
 .flow .call[data-k="me"] .out .txt {
-  padding: 12px 15px; border: 1px solid var(--border); border-radius: 12px;
+  margin-inline-start: auto; padding: 12px 15px; border: 1px solid var(--border); border-radius: 12px;
   background: var(--raised); box-shadow: inset 0 1px rgb(255 255 255 / .024);
   color: var(--text); font-family: var(--ui); font-size: var(--read); font-weight: var(--w-reg); line-height: 1.72;
   letter-spacing: 0; -webkit-font-smoothing: antialiased;
@@ -927,7 +927,6 @@ body { background: var(--page) !important; }
   color: var(--faint); font: 450 9px/1.5 var(--ui);
 }
 .flow { --out-peek: 4rem; }
-:root[data-measure="full"] { --measure: 100%; }
 .flow .call:not([data-k="me"]):not([data-k="say"]) { margin-block: 0 2px; }
 .flow .call:not([data-k="me"]):not([data-k="say"]) > .c {
   min-width: 0; padding: 7px 0 10px; border: 0; border-bottom: 1px solid var(--hair);
@@ -1064,7 +1063,7 @@ body { background: var(--page) !important; }
 .flow .copy:hover { color: var(--muted); background: transparent; }
 
 .compose {
-  width: min(760px, calc(100% - var(--srail-w) - 42px));
+  width: min(var(--column), calc(100% - var(--srail-w) - 42px));
   margin-bottom: 35px;
   padding: 15px 16px 10px;
   border-radius: 15px;
@@ -1163,7 +1162,7 @@ body { background: var(--page) !important; }
 .btn.send:hover { background: var(--accent); transform: translateY(-1px); }
 .btn.send:disabled { background: var(--hair); color: var(--ghost); }
 .composeaux,
-.composenotes { width: min(760px, calc(100% - var(--srail-w) - 42px)); margin-inline: auto; }
+.composenotes { width: min(var(--column), calc(100% - var(--srail-w) - 42px)); margin-inline: auto; }
 .composenotes { color: var(--ghost); }
 .studio-meterrail {
   position: absolute; z-index: 12; left: 16px; right: 16px; bottom: -32px; min-height: 27px;

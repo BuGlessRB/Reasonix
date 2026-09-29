@@ -91,6 +91,9 @@ func (c *Controller) RunTurnWithRaw(ctx context.Context, input, raw, invokedSkil
 type turnTags struct {
 	format string
 	via    *provider.Via
+	// refuseUnknownSlash answers a slash command nothing resolves with a notice
+	// instead of sending the line to the model as prose.
+	refuseUnknownSlash bool
 }
 
 type turnViaKey struct{}

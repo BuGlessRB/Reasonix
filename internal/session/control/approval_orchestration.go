@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 
+	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/contract/provider"
@@ -186,6 +190,8 @@ func (c *Controller) newInteractiveGate() *permission.Gate {
 		policy.Mode = permission.Allow
 	case ToolApprovalDontAsk:
 		policy.Mode = permission.Deny
+	case ToolApprovalReadOnly:
+		policy.Mode, policy.ReadOnly = permission.Deny, true
 	default:
 		policy.Mode = permission.Ask
 	}
@@ -460,7 +466,7 @@ func (c *Controller) ApplyToolApprovalMode(mode string) []string {
 	}
 	pending := c.approval.setMode(mode)
 	if c.subagentGate != nil {
-		c.subagentGate.Update(mode)
+		c.subagentGate.UpdateAttended(mode)
 	}
 	c.refreshInteractiveGate()
 	// Clear recovery cards dismissed by the mode switch outside the gate lock.
@@ -609,4 +615,80 @@ func (c *Controller) requestApprovalDecision(ctx context.Context, req approvalRe
 func (c *Controller) approvalRequestEvent(approval event.Approval) event.Event {
 	approval.Scope = c.approvalScope(approval.Tool)
 	return event.Event{Kind: event.ApprovalRequest, Approval: approval}
+}
+
+// ToolApprovalReadOnly refuses every call that is not a read, whatever the
+// rules allow; no approval can talk a write past it.
+const ToolApprovalReadOnly = "readOnly"
+
+// PostureEvidence is what a terminal session's default posture is decided
+// from. WritesConfined is the bash sandbox's Integrity claim for this build,
+// as its backend reports it; Home is where the person recorded folder trust.
+type PostureEvidence struct {
+	WritesConfined bool
+	Home           string
+}
+
+// DefaultApprovalMode is the posture a session opens in when nobody named one:
+// writes inside the workspace run without asking only where an OS sandbox
+// confines them and the person trusted this folder. Everywhere else — no
+// backend, bash off, Windows, an undecided or declined folder — it asks.
+func DefaultApprovalMode(writesConfined bool, trust config.WorkspaceTrust) string {
+	if writesConfined && trust == config.WorkspaceTrusted {
+		return ToolApprovalAuto
+	}
+	return ToolApprovalAsk
+}
+
+// DefaultApprovalMode reads the trust record now, so a folder trusted after
+// this controller was built counts.
+func (c *Controller) DefaultApprovalMode() string {
+	if !TrustableFolder(c.WorkspaceRoot()) {
+		return ToolApprovalAsk
+	}
+	return DefaultApprovalMode(c.posture.WritesConfined, c.WorkspaceTrust())
+}
+
+// TrustableFolder leaves out the folders nobody should grant wholesale: a home
+// directory or a filesystem root holds far more than one project, so a trust
+// record for one, however it got there, opens nothing.
+func TrustableFolder(root string) bool {
+	root = filepath.Clean(strings.TrimSpace(root))
+	if root == "." || root == "" || filepath.Dir(root) == root {
+		return false
+	}
+	if home, err := os.UserHomeDir(); err == nil && sameDir(home, root) {
+		return false
+	}
+	return true
+}
+
+func sameDir(a, b string) bool {
+	if r, err := filepath.EvalSymlinks(a); err == nil {
+		a = r
+	}
+	if r, err := filepath.EvalSymlinks(b); err == nil {
+		b = r
+	}
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+// WorkspaceTrust is the person's recorded decision about this workspace; an
+// unreadable record is undecided, which costs a prompt and grants nothing.
+func (c *Controller) WorkspaceTrust() config.WorkspaceTrust {
+	trust, _ := config.NewProjectGrantStore(c.posture.Home).Trust(c.WorkspaceRoot())
+	return trust
+}
+
+// WritesConfined reports this build's bash Integrity claim.
+func (c *Controller) WritesConfined() bool { return c.posture.WritesConfined }
+
+// SetWorkspaceTrust records the person's decision about this workspace under
+// the same home DefaultApprovalMode reads it from.
+func (c *Controller) SetWorkspaceTrust(trust config.WorkspaceTrust) error {
+	return config.NewProjectGrantStore(c.posture.Home).SetTrust(c.WorkspaceRoot(), trust)
 }

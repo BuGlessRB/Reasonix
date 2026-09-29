@@ -15,7 +15,7 @@ func TestCommandIsReadOnly(t *testing.T) {
 		`grep 'a|b' file`, `printf "%s\n" "a && b"`,
 		// tooling probes.
 		"go version", "go env", "go list ./...", "go doc fmt",
-		"npm view react version", "npm outdated", "cargo check",
+		"npm view react version", "npm outdated", "cargo search serde",
 		"docker ps", "docker images", "kubectl get pods",
 		"node -v", "node --version", "python --version", "python3 --version",
 		// PowerShell permission-safe inspection commands.

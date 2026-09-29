@@ -162,12 +162,14 @@ raised with its ratios kept.
 - `--read` is the conversation body's own size, separate from interface zoom, so
   "I cannot read this" adjusts one thing. The value here is the first-frame
   fallback; the real default is `look.ts`'s `readDefault()`.
-- `--doc` is the reading column: terminal blocks, cards and prose share one
-  boundary so the right edge lines up. The floor comes from the narrowest block
-  in it — 80 columns of IBM Plex Mono at `--fs-ui` is 624px, and the transcript's
-  indent and padding want another 82px. Line length moves with `--read`: about
-  80 Latin characters at 15px, about 36 Han characters at 16px. Column width and
-  body size are one reading, never two.
+- `--column` is the reading column's width. The composer is laid at it in
+  every measure; the transcript takes it through `--doc`.
+- `--doc` is the column the transcript is laid in: `--column`, or the whole
+  pane in the full measure. Cards, prose and the composer share its edges.
+- The column's floor is its narrowest block: 80 columns of IBM Plex Mono at
+  `--fs-ui` is 624px, and the transcript's indent and padding want 82px more.
+- Line length moves with `--read`: about 80 Latin characters at 15px, about 36
+  Han characters at 16px. Column width and body size are one reading.
 - `--srail-w` is the locator rail's own column. It is a `pointer-events: auto`
   strip laid over the transcript's right edge, so content that clears it must
   reference the same number.

@@ -77,8 +77,10 @@ func (m *model) modeTag() string {
 		return termrender.Badge(tagPlanColor, tagLight, "Plan")
 	case s.ToolApprovalMode == "auto":
 		return termrender.Badge(tagAskColor, tagDark, "Auto")
-	case s.ToolApprovalMode == "dontAsk":
+	case s.ToolApprovalMode == "readOnly":
 		return termrender.Badge(tagAskColor, tagDark, "Read only")
+	case s.ToolApprovalMode == "dontAsk":
+		return termrender.Badge(tagAskColor, tagDark, "Don't ask")
 	}
 	return termrender.Badge(tagAskColor, tagDark, "Ask")
 }

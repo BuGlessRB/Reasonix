@@ -202,6 +202,19 @@ export function Rules({ port, onChanged }: { port: AgentPort; onChanged: () => v
     }
   };
 
+  const revokeRemembered = async (rule: string) => {
+    setBusy(`remembered:${rule}`);
+    setError("");
+    try {
+      setRules(await port.revokeRememberedProjectRule(rule));
+      onChanged();
+    } catch (e) {
+      setError(reason(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
   const without = (l: PermissionLists, rule: string): PermissionLists => ({
     ...l,
     deny: l.deny.filter((r) => r !== rule),
@@ -265,6 +278,30 @@ export function Rules({ port, onChanged }: { port: AgentPort; onChanged: () => v
         </div>
       </div>
       <p className="note">{t(MODES.find(([id]) => id === rules.mode)?.[2] ?? "")}</p>
+
+      {rules.rememberedErrorCode && (
+        <div className="find" data-lvl="warn" role="status">
+          <span className="t">{t("已记住的权限规则无法读取")}</span>
+          <span className="why">{t("请检查或修复用户目录中的授权记录文件。")}</span>
+          <span className="path">{rules.rememberedPath}</span>
+        </div>
+      )}
+
+      {!!rules.remembered?.length && (
+        <section className="rtable" aria-label={t("当前项目记住的放行规则")}>
+          <div className="rhead">{t("当前项目记住的放行规则")}</div>
+          {rules.remembered.map((rule) => (
+            <div className="rrow" data-k="allow" key={rule}>
+              <i className="dot" aria-hidden="true" />
+              <span className="pat"><code>{rule}</code></span>
+              <button className="act ghost" data-action="permissions.revoke-remembered" data-target={rule}
+                disabled={!!busy} aria-label={t("收回 {rule}", { rule })}
+                onClick={() => void revokeRemembered(rule)}>{t("收回")}</button>
+            </div>
+          ))}
+          <p className="path">{rules.rememberedPath}</p>
+        </section>
+      )}
 
       {/* The table's own header: how big the boundary is, how to find one row in
           it, and the single way in. Three separate add boxes made one act look

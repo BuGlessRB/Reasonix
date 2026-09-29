@@ -33,12 +33,16 @@ func refuseNetworkShell(w http.ResponseWriter, r *http.Request, trimmed string) 
 
 // submitOrShell runs a `!` command the transport admitted, and submits
 // anything else as a turn.
-func submitOrShell(ctrl control.SessionAPI, r *http.Request, input, format string) {
+func submitOrShell(ctrl control.SessionAPI, r *http.Request, input, format string, refuseUnknownSlash, localShell bool) {
 	if cmd, ok := strings.CutPrefix(strings.TrimSpace(input), "!"); ok && fromInProcess(r) {
+		if localShell {
+			ctrl.RunShellWith(cmd, control.ShellRun{LocalOnly: true})
+			return
+		}
 		ctrl.RunShell(cmd)
 		return
 	}
-	submitAs(ctrl, r, input, format)
+	submitAs(ctrl, r, input, format, refuseUnknownSlash)
 }
 
 // InProcessClient reaches this hub's routes without a listener, for a

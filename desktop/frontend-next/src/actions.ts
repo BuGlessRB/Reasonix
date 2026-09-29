@@ -91,6 +91,7 @@ export const ACTIONS: UIAction[] = [
   // header ask the same thing of the kernel, and which grant rides on
   // data-target, with "all" as the value that names none of them.
   { id: "permissions.revoke-session", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
+  { id: "permissions.revoke-remembered", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
 
   { id: "tool.image-open", kind: "view", target: "none", proof: "interaction" },
   { id: "tool.image-close", kind: "view", target: "none", proof: "interaction" },
@@ -194,6 +195,7 @@ export const ACTIONS: UIAction[] = [
   { id: "market.kind", kind: "view", target: "none", proof: "interaction" },
   { id: "market.sort", kind: "view", target: "none", proof: "interaction" },
   { id: "market.pinned", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.show-all", kind: "view", target: "none", proof: "interaction" },
   { id: "market.more", kind: "view", target: "none", proof: "interaction" },
   { id: "market.open", kind: "navigation", target: "none", proof: "interaction" },
   { id: "market.back", kind: "navigation", target: "none", proof: "interaction" },
@@ -201,6 +203,7 @@ export const ACTIONS: UIAction[] = [
   { id: "market.inspect", kind: "kernel-mutation", target: "none", proof: "interaction" },
   { id: "market.confirm-many", kind: "view", target: "none", proof: "interaction" },
   { id: "market.install", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
+  { id: "market.view-installed", kind: "navigation", target: "none", proof: "interaction" },
   // Publishing: the draft is on screen only, and the submission is the one
   // write, spending the account session on the registry.
   { id: "market.view", kind: "view", target: "none", proof: "interaction" },

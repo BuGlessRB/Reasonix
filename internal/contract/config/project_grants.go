@@ -22,8 +22,9 @@ import (
 // home, keyed by the folder's own path: a grant has no digest to bind it, so it
 // must not follow a repository identity a checkout's .git file could claim.
 type ProjectGrant struct {
-	Allow      []string `json:"allow,omitempty"`
-	AllowWrite []string `json:"allow_write,omitempty"`
+	Allow      []string       `json:"allow,omitempty"`
+	AllowWrite []string       `json:"allow_write,omitempty"`
+	Trust      WorkspaceTrust `json:"trust,omitempty"`
 }
 
 type projectGrantFile struct {
@@ -86,7 +87,7 @@ func (s *ProjectGrantStore) Update(root string, edit func(ProjectGrant) (Project
 		return err
 	}
 	current := file.Workspaces[ws]
-	next, err := edit(ProjectGrant{Allow: slices.Clone(current.Allow), AllowWrite: slices.Clone(current.AllowWrite)})
+	next, err := edit(ProjectGrant{Allow: slices.Clone(current.Allow), AllowWrite: slices.Clone(current.AllowWrite), Trust: current.Trust})
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
+import { HttpError } from "../port/http_error";
 import type { AccountState, AgentPort, MarketDetail, MarketKind, MarketPackage, MarketPlan } from "../port/port";
 import { Outcome } from "./AddPlugin";
 import { Group } from "./Group";
@@ -17,43 +18,56 @@ const KIND_NAME: Record<string, string> = { skill: "技能", plugin: "插件", m
 interface Props {
   port: AgentPort;
   onInstalled: () => void;
+  onViewInstalled?: (kind: string, name: string) => void;
   onSignIn?: () => void;
 }
 
 // The market is one more place a source comes from. It lists what reviewers let
 // through and hands the approved version to the same plan-then-install every
 // pasted address goes through; the kernel holds the pin, this only shows it.
-export function Market({ port, onInstalled, onSignIn }: Props) {
+export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) {
   const [kind, setKind] = useState<MarketKind | "">("");
   const [sort, setSort] = useState<Sort>("recommended");
   const [q, setQ] = useState("");
-  const [pinned, setPinned] = useState(false);
+  const [pinned, setPinned] = useState(true);
   const [rows, setRows] = useState<MarketPackage[] | null>(null);
   const [more, setMore] = useState(false);
   const [error, setError] = useState("");
+  const [filterUnsupported, setFilterUnsupported] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [open, setOpen] = useState("");
   const asked = useRef(0);
 
   const load = (offset: number) => {
     const n = ++asked.current;
     setError("");
+    setFilterUnsupported(false);
+    if (offset > 0) setLoadingMore(true);
     port
       .marketList({ kind, q: q.trim(), sort, offset, pinned })
       .then((page) => {
         if (n !== asked.current) return;
         setRows((prev) => (offset > 0 && prev ? [...prev, ...page.packages] : page.packages));
         setMore(page.packages.length >= page.limit);
+        setLoadingMore(false);
       })
       .catch((e) => {
         if (n !== asked.current) return;
         setError(reason(e));
+        setFilterUnsupported(pinned && e instanceof HttpError && e.reason?.code === "market.filter_unsupported");
+        setLoadingMore(false);
         if (offset === 0) setRows([]);
       });
   };
 
   useEffect(() => {
+    ++asked.current;
+    setRows(null);
+    setMore(false);
+    setError("");
+    setLoadingMore(false);
     const timer = setTimeout(() => load(0), q ? 250 : 0);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); ++asked.current; };
   }, [kind, sort, q, pinned]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (open) {
@@ -62,6 +76,7 @@ export function Market({ port, onInstalled, onSignIn }: Props) {
         port={port}
         slug={open}
         onSignIn={onSignIn}
+        onViewInstalled={onViewInstalled}
         onBack={() => setOpen("")}
         onInstalled={() => {
           onInstalled();
@@ -106,10 +121,11 @@ export function Market({ port, onInstalled, onSignIn }: Props) {
         <div className="find" data-lvl="err">
           <span className="t">{t("无法读取社区市场")}</span>
           <span className="why">{error}</span>
+          {filterUnsupported && <button className="act" data-action="market.show-all" onClick={() => setPinned(false)}>{t("查看全部包")}</button>}
         </div>
       )}
       {rows === null && !error && <div className="empty">{t("正在读取…")}</div>}
-      {rows?.length === 0 && !error && <div className="empty">{t("没有找到匹配的包。")}</div>}
+      {rows?.length === 0 && !error && <div className="empty">{t(pinned ? "没有找到可安装的包。可关闭筛选查看全部包。" : "没有找到匹配的包。")}</div>}
       <ul className="mkt-list">
         {rows?.map((p) => (
           <li key={p.slug}>
@@ -130,18 +146,16 @@ export function Market({ port, onInstalled, onSignIn }: Props) {
                 <span className="mkt-sum">{p.summary}</span>
                 <span className="mkt-meta mkt-id">{`@${p.handle} · v${p.latestVersion}`}</span>
                 {/* Outside the truncating meta so a narrow row loses the handle, never this. */}
-                {p.pinned !== undefined && (
-                  <span className="mkt-pinned" data-on={p.pinned ? "" : undefined} title={p.pinned ? undefined : t("审核版本没有固定内容，不能从市场安装")}>
-                    {t(p.pinned ? "可安装" : "未固定")}
-                  </span>
-                )}
+                <span className="mkt-pinned" data-on={p.pinned ? "" : undefined} title={p.pinned === false ? t("审核版本没有固定内容，不能从市场安装") : undefined}>
+                  {t(p.pinned === undefined ? "固定状态未知" : p.pinned ? "可安装" : "未固定")}
+                </span>
               </span>
             </button>
           </li>
         ))}
       </ul>
       {more && (
-        <button className="act" data-action="market.more" onClick={() => load(rows?.length ?? 0)}>
+        <button className="act" data-action="market.more" disabled={loadingMore} onClick={() => load(rows?.length ?? 0)}>
           {t("加载更多")}
         </button>
       )}
@@ -149,7 +163,7 @@ export function Market({ port, onInstalled, onSignIn }: Props) {
   );
 }
 
-function Entry({ port, slug, onBack, onInstalled, onSignIn }: { port: AgentPort; slug: string; onBack: () => void; onInstalled: () => void; onSignIn?: () => void }) {
+function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: { port: AgentPort; slug: string; onBack: () => void; onInstalled: () => void; onViewInstalled?: (kind: string, name: string) => void; onSignIn?: () => void }) {
   const [d, setD] = useState<MarketDetail | null>(null);
   const [plan, setPlan] = useState<MarketPlan | null>(null);
   const [done, setDone] = useState<MarketPlan | null>(null);
@@ -194,10 +208,19 @@ function Entry({ port, slug, onBack, onInstalled, onSignIn }: { port: AgentPort;
   );
 
   if (done) {
+    const installed = done.applied ? done.actions?.filter((action) => action.status === "done" && action.name) ?? [] : [];
+    const location = d?.package.kind === "plugin" || d?.package.kind === "theme"
+      ? installed.find((action) => action.kind === "plugin") : installed[0];
     return (
       <div className="mkt addpkg" data-stage="done">
         <Outcome plan={done} />
-        <div className="acts">{back}</div>
+        {installed.length > 0 && <ul className="mkt-installed">{installed.map((action, i) => <li key={`${action.kind}:${action.name}:${i}`}>{action.name}</li>)}</ul>}
+        <div className="acts">
+          {back}
+          {location && onViewInstalled && (
+            <button className="act" data-action="market.view-installed" onClick={() => onViewInstalled(location.kind, location.name!)}>{t("查看已安装能力")}</button>
+          )}
+        </div>
       </div>
     );
   }
@@ -288,7 +311,7 @@ const VIEWS: [View, string][] = [["browse", "浏览"], ["mine", "我的发布"],
 // Installed and discover are two views of one subject, so they are tabs of one
 // page rather than two sections: what the market adds shows up on the other tab.
 // Publishing spends the account session, so it is offered only while signed in.
-export function MarketGroup({ port, onInstalled, account, onSignIn }: Props & { account: AccountState | null; onSignIn: () => void }) {
+export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSignIn }: Props & { account: AccountState | null; onSignIn: () => void }) {
   const [view, setView] = useState<View>("browse");
   const handle = account?.signedIn ? account.user?.handle : undefined;
   const at = handle ? view : "browse";
@@ -313,7 +336,7 @@ export function MarketGroup({ port, onInstalled, account, onSignIn }: Props & { 
           </div>
         )
       )}
-      {at === "browse" && <Market port={port} onInstalled={onInstalled} onSignIn={onSignIn} />}
+      {at === "browse" && <Market port={port} onInstalled={onInstalled} onViewInstalled={onViewInstalled} onSignIn={onSignIn} />}
       {at === "mine" && <MyPackages port={port} onInstalled={onInstalled} />}
       {at === "publish" && handle && <PublishForm port={port} handle={handle} onMine={() => setView("mine")} />}
     </Group>

@@ -488,6 +488,19 @@ func (c *Config) DesktopDefaultToolApprovalMode() string {
 	return NormalizeToolApprovalMode(c.Desktop.DefaultToolApprovalMode)
 }
 
+// UnrecognizedDesktopToolApprovalMode is the file's default_tool_approval_mode
+// when it names no posture this build knows, so it loads as ask; else "".
+func (c *Config) UnrecognizedDesktopToolApprovalMode() string {
+	raw := ""
+	if c != nil {
+		raw = strings.TrimSpace(c.Desktop.DefaultToolApprovalMode)
+	}
+	if raw == "" || strings.EqualFold(raw, "ask") || NormalizeToolApprovalMode(raw) != "ask" {
+		return ""
+	}
+	return raw
+}
+
 // DesktopStatusBarStyle normalizes the desktop status bar metric label style.
 // Default is "text"; explicit "icon" preserves the user's compact choice.
 func (c *Config) DesktopStatusBarStyle() string {
@@ -1541,7 +1554,7 @@ Keep changes focused and responses concise.`
 // Default returns the built-in default configuration.
 func Default() *Config {
 	return &Config{
-		ConfigVersion:    6,
+		ConfigVersion:    freshConfigVersion,
 		DefaultModel:     "deepseek-flash",
 		CredentialsStore: CredentialsStoreAuto,
 		UI:               UIConfig{Theme: "auto", ShowTurnUsage: true},
@@ -1594,6 +1607,13 @@ func Default() *Config {
 // main config into an unparseable state that leaves the app with no usable
 // models (#4615, #4708).
 func (c *Config) WriteFile(path string) error {
+	if renderScopeForPath(path) == RenderScopeUser {
+		resolved, err := resolveConfigReadPath(path)
+		if err != nil {
+			return err
+		}
+		return c.writeUserConfig(path, resolved, func(body string) error { return atomicWriteToConfigFile(path, body, configFilePerm(path)) })
+	}
 	return atomicWriteToConfigFile(path, RenderTOMLForScope(c, renderScopeForPath(path)), configFilePerm(path))
 }
 

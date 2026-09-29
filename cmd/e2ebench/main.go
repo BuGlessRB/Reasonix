@@ -288,6 +288,7 @@ func main() {
 	tapeRecord, tapeReplay := registerTapeFlags()
 	trials := flag.Int("trials", 1, "suite mode: run every task N times and keep every outcome; reports pass^N (all passed) beside mean pass@1")
 	flag.Parse()
+	*trajDir = absTrajectoryDir(*trajDir)
 	if *trials > 1 && *attempts > 1 {
 		fmt.Fprintln(os.Stderr, "e2ebench: -trials and -attempts count repeats differently; use one")
 		os.Exit(2)

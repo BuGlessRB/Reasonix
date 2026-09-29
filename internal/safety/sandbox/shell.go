@@ -15,16 +15,25 @@ import (
 	"reasonix/internal/base/secrets"
 )
 
-// psUTF8Prologue forces PowerShell to emit UTF-8 instead of the host's OEM code
-// page (e.g. CP936 on a Chinese Windows), so non-ASCII command output and error
-// text come back as valid UTF-8 rather than mojibake.
-const psUTF8Prologue = "$OutputEncoding=[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;"
+// psUTF8Prologue makes captured output UTF-8 rather than the console code page
+// (CP936 on a Chinese Windows). Each assignment is guarded on its own: without a
+// console, or under ConstrainedLanguage, the Console one throws, and that must
+// neither skip $OutputEncoding nor print an error ahead of every command.
+const psUTF8Prologue = "if($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage'){try{[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)}catch{};try{$OutputEncoding=[Text.UTF8Encoding]::new($false)}catch{}};"
 
-// PowerShellUTF8Script prepares a PowerShell script for captured execution.
-// Setting both encodings keeps PowerShell's own output and native child-process
-// output UTF-8 across Windows console code pages.
+// psToolFileDefaults is for the agent's shell tool only: Windows PowerShell 5.1
+// writes '>' and Out-File as UTF-16LE, so there they default to UTF-8 (with the
+// BOM 5.1 always adds). Hooks run the user's own scripts and keep its defaults.
+const psToolFileDefaults = "if($PSVersionTable.PSVersion.Major -lt 6){try{$PSDefaultParameterValues['Out-File:Encoding']='utf8'}catch{}};"
+
+// PowerShellUTF8Script prepares a PowerShell script for captured execution, so
+// PowerShell's own output and what it pipes to native programs are UTF-8.
 func PowerShellUTF8Script(command string) string {
 	return psUTF8Prologue + command
+}
+
+func powerShellToolScript(command string) string {
+	return psUTF8Prologue + psToolFileDefaults + command
 }
 
 // ShellKind is the interpreter a shell command runs under.
@@ -70,10 +79,11 @@ type shellHost struct {
 	winPS    []string
 	probe    func(string) bool
 	isWSL    func(string) bool
+	launches func(string) bool // whether a found PowerShell starts; asked only of the one about to win
 }
 
 func currentHost() shellHost {
-	return shellHost{runtime.GOOS, exec.LookPath, fileExists, windowsBashCandidates(), windowsPowerShellCandidates(), probeBash, isWindowsWSLBash}
+	return shellHost{runtime.GOOS, exec.LookPath, fileExists, windowsBashCandidates(), windowsPowerShellCandidates(), probeBash, isWindowsWSLBash, powerShellLaunches}
 }
 
 func (h shellHost) bash() (Shell, bool) {
@@ -95,11 +105,11 @@ func (h shellHost) powerShell(order []string) (Shell, bool) {
 			if base != strings.ToLower(name) && strings.TrimSuffix(base, ".exe") != strings.ToLower(name) {
 				continue
 			}
-			if h.exists(p) {
+			if h.exists(p) && h.launches(p) {
 				return Shell{Kind: ShellPowerShell, Path: p}, true
 			}
 		}
-		if p, err := h.lookPath(name); err == nil {
+		if p, err := h.lookPath(name); err == nil && h.launches(p) {
 			return Shell{Kind: ShellPowerShell, Path: p}, true
 		}
 	}
@@ -182,7 +192,7 @@ func VerifyShell(prefer, path string) error {
 // are empty off Windows — so the decision table is deterministically testable on
 // any host.
 func resolveShell(prefer, path string, warn io.Writer, goos string, lookPath func(string) (string, error), exists func(string) bool, winBashCandidates []string, winPowerShellCandidates []string, probe func(string) bool, isWSL func(string) bool) Shell {
-	h := shellHost{goos, lookPath, exists, winBashCandidates, winPowerShellCandidates, probe, isWSL}
+	h := shellHost{goos, lookPath, exists, winBashCandidates, winPowerShellCandidates, probe, isWSL, powerShellLaunches}
 	switch strings.ToLower(strings.TrimSpace(prefer)) {
 	case "", "auto":
 		return h.auto()
@@ -293,7 +303,7 @@ func windowsBashCandidates() []string {
 }
 
 // windowsPowerShellCandidates lists common PowerShell executables that are not
-// always present on PATH, especially PowerShell 7's default MSI install path.
+// always present on PATH: PowerShell 7's MSI path, then the Store's execution alias.
 func windowsPowerShellCandidates() []string {
 	var roots []string
 	for _, env := range []string{"ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"} {
@@ -304,6 +314,9 @@ func windowsPowerShellCandidates() []string {
 	var out []string
 	for _, r := range roots {
 		out = append(out, filepath.Join(r, "PowerShell", "7", "pwsh.exe"))
+	}
+	if v := os.Getenv("LOCALAPPDATA"); v != "" {
+		out = append(out, filepath.Join(v, "Microsoft", "WindowsApps", "pwsh.exe"))
 	}
 	if v := os.Getenv("SystemRoot"); v != "" {
 		out = append(out, filepath.Join(v, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"))
@@ -444,7 +457,7 @@ func (s Shell) argv(command string) []string {
 		path = s.Kind.String()
 	}
 	if s.Kind == ShellPowerShell {
-		return []string{path, "-NoProfile", "-NonInteractive", "-Command", PowerShellUTF8Script(normalizeNullRedirects(command, "$null"))}
+		return []string{path, "-NoProfile", "-NonInteractive", "-Command", powerShellToolScript(normalizeNullRedirects(command, "$null"))}
 	}
 	return []string{path, "-c", normalizeNullRedirects(command, "/dev/null")}
 }

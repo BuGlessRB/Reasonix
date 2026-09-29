@@ -252,6 +252,7 @@ type RuntimeSettings interface {
 	PermissionRules() PermissionRules
 	SavePermissionRules(in PermissionLists) error
 	RevokeSessionGrant(rule string) int
+	RevokeRememberedProjectRule(rule string) error
 	SandboxSettings() SandboxSettings
 	SaveSandboxSettings(in SandboxSettings) error
 	BrowserToolsSettings() BrowserToolsSettings
@@ -331,6 +332,7 @@ type SessionPersistence interface {
 // resolving @-references before submission — including what the composer can
 // still offer to complete while the line is being typed.
 type Input interface {
+	SubmitHTTPOptions(input string, opts SubmitOptions)
 	Compose(text string) string
 	ComposeSynthetic(text string) string
 	ResolveRefs(ctx context.Context, line string) (block string, errs []string)
@@ -359,6 +361,12 @@ type Provenance interface {
 	AnswerQuestionFrom(id string, answers []event.AskAnswer, via *provider.Via)
 }
 
+// LocalShell is a `!` command typed on the machine the kernel runs on. Only
+// the full port names it: an editor has no prompt of its own to type one at.
+type LocalShell interface {
+	RunShellWith(command string, opts ShellRun)
+}
+
 // SessionAPI is the full driving port — the composition of every sub-port, for
 // a frontend that drives all of it: the TUI does, and the HTTP server all but
 // one. A leaner frontend names EditorAPI instead.
@@ -378,6 +386,7 @@ type SessionAPI interface {
 	Inbox
 	Provenance
 	BackgroundJobs
+	LocalShell
 }
 
 // EditorAPI is what an editor integration drives over ACP: turns, approvals and
@@ -421,5 +430,6 @@ var (
 	_ Settings           = (*Controller)(nil)
 	_ Inbox              = (*Controller)(nil)
 	_ Provenance         = (*Controller)(nil)
+	_ LocalShell         = (*Controller)(nil)
 	_ SessionAPI         = (*Controller)(nil)
 )

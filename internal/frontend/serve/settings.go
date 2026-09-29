@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/planmode"
 	"reasonix/internal/contract/provider"
+	"reasonix/internal/contract/surface"
 	"reasonix/internal/session/control"
 )
 
@@ -101,7 +102,7 @@ func (s *Server) toolApprovalMode(w http.ResponseWriter, r *http.Request) {
 	}
 	mode, ok := control.ParseToolApprovalMode(body.Mode)
 	if !ok {
-		badValue(w, "mode", "ask", "auto", "dontAsk", "yolo")
+		badValue(w, "mode", "readOnly", "ask", "auto", "dontAsk", "yolo")
 		return
 	}
 	s.applyApprovalMode(mode)
@@ -120,7 +121,11 @@ func (s *Server) bypass(w http.ResponseWriter, r *http.Request) {
 func (s *Server) applyApprovalMode(mode string) {
 	s.ctl().SetToolApprovalMode(mode)
 	s.stance.set(mode)
-	persistDesktopApprovalMode(mode)
+	// A terminal states its posture on its own command line; recording its
+	// switch would make a terminal's YOLO the window's next default.
+	if s.statsSurface() != surface.CLI {
+		persistDesktopApprovalMode(mode)
+	}
 }
 
 // persistDesktopApprovalMode records the posture chosen on the composer. Same
