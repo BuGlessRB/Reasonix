@@ -271,9 +271,20 @@ func TestNPMPackageAcceptsOnlyPackageNames(t *testing.T) {
 	for s, want := range map[string]bool{
 		"demo-mcp": true, "@scope/demo": true, "scope/demo": false, "../x": false,
 		"C:x": false, "@scope/../x": false, "": false, strings.Repeat("a", 65): false,
+		"@playwright/mcp@0.0.83": true, "name@1.2.3": true, "name@1.2.3-beta.1": true,
+		"name@latest": false, "name@^1.2.3": false, "name@": false, "a@b@c": false,
+		"-y": false, "--help": false, "-y@1.2.3": false, "@a/..": false, "@a/..@1.2.3": false,
 	} {
 		if npmPackage(s) != want {
 			t.Errorf("npmPackage(%q) = %v", s, !want)
+		}
+	}
+}
+
+func TestSourceInstallableAcceptsAPinnedNPMPackage(t *testing.T) {
+	for source, ok := range map[string]bool{"@playwright/mcp@0.0.83": true, "name@1.2.3": true, "name@latest": false, "--help": false} {
+		if got := sourceInstallable("mcp", source) == nil; got != ok {
+			t.Errorf("sourceInstallable(mcp, %q) accepted = %v, want %v", source, got, ok)
 		}
 	}
 }

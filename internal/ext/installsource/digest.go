@@ -70,7 +70,7 @@ func digestPartFor(a action) (digestPart, bool) {
 		}
 		return digestPart{Kind: a.Kind, Name: a.Name, Source: a.Source, Commit: commit}, true
 	case a.Kind == "mcp" && a.Action == "install_mcp_server":
-		if !isURL(a.Source) && !looksLikePackage(a.Source) {
+		if !isURL(a.Source) && !LooksLikePackage(a.Source) {
 			return digestPart{}, false
 		}
 		e := a.entry

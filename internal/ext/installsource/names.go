@@ -72,15 +72,37 @@ func rawGitHubBlobURL(s string) string {
 	return s
 }
 
-func looksLikePackage(s string) bool {
-	if strings.ContainsAny(s, " \t\n\\") || strings.HasPrefix(s, ".") || strings.HasPrefix(s, "/") {
+// exactVersionRe is an exact semver: no ranges, no dist-tags, no "v" prefix.
+var exactVersionRe = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+
+// SplitPackageSpec splits an npm spec into its name and optional exact-version
+// pin. A "@" past the first byte always starts the version, so a second one
+// lands inside the version and fails exactVersionRe.
+func SplitPackageSpec(s string) (name, version string, ok bool) {
+	name = s
+	if i := strings.Index(s[min(1, len(s)):], "@"); i >= 0 {
+		name, version = s[:i+1], s[i+2:]
+		if !exactVersionRe.MatchString(version) {
+			return "", "", false
+		}
+	}
+	if strings.HasPrefix(name, "@") {
+		parts := strings.Split(name, "/")
+		ok = len(parts) == 2 && packageNameRe.MatchString(parts[0][1:]) && packageNameRe.MatchString(parts[1])
+	} else {
+		ok = packageNameRe.MatchString(name)
+	}
+	return name, version, ok
+}
+
+// LooksLikePackage reports whether s is an npm package spec install_source can
+// run: a name with an optional exact-version pin.
+func LooksLikePackage(s string) bool {
+	if strings.ContainsAny(s, " \t\n\\") || strings.HasPrefix(s, ".") || strings.HasPrefix(s, "/") || strings.HasPrefix(s, "-") {
 		return false
 	}
-	if strings.HasPrefix(s, "@") {
-		parts := strings.Split(s, "/")
-		return len(parts) == 2 && packageNameRe.MatchString(parts[0][1:]) && packageNameRe.MatchString(parts[1])
-	}
-	return packageNameRe.MatchString(s)
+	_, _, ok := SplitPackageSpec(s)
+	return ok
 }
 
 // isExecutable reports whether path is a regular executable file. POSIX uses

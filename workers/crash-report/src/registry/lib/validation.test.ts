@@ -19,6 +19,67 @@ describe("PublishSchema source", () => {
     }
   });
 
+  it("accepts an exact semver pin on a package source", () => {
+    for (const source of [
+      "@playwright/mcp@0.0.83",
+      "name@1.2.3",
+      "@scope/name@10.20.30",
+      "name@1.2.3-beta.1",
+      "name@1.2.3+build.5",
+      "name@1.2.3-alpha.1+sha.abc",
+    ]) {
+      expect(parse({ kind: "mcp", source }).success, source).toBe(true);
+    }
+  });
+
+  it("rejects ranges, dist-tags, empty versions and anything that is not a plain package spec", () => {
+    for (const source of [
+      "name@",
+      "@scope/name@",
+      "name@latest",
+      "name@next",
+      "name@^1.2.3",
+      "name@~1.2.3",
+      "name@>=1.2.3",
+      "name@1",
+      "name@1.2",
+      "name@1.2.x",
+      "name@*",
+      "name@01.2.3",
+      "name@1.2.3-",
+      "name@v1.2.3",
+      "a@b@c",
+      "name@1.2.3@4.5.6",
+      "@scope@1.2.3",
+      "@scope/name/extra@1.2.3",
+      "@1.2.3",
+      "name@1.2.3;rm",
+      "name@1.2.3 --foo",
+      "name @1.2.3",
+      "name@1.2.3/../x",
+      "name@..",
+      "../name@1.2.3",
+      "/abs/name@1.2.3",
+      "name@1.2.3\\x",
+      "name@1.2.3$(id)",
+      "name@1.2.3&x",
+      "name@1.2.3|x",
+      "file:name@1.2.3",
+      "git+https://github.com/o/r.git@1.2.3",
+      "npm:name@1.2.3",
+      "o/r@1.2.3",
+      "-y@1.2.3",
+      "--help",
+      "-y",
+    ]) {
+      expect(parse({ kind: "mcp", source }).success, source).toBe(false);
+    }
+  });
+
+  it("still refuses a pinned package for kind=skill", () => {
+    expect(parse({ kind: "skill", source: "@scope/pkg@1.2.3" }).success).toBe(false);
+  });
+
   it("rejects free text, bare local paths, and scheme-less hosts", () => {
     for (const source of [
       "这个来源是自己制作的",

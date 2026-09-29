@@ -282,15 +282,11 @@ func commitPinned(s string) bool {
 var fullCommit = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func npmPackage(s string) bool {
-	name := strings.TrimPrefix(s, "@")
-	if name == "" || strings.ContainsAny(s, `\:`) || strings.HasPrefix(s, ".") {
+	if !installsource.LooksLikePackage(s) {
 		return false
 	}
-	parts := strings.Split(name, "/")
-	if len(parts) > 2 || (len(parts) == 2 && !strings.HasPrefix(s, "@")) {
-		return false
-	}
-	for _, p := range parts {
+	name, _, _ := installsource.SplitPackageSpec(s)
+	for p := range strings.SplitSeq(strings.TrimPrefix(name, "@"), "/") {
 		if !slugPart(p) {
 			return false
 		}
