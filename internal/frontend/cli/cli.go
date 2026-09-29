@@ -94,7 +94,7 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 		return runAgent(rest, version)
 	case "serve":
 		return runServe(rest, version)
-	case "tui":
+	case "tui", "chat", "code":
 		return runTUI(rest, version)
 	case "web":
 		return runWebCommand(rest, version)
@@ -174,7 +174,7 @@ func isDoctorRepairCommand(args []string) bool {
 
 func isDefaultInteractiveFlag(arg string) bool {
 	switch arg {
-	case "--model", "--max-steps", "--continue", "-c", "--resume", "-r", "--copy", "--dangerously-skip-permissions", "--yolo", "--permission-mode", "--effort", "--dir", "--add-dir", "--allowed-tools", "--allowedTools", "--profile":
+	case "--model", "--max-steps", "--continue", "-c", "--resume", "-r", "--copy", "--dangerously-skip-permissions", "--yolo", "--permission-mode", "--effort", "--dir", "--add-dir", "--allowed-tools", "--allowedTools", "--profile", "--preset":
 		return true
 	}
 	if name, _, ok := strings.Cut(arg, "="); ok && isDefaultInteractiveFlag(name) {
@@ -475,7 +475,7 @@ func runAgent(args []string, version string) int {
 	if resumePath != "" {
 		if err := leases.Rebind(resumePath); err != nil {
 			if errors.Is(err, sessionstore.ErrSessionLeaseHeld) {
-				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, sessionLeaseResumeRefusal(err))
+				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, sessionLeaseResumeRefusal(err, *f.takeover))
 			} else {
 				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 			}

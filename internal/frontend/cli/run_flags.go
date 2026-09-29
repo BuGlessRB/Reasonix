@@ -13,6 +13,7 @@ type runFlags struct {
 	outputFormat                      *string
 	maxSteps                          *int
 	showThinking, cont, copySession   *bool
+	takeover                          *bool
 	autoApprove, yolo                 *bool
 	printOnly, eventsJSONL            *bool
 	additionalDirs, allowedToolValues []string
@@ -33,6 +34,7 @@ func newRunFlags() *runFlags {
 	f.dir = fs.String("dir", "", "change to this directory first (project root); config, sandbox and file tools resolve from here")
 	f.cont = registerContinueFlag(fs)
 	f.resume = fs.String("resume", "", "resume by session file path, session ID, or machine session ID (takes precedence over --continue)")
+	f.takeover = fs.Bool("takeover", false, "with --resume/--continue: accepted for 1.x command lines; a session another Reasonix process holds is still refused")
 	f.copySession = fs.Bool("copy", false, "with --resume/--continue: duplicate the session and continue in the copy (escape hatch when the original is held by another Reasonix process)")
 	f.effort = fs.String("effort", "", "session reasoning effort override")
 	f.permissionMode = fs.String("permission-mode", "ask", "permission mode: manual | ask | auto | acceptEdits | dontAsk | plan | bypassPermissions")
