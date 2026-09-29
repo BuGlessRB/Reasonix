@@ -22,10 +22,14 @@ func (t *Transcript) foldProgressWatch(w *eventwire.ProgressWatch) {
 }
 
 func stallText(w *eventwire.ProgressWatch) string {
-	if w.Cause == "tokens" {
+	switch w.Cause {
+	case "tokens":
 		return fmt.Sprintf("About %d context windows of input (%d tokens) since the run last did anything observable. Whether to keep going is your call.",
 			w.TokenMultiple, w.PromptTokens)
+	case "perseveration":
+		return "The model is repeating the same text. Whether to keep going is your call."
+	default:
+		return fmt.Sprintf("No observable progress for %d tool rounds: no file changed, no check or task step moved, nothing new was read. Whether to keep going is your call.",
+			w.IdleRounds)
 	}
-	return fmt.Sprintf("No observable progress for %d tool rounds: no file changed, no check or task step moved, nothing new was read. Whether to keep going is your call.",
-		w.IdleRounds)
 }

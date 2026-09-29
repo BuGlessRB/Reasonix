@@ -647,30 +647,33 @@ func New(prov provider.Provider, tools *tool.Registry, session *sessionstore.Ses
 	if reasoningByteLimit == 0 {
 		reasoningByteLimit = defaultReasoningByteLimit
 	}
+	perseverationGuard, perseverationMaxRetries := resolvePerseverationGuard(opts.MaxPerseverationRetries)
 	a := &Agent{
 		svc: newAgentServices(prov, tools, sink, gate,
 			sandboxEscapeApprover, configWriteApprover, hooks, opts),
 		agentConfig: agentConfig{
-			maxSteps:           opts.MaxSteps,
-			maxStepsKey:        maxStepsKey,
-			reasoningByteLimit: reasoningByteLimit,
-			maxOutputTokens:    opts.MaxOutputTokens,
-			temperature:        opts.Temperature,
-			usageSource:        usageSourceOrDefault(opts.UsageSource, event.UsageSourceExecutor),
-			modelRef:           strings.TrimSpace(opts.ModelRef),
-			workspaceID:        strings.TrimSpace(opts.WorkspaceID),
-			classifierTaskText: opts.ClassifierTaskText,
-			writeWorkspaceRoot: strings.TrimSpace(opts.WriteWorkspaceRoot),
-			observeRoot:        opts.observeRoot(),
-			renderRoot:         strings.TrimSpace(opts.RenderRoot),
-			workspaceVCS:       strings.TrimSpace(opts.WorkspaceVCS),
-			subagentDepth:      subagentDepth,
-			maxSubagentDepth:   maxSubagentDepth,
-			contextWindow:      opts.ContextWindow,
-			compactRatio:       opts.CompactRatio,
-			recentKeep:         opts.RecentKeep,
-			budgets:            opts.CompactionBudgets,
-			archiveDir:         opts.ArchiveDir,
+			maxSteps:                opts.MaxSteps,
+			maxStepsKey:             maxStepsKey,
+			reasoningByteLimit:      reasoningByteLimit,
+			perseverationGuard:      perseverationGuard,
+			perseverationMaxRetries: perseverationMaxRetries,
+			maxOutputTokens:         opts.MaxOutputTokens,
+			temperature:             opts.Temperature,
+			usageSource:             usageSourceOrDefault(opts.UsageSource, event.UsageSourceExecutor),
+			modelRef:                strings.TrimSpace(opts.ModelRef),
+			workspaceID:             strings.TrimSpace(opts.WorkspaceID),
+			classifierTaskText:      opts.ClassifierTaskText,
+			writeWorkspaceRoot:      strings.TrimSpace(opts.WriteWorkspaceRoot),
+			observeRoot:             opts.observeRoot(),
+			renderRoot:              strings.TrimSpace(opts.RenderRoot),
+			workspaceVCS:            strings.TrimSpace(opts.WorkspaceVCS),
+			subagentDepth:           subagentDepth,
+			maxSubagentDepth:        maxSubagentDepth,
+			contextWindow:           opts.ContextWindow,
+			compactRatio:            opts.CompactRatio,
+			recentKeep:              opts.RecentKeep,
+			budgets:                 opts.CompactionBudgets,
+			archiveDir:              opts.ArchiveDir,
 		},
 		sess: sessionRuntime{
 			conversation: session,
@@ -1184,15 +1187,15 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 	var maxArgChars int
 	var lastArgProgress time.Time
 	var thought thoughtClock
-	// collect packages the stream state accumulated so far; stored is the
-	// finishReasoning output that becomes the round-tripped reasoning.
+	perseveration, perseverationDetected := newPerseverationGuards(), false
+	// collect packages the accumulated stream state; stored is the round-tripped reasoning.
 	collect := func(stored string, err error) streamedTurn {
 		return streamedTurn{
 			text: text.String(), reasoning: stored, signature: signature, thoughtMs: thought.ms(),
 			reasoningID: reasoningID, reasoningStatus: reasoningStatus,
 			calls: calls, responsesItems: responsesItems, usage: usage,
 			partialToolStarted: partialToolStarted, partialCalls: partialCalls,
-			maxArgChars: maxArgChars, err: err,
+			maxArgChars: maxArgChars, err: err, perseverationDetected: perseverationDetected,
 		}
 	}
 	finishReasoning := func() (stored, display string) {
@@ -1257,7 +1260,7 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 					text: finalText, reasoning: finalReasoning, signature: signature, thoughtMs: thought.ms(),
 					reasoningID: reasoningID, reasoningStatus: reasoningStatus,
 					calls: calls, responsesItems: responsesItems, usage: usage,
-					partialCalls: partialCalls, maxArgChars: maxArgChars,
+					partialCalls: partialCalls, maxArgChars: maxArgChars, perseverationDetected: perseverationDetected,
 				}
 			}
 			chunk = c
@@ -1345,6 +1348,10 @@ func (a *Agent) streamWithFrozen(ctx context.Context, turn int, sink event.Sink,
 			}
 			usage = provider.UsageWithRequestAttemptCount(ctx, usage)
 			return collect(stored, chunk.Err)
+		}
+		if cut := a.perseverationStep(perseveration, chunk, sink, &perseverationDetected, perseverationAbort{ctx: ctx, sink: sink,
+			finishReasoning: finishReasoning, collect: collect, reasoningBytes: reasoningBytes, thoughtMs: thought.ms()}); cut != nil {
+			return *cut
 		}
 	}
 }

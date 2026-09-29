@@ -1507,6 +1507,51 @@ an explicit run budget is needed.
 tokens, not time, not money. It runs until the model finishes, an adaptive
 guard decides it stopped making progress, or you stop it.
 
+One such guard is the **perseveration guard** (a model stuck echoing one block):
+it detects when the model emits the same short block of text or reasoning
+byte-for-byte.
+
+Detection is **on by default**, but it only reports: a byte-identical block is
+sometimes legitimate output — printing a value 300 times, a run of identical
+table or log rows, a page of `=` or `A` — so nothing is cut and nothing reaches
+the model unless you opt in.
+
+A detected loop is surfaced through the progress-watch channel as a
+`perseveration` notice, and the run goes on.
+
+The notice is said once per loop episode: while the same loop keeps tripping the
+guard it stays quiet, and it is said again only after a block that does not trip
+the guard in between. The user's `progress_watch.pause` setting is what ends the
+run on a detected loop.
+
+Cutting the stream and nudging a retry is opt-in with
+`[progress_watch].perseveration_retries` (a global default) or a per-provider
+`perseveration_retries` on a `[[providers]]` entry, which overrides the global
+value for that provider:
+
+```toml
+[progress_watch]
+perseveration_retries = 0   # the default: report a detected loop, never cut
+
+[[providers]]
+name = "deepseek"
+perseveration_retries = 1   # this provider also cuts and retries once
+```
+
+At `0` a detected loop is only reported, as above.
+
+A **positive** value also cuts the stream, shows the user a
+`[retrying (N) avoiding perseveration]` interjection, appends a host-authored
+nudge through the mid-turn steer path, and retries up to that many times; once
+the budget is spent the run stops resumably with a perseveration pause.
+
+Before retrying, it trims the loop from the turn back to the phrase and its last
+repetition, so the retry resubmits evidence of the loop rather than all of it.
+The trim reaches both the transcript and the stored turn, so the two never
+diverge.
+
+Setting the key negative disables the guard entirely.
+
 An optional spend gate is available when you want one. It bounds a whole task
 (every "continue" included, until you start unrelated work), and on crossing it
 the task produces one tool-free summary and pauses; the work is saved and the

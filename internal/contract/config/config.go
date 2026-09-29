@@ -1182,15 +1182,13 @@ type ProviderEntry struct {
 	BalanceURL        string `toml:"balance_url"` // optional; a provider-specific wallet-balance endpoint (DeepSeek: https://api.deepseek.com/user/balance). Empty = no balance readout.
 	ContextWindow     int    `toml:"context_window"`
 	// MaxOutputTokens is a protocol-neutral total output budget for one turn.
-	// Zero means automatic (not unlimited): ordinary 16K, reasoning 32K, high/max
-	// 64K — DeepSeek's default effort is high, so auto is typically ~64K.
-	// User guidance: 0 recommended; 32768 ordinary coding/cost control;
-	// 65536 heavy reasoning/long tools; 131072 only after finish_reason=length.
-	// A negative value omits optional wire limits when the protocol allows;
-	// Anthropic still requires max_tokens. Never feeds compact_ratio.
-	MaxOutputTokens int                          `toml:"max_output_tokens"`
-	Price           *provider.Pricing            `toml:"price"`  // legacy/provider-wide fallback
-	Prices          map[string]*provider.Pricing `toml:"prices"` // optional per-model prices; keys are model ids
+	// Zero means automatic (ordinary 16K, reasoning 32K, high/max 64K); 32768
+	// suits cost control and 65536 heavy reasoning. Negative omits wire limits.
+	MaxOutputTokens int `toml:"max_output_tokens"`
+	// PerseverationRetries overrides [progress_watch].perseveration_retries; nil inherits the global default.
+	PerseverationRetries *int                         `toml:"perseveration_retries"`
+	Price                *provider.Pricing            `toml:"price"`  // legacy/provider-wide fallback
+	Prices               map[string]*provider.Pricing `toml:"prices"` // optional per-model prices; keys are model ids
 	// BillingCurrency is the frozen list-price currency (ISO-4217). Independent
 	// of [billing].display_currency; switching display never rewrites this.
 	BillingCurrency string `toml:"billing_currency"`

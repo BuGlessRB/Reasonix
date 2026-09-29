@@ -35,6 +35,11 @@ describe("the stall strip beside the composer", () => {
     expect(screen.getByRole("status").textContent).toContain("8 倍上下文");
   });
 
+  it("says a perseveration stall as perseveration", () => {
+    render(<RuntimeBar notices={[]} onSeen={() => {}} watch={{ stall: stall({ cause: "perseveration" }) }} onStall={() => {}} />);
+    expect(screen.getByRole("status").textContent).toContain("模型在重复输出同一段文字");
+  });
+
   it("stays quiet once muted", () => {
     render(<RuntimeBar notices={[]} onSeen={() => {}} watch={{ stall: stall(), stallMuted: true }} onStall={() => {}} />);
     expect(screen.queryByRole("status")).toBeNull();
