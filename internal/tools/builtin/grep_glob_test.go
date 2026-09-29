@@ -92,6 +92,19 @@ func TestGrepSlashGlobThroughSymlinkedParent(t *testing.T) {
 	}
 }
 
+func TestGrepRelativeSearchRootKeepsItsOutputPath(t *testing.T) {
+	dir := grepGlobTree(t)
+	t.Chdir(filepath.Dir(dir))
+	root := filepath.Base(dir)
+	for _, engine := range grepEnginesUnderTest(t) {
+		out := runTool(t, engine.tool, map[string]any{"pattern": "needle", "path": root, "glob": "internal/**/*_test.go"})
+		want := filepath.Join(root, "internal", "deep", "nested_test.go") + ":1:needle in a test"
+		if out != want {
+			t.Fatalf("%s: result=%q, want %q", engine.name, out, want)
+		}
+	}
+}
+
 // An omitted glob keeps the unfiltered behavior every existing caller relies on.
 func TestGrepWithoutGlobSearchesEverything(t *testing.T) {
 	dir := grepGlobTree(t)

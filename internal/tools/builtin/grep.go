@@ -377,11 +377,9 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 			"--glob", "!.ssh/**",
 		)
 	}
-	target := path
-	if directory {
-		// An absolute symlink alias may differ from ripgrep's physical cwd,
-		// breaking root-relative globs even when cmd.Dir names that same alias.
-		target = "."
+	target, err := ripgrepTarget(path, directory)
+	if err != nil {
+		return nil, false, false, ripgrepDisplayError(err, target, path, rp)
 	}
 	args = append(args, "--regexp", pattern, "--", target)
 
@@ -405,7 +403,7 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	// Keep glob anchoring local to this subprocess, never the host process.
 	if directory {
-		cmd.Dir = path
+		cmd.Dir = target
 	}
 	cmd.Env = applyEnvOverrides(secrets.ProcessEnv(), prepared.EnvOverrides)
 	proc.HideWindow(cmd)
@@ -416,7 +414,7 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return nil, false, wrapped, fmt.Errorf("ripgrep: %w", err)
+		return nil, false, wrapped, ripgrepDisplayError(err, target, path, rp)
 	}
 
 	var out []string
@@ -426,9 +424,7 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	for sc.Scan() {
 		line := sc.Text()
 		if directory {
-			if relative, ok := strings.CutPrefix(line, "."+string(filepath.Separator)); ok {
-				line = strings.TrimSuffix(path, string(filepath.Separator)) + string(filepath.Separator) + relative
-			}
+			line = restoreRipgrepPath(line, target, path)
 		}
 		out = append(out, displayRipgrepLine(line, rp))
 		if len(out) >= grepMaxMatches {
@@ -446,10 +442,7 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 		// ripgrep exits 1 with no output for "no matches"; a real failure (bad
 		// pattern, unreadable path) writes a message to stderr.
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			if rp.External {
-				msg = rp.ErrorText(fmt.Errorf("%s", msg))
-			}
-			return nil, false, wrapped, fmt.Errorf("ripgrep: %s", msg)
+			return nil, false, wrapped, ripgrepDisplayError(errors.New(msg), target, path, rp)
 		}
 	}
 	return out, truncated, wrapped, nil
