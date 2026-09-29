@@ -201,6 +201,7 @@ export const ACTIONS: UIAction[] = [
   { id: "market.back", kind: "navigation", target: "none", proof: "interaction" },
   { id: "market.cancel", kind: "navigation", target: "none", proof: "interaction" },
   { id: "market.inspect", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  { id: "market.trust", kind: "kernel-mutation", target: "none", proof: "interaction" },
   { id: "market.confirm-many", kind: "view", target: "none", proof: "interaction" },
   { id: "market.install", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "market.view-installed", kind: "navigation", target: "none", proof: "interaction" },
