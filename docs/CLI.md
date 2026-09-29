@@ -283,6 +283,25 @@ Execution failures use `subtype: "error_during_execution"` and
 `is_error: true`. Structured modes keep runtime errors in JSON instead of also
 printing a duplicate human-readable error.
 
+What the host decided about the answer rides beside it and does not change the
+exit status:
+
+- `-p` names the calls listed in `permission_denials` on stderr.
+- `readiness` (`attempts`, `missing`) appears when the model finished but the
+  host's final-readiness check stayed unmet, for example no check ran after
+  the last write. The run still counts as a success.
+- `completion` repeats the turn's `completion_summary` when there was one.
+- `--events-jsonl`'s `run_done` carries the denial count and `readiness`.
+
+Exit statuses of `reasonix run`:
+
+| Status | Meaning |
+| --- | --- |
+| `0` | The model finished, including with refused calls or unmet readiness. |
+| `1` | The run failed: provider, configuration, limit, or cancellation. |
+| `2` | The command line was invalid. |
+| `3` | `--fail-on-unverified` was given and final readiness stayed unmet. |
+
 ### Redacted machine interfaces
 
 Use the dedicated event flag when an automation needs lifecycle telemetry but

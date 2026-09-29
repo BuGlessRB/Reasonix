@@ -548,7 +548,7 @@ func runAgent(args []string, version string) int {
 	chain.begin(ctrl, version, prompt)
 	runErr := ctrl.Run(ctx, prompt)
 	reporter.RecordRecovery(ctrl.DrainRecoveryMetrics())
-	completion := classifyRunCompletion(runErr)
+	completion := classifyRunCompletion(runErr).withFailOnUnverified(*f.failOnUnverified)
 	if cfg != nil {
 		notify.SendEvent(newNotificationSender(), i18n.M, cfg.Notifications, event.Event{
 			Kind:    event.TurnDone,
