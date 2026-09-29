@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1008,6 +1009,67 @@ func TestServeEventsReplaysPendingAskOnAttach(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("blocked ask did not exit after test cancellation")
 	}
+}
+
+func TestServeEventsFirstWindowReceivesStartupNotice(t *testing.T) {
+	bc := NewBroadcaster()
+	ctrl := control.New(control.Options{Sink: bc})
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
+	defer srv.Close()
+
+	bc.Emit(event.Event{Kind: event.Notice, Code: "startup-test", Text: "startup warning"})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("/events status = %d", resp.StatusCode)
+	}
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), `"code":"startup-test"`) {
+			return
+		}
+	}
+	t.Fatalf("first window missed startup notice: %v", scanner.Err())
+}
+
+func TestServeEventsExplicitZeroCursorDoesNotReplayNotice(t *testing.T) {
+	bc := NewBroadcaster()
+	ctrl := control.New(control.Options{Sink: bc})
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
+	defer srv.Close()
+
+	bc.Emit(event.Event{Kind: event.Notice, Text: "before subscribe"})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events?lastEventId=0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	bc.Emit(event.Event{Kind: event.TurnDone})
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		if line := scanner.Text(); strings.HasPrefix(line, "data: ") {
+			if !strings.Contains(line, `"kind":"turn_done"`) {
+				t.Fatalf("explicit cursor replayed old event: %s", line)
+			}
+			return
+		}
+	}
+	t.Fatalf("no live event arrived: %v", scanner.Err())
 }
 
 // TestServeEventsReplayHandoffSerializesPromptEmission proves the controller's
