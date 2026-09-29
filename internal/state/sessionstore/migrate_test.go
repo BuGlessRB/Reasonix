@@ -61,6 +61,42 @@ func TestMigrateLegacySessionsReconstructsConversation(t *testing.T) {
 	}
 }
 
+// The one-time import marker says the import ran. A session the pass could not
+// copy must keep it unstamped, or the next launch skips the import and that
+// session never arrives.
+func TestMigrateLegacySessionsWithholdsMarkerWhenACopyFails(t *testing.T) {
+	root := testenv.TempDir(t)
+	src := filepath.Join(root, "src")
+	dest := filepath.Join(root, "dest")
+	workspace := filepath.Join(root, "workspace")
+	blocked := filepath.Join(root, "blocked")
+	for _, dir := range []string{src, dest, workspace} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A v0.x sidecar routes the session into its workspace, and dirExists has to
+	// see that workspace for the route to apply.
+	if err := writeFile(filepath.Join(src, "chat-1.jsonl"), []byte(`{"role":"user","content":"hi"}`+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(src, "chat-1.meta.json"), []byte(`{"workspace":"`+workspace+`","summary":"chat"}`)); err != nil {
+		t.Fatal(err)
+	}
+	// projectDir names a file, so the routed copy cannot create its directory.
+	// A file (not a chmod) keeps the failure portable.
+	if err := os.WriteFile(blocked, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := MigrateLegacySessions(src, dest, func(string) string { return blocked }); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if importMarkerExists(dest, legacyRoutedHomeImportMarker) {
+		t.Fatal("import marker stamped although a session copy failed, so that session is never retried")
+	}
+}
+
 func TestMigrateLegacySessionsReplaysNativeEventLog(t *testing.T) {
 	src := testenv.TempDir(t)
 	dest := testenv.TempDir(t)
