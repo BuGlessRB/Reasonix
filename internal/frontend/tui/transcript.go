@@ -127,6 +127,12 @@ func (t *Transcript) AddUser(text string) int {
 	return id
 }
 
+// AddEcho records a command this screen answered itself: it is shown as typed
+// and no turn will start on it.
+func (t *Transcript) AddEcho(text string) {
+	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemUser, Text: text})
+}
+
 // AddQueued records input handed to a running turn. It stays pending until the
 // kernel takes it: a steer event for guidance, the start of its own turn for a
 // follow-up.

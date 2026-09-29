@@ -50,6 +50,14 @@ func (k *recordingKernel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode([]map[string]any{{"role": "user", "content": "write the docs"}})
 	case "/inbox/items":
 		_ = json.NewEncoder(w).Encode(map[string]string{"itemId": "q-7"})
+	case "/checkpoints":
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"turn": 0, "prompt": "read the code"}, {"turn": 1, "prompt": "fix the bug", "files": 2},
+		})
+	case "/rewind/prepare":
+		_ = json.NewEncoder(w).Encode(map[string]any{"planId": "p-1", "canFiles": true, "canConversation": true})
+	case "/rewind/commit":
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "conversationOk": true})
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
