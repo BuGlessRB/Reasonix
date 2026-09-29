@@ -105,6 +105,12 @@ func (c *Client) Submit(ctx context.Context, input string) error {
 	return c.do(ctx, http.MethodPost, "/submit", map[string]any{"input": input, "refuseUnknownSlash": true}, nil)
 }
 
+// RunShell runs a `!` command on this machine. It stays local, as in 1.x: the
+// output is shown and the model is not asked to answer it.
+func (c *Client) RunShell(ctx context.Context, command string) error {
+	return c.do(ctx, http.MethodPost, "/submit", map[string]any{"input": "!" + command, "localShell": true}, nil)
+}
+
 // Queue hands input to the running turn: steer lands at its next tool
 // boundary, a follow-up starts once it finishes.
 func (c *Client) Queue(ctx context.Context, input string, steer bool) (string, error) {

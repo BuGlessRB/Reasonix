@@ -344,6 +344,30 @@ func TestRunShellHandsTheOutputToTheModel(t *testing.T) {
 	}
 }
 
+// A terminal's `!` command can stay the user's own: its output is shown and
+// nothing reaches the model, as 1.x has it.
+func TestRunShellLocalOnlyLeavesTheModelOut(t *testing.T) {
+	sink, done, events := collectSink()
+	runner := &inputRecorder{}
+	ctrl := New(Options{Runner: runner, Sink: sink})
+	t.Cleanup(ctrl.Close)
+
+	ctrl.RunShellWith("echo shell-stays-local", ShellRun{LocalOnly: true})
+	waitForDone(t, done)
+	if n := len(runner.seen()); n != 0 {
+		t.Fatalf("a local command was answered %d times: %q", n, runner.seen())
+	}
+	var shown bool
+	for _, e := range events() {
+		if e.Kind == event.ToolResult && strings.Contains(e.Tool.Output, "shell-stays-local") {
+			shown = true
+		}
+	}
+	if !shown {
+		t.Fatal("the command's output never reached the screen")
+	}
+}
+
 // A command the user stopped is not something to answer.
 func TestCancelledShellIsNotAnswered(t *testing.T) {
 	sink, done, _ := collectSink()
