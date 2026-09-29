@@ -210,6 +210,16 @@ reasonix -p "summarize the diff" --output-format json
 reasonix run "run the tests" --output-format stream-json
 ```
 
+`stream-json` lines before the result follow the 1.x contract:
+
+- Each carries `sessionId`, `turnId`, `seq` (from 1) and `status`.
+- The turn opens with `turn_status` (`status: "queued"`) and `user_message`.
+- A call that cleared every gate and ran reports `tool_started` before its
+  `tool_result`.
+- The turn closes with `turn_done`: `completed`, `failed` or `interrupted`.
+- Only kinds 1.x emitted appear; host-internal state such as workspace leases
+  stays off the stream.
+
 The final structured object has this shape:
 
 ```json
@@ -287,6 +297,9 @@ Every line has `schema_version`, `sequence`, and `kind`; the final line is
 `kind: "run_done"`. `--events-jsonl` is intentionally separate from the richer
 `--output-format stream-json` contract and cannot be combined with
 `--output-format`.
+
+Its lifecycle records match `stream-json`'s (`turn_status`, `user_message`,
+`tool_started`, `turn_done`) without their content.
 
 The following read-only commands expose persisted state without transcript,
 label, command, output, path, PID, or host-name content. Here, read-only means
