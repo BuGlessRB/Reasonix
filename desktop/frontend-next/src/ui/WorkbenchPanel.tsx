@@ -18,6 +18,8 @@ import { docRef } from "./docrefs";
 import { useGlance } from "./glance";
 import { useMarkdownPoll } from "./useMarkdownPoll";
 import { pinToViewport } from "./place";
+import { WorkbenchExplorerHead } from "./WorkbenchExplorerHead";
+import { setShowsHiddenFiles, showsHiddenFiles } from "../state/prefs";
 
 // The editor and its grammars load with the first file opened, not with Studio.
 const CodeEditor = lazy(() => import("./CodeEditor"));
@@ -146,6 +148,7 @@ export function WorkbenchPanel({
   // The explorer's own failure, drawn in the explorer: the file view's error
   // sits in a canvas the docked file list hides.
   const [listFailed, setListFailed] = useState("");
+  const [hidden, setHidden] = useState(showsHiddenFiles);
   const openFolders = useRef<string[]>([]);
   openFolders.current = directories.filter((path) => !collapsed.has(path));
   const [browsers, setBrowsers] = useState<string[]>([]),
@@ -157,15 +160,6 @@ export function WorkbenchPanel({
     [diff, setDiff] = useState("");
   const [busy, setBusy] = useState(false),
     [failed, setFailed] = useState("");
-  // Which editor opened it, or why none did. The host knows both and says so,
-  // because a button that does nothing is indistinguishable from a broken one.
-  const [editorNote, setEditorNote] = useState("");
-  const openEditor = useCallback(() => {
-    void port
-      .openInEditor()
-      .then(({ editor }) => setEditorNote(t("已在 {app} 中打开", { app: editor })))
-      .catch((e) => setEditorNote(reason(e)));
-  }, [port]);
   // Showing a file where it lives needs a shell on the kernel's own machine.
   const revealable = !remote && port.revealsFiles();
   const [platform, setPlatform] = useState("");
@@ -212,7 +206,7 @@ export function WorkbenchPanel({
     let live = true;
     void (async () => {
       try {
-        const top = await port.workspaceFiles("", query);
+        const top = await port.workspaceFiles("", query, hidden);
         let files = top.files;
         let dirs = top.directories;
         // A reload is the tree read again, not the reader's place in it lost:
@@ -224,7 +218,7 @@ export function WorkbenchPanel({
           for (const path of [...openFolders.current].sort((a, b) => depth(a) - depth(b))) {
             if (!dirs.includes(path)) continue;
             try {
-              const inner = await port.workspaceFiles(path);
+              const inner = await port.workspaceFiles(path, "", hidden);
               files = [...files, ...inner.files];
               dirs = [...dirs, ...inner.directories];
               open.add(path);
@@ -245,7 +239,7 @@ export function WorkbenchPanel({
     return () => {
       live = false;
     };
-  }, [port, shown, changeKey, query, glance, running, wrote]);
+  }, [port, shown, changeKey, query, hidden, glance, running, wrote]);
   // The button in the chrome says "show me the browser", not "show me this one
   // browser". When the agent has a page, that page is the browser; the start
   // page is only for an empty column, and steps aside unused once the agent
@@ -424,7 +418,7 @@ export function WorkbenchPanel({
       return;
     }
     try {
-      const result = await port.workspaceFiles(path);
+      const result = await port.workspaceFiles(path, "", hidden);
       setFiles((v) => [...new Set([...v, ...result.files])]);
       setDirectories((v) => [...new Set([...v, ...result.directories])]);
       setCollapsed((v) => {
@@ -643,32 +637,17 @@ export function WorkbenchPanel({
           )}
         </main>
         <aside className="workbench-explorer">
-          <div className="workbench-explorer-head">
-            <span>{t("资源管理器")}</span>
-            <small>{files.length + directories.length}</small>
-            {/* Beside the files rather than in settings: this is the one place
-                the workspace is already what you are looking at. */}
-            <button
-              className="workbench-open-editor"
-              data-action="workspace.editor"
-              title={editorNote || t("在代码编辑器中打开工作区")}
-              aria-label={t("在代码编辑器中打开工作区")}
-              onClick={openEditor}
-            >
-              <StudioIcon name="code" />
-            </button>
-            {revealable && (
-              <button
-                className="workbench-open-editor"
-                data-action="workbench.reveal"
-                title={t("在系统文件管理器中显示工作区")}
-                aria-label={t("在系统文件管理器中显示工作区")}
-                onClick={() => reveal("")}
-              >
-                <StudioIcon name="reveal" />
-              </button>
-            )}
-          </div>
+          <WorkbenchExplorerHead
+            port={port}
+            count={files.length + directories.length}
+            revealable={revealable}
+            hidden={hidden}
+            onHidden={(on) => {
+              setShowsHiddenFiles(on);
+              setHidden(on);
+            }}
+            onReveal={() => reveal("")}
+          />
           <label className="workbench-search">
             <StudioIcon name="search" />
             <input

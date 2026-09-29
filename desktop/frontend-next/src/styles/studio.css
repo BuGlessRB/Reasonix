@@ -1369,6 +1369,7 @@ body { background: var(--page) !important; }
   transition: color var(--m-line), background var(--m-line);
 }
 .workbench-open-editor:hover { color: var(--text); background: var(--overlay); }
+.workbench-open-editor[aria-pressed="true"] { color: var(--text); background: var(--overlay); }
 .workbench-open-editor svg { width: 13px; height: 13px; }
 .workbench-open-editor + .workbench-open-editor { margin-left: 2px; }
 .workbench-search { height: 34px; margin: 7px 8px; padding: 0 8px; flex: none; display: flex; align-items: center; gap: 6px; border: 1px solid var(--hair); border-radius: 5px; background: var(--surface); }

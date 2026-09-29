@@ -412,7 +412,8 @@ export interface AgentPort {
   // only this says how, and asking per path is what keeps a session that
   // touched two hundred files from shipping two hundred diffs nobody opened.
   changeDiff(path: string): Promise<ChangeDiff>;
-  workspaceFiles(path?: string, query?: string): Promise<WorkspaceFiles>;
+  // Dot entries are left out unless hidden is set; VCS stores never appear.
+  workspaceFiles(path?: string, query?: string, hidden?: boolean): Promise<WorkspaceFiles>;
   workspaceFile(path: string): Promise<WorkspaceFile>;
   saveWorkspaceFile(file: WorkspaceFile): Promise<WorkspaceFile>;
   // Where an image in the workspace is served, for a rendered document to show.
