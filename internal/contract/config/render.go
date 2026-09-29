@@ -159,9 +159,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 
 	b.WriteString("[agent]\n")
 	if shouldRenderSystemPrompt(c, defaults, scope) {
-		b.WriteString("system_prompt = \"\"\"\n")
-		b.WriteString(c.Agent.SystemPrompt)
-		b.WriteString("\"\"\"\n")
+		b.WriteString("system_prompt = " + tomlMultilineBasicString(c.Agent.SystemPrompt) + "\n")
 	} else {
 		b.WriteString("# system_prompt = \"\"\"...\"\"\"   # omit to use the built-in prompt for this version\n")
 	}

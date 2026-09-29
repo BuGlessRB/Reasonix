@@ -144,7 +144,7 @@ func markPersistedDeepSeekOfficialPricing(c *Config) {
 			continue
 		}
 		p.persistedOfficialCurrency = completeDeepSeekOfficialPricingCurrency(p)
-		if c.ConfigVersion >= Default().ConfigVersion && isStandardDeepSeekProviderTemplate(p) {
+		if c.ConfigVersion >= lastUpgradeConfigVersion && isStandardDeepSeekProviderTemplate(p) {
 			p.persistedOfficialCurrency = ""
 		}
 	}
@@ -220,6 +220,12 @@ const (
 	windowsBashSandboxDefaultConfigVersion = 4
 	retiredAutoPlanConfigVersion           = 5
 	billingSplitConfigVersion              = 6
+	// lastUpgradeConfigVersion is the newest upgrade this build applies.
+	lastUpgradeConfigVersion = billingSplitConfigVersion
+	// freshConfigVersion marks a file this build writes from nothing. The 1.x
+	// line shares the file and rewrites it whole, dropping every table it does
+	// not know, when the marker is below its own latest upgrade, 12.
+	freshConfigVersion = 12
 )
 
 // ApplyUserConfigUpgradesOnStartup applies one-time startup migrations. It
@@ -247,7 +253,7 @@ func ApplyUserConfigUpgradesOnStartup(path string) (bool, error) {
 	if _, err := decodeTOMLFile(path, &header); err != nil {
 		return false, fmt.Errorf("config %s: %w", path, err)
 	}
-	if header.ConfigVersion >= Default().ConfigVersion {
+	if header.ConfigVersion >= lastUpgradeConfigVersion {
 		return false, nil
 	}
 	cfg := LoadForEdit(path)
@@ -277,7 +283,7 @@ func ApplyUserConfigUpgradesOnStartup(path string) (bool, error) {
 	if !changed {
 		return false, nil
 	}
-	cfg.ConfigVersion = Default().ConfigVersion
+	cfg.ConfigVersion = lastUpgradeConfigVersion
 	if err := cfg.SaveTo(path); err != nil {
 		return false, err
 	}
