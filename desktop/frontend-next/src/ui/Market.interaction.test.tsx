@@ -62,6 +62,26 @@ describe("market list", () => {
     await waitFor(() => expect(screen.queryByText("kit")).toBeNull());
   });
 
+  it("keeps pagination moving when adjacent registry pages overlap", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    const asked: number[] = [];
+    port.marketList = vi.fn(async (q: MarketQuery) => {
+      const offset = q.offset ?? 0;
+      asked.push(offset);
+      const slugs = offset === 0 ? ["a/one", "b/two"] : offset === 2 ? ["b/two", "c/three"] : ["d/four"];
+      return { packages: slugs.map((slug) => row(slug, true)), limit: 2, offset };
+    });
+    render(<Market port={port} onInstalled={() => {}} />);
+
+    await screen.findByText("one");
+    await userEvent.click(screen.getByRole("button", { name: "加载更多" }));
+    await screen.findByText("three");
+    expect(document.querySelectorAll('[data-action="market.open"][data-value="b/two"]')).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "加载更多" }));
+    await screen.findByText("four");
+    expect(asked).toEqual([0, 2, 4]);
+  });
+
   it("opens an entry from the keyboard", async () => {
     const port = new MockPort() as unknown as AgentPort;
     port.marketList = async () => ({ packages: [row("a/kit", true)], limit: 24, offset: 0 });
