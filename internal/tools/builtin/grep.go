@@ -377,7 +377,11 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 			"--glob", "!.ssh/**",
 		)
 	}
-	args = append(args, "--regexp", pattern, "--", path)
+	target, err := ripgrepTarget(path, directory)
+	if err != nil {
+		return nil, false, false, ripgrepDisplayError(err, target, path, rp)
+	}
+	args = append(args, "--regexp", pattern, "--", target)
 
 	var lease *sessiontemp.Lease
 	sessionDir := ""
@@ -397,10 +401,9 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	}
 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	// Ripgrep anchors slash-containing globs to its process directory on Windows.
-	// Search from the requested root so both engines keep the same glob contract.
+	// Keep glob anchoring local to this subprocess, never the host process.
 	if directory {
-		cmd.Dir = path
+		cmd.Dir = target
 	}
 	cmd.Env = applyEnvOverrides(secrets.ProcessEnv(), prepared.EnvOverrides)
 	proc.HideWindow(cmd)
@@ -411,7 +414,7 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return nil, false, wrapped, fmt.Errorf("ripgrep: %w", err)
+		return nil, false, wrapped, ripgrepDisplayError(err, target, path, rp)
 	}
 
 	var out []string
@@ -419,7 +422,11 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
-		out = append(out, displayRipgrepLine(sc.Text(), rp))
+		line := sc.Text()
+		if directory {
+			line = restoreRipgrepPath(line, target, path)
+		}
+		out = append(out, displayRipgrepLine(line, rp))
 		if len(out) >= grepMaxMatches {
 			truncated = true
 			break
@@ -435,10 +442,7 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 		// ripgrep exits 1 with no output for "no matches"; a real failure (bad
 		// pattern, unreadable path) writes a message to stderr.
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			if rp.External {
-				msg = rp.ErrorText(fmt.Errorf("%s", msg))
-			}
-			return nil, false, wrapped, fmt.Errorf("ripgrep: %s", msg)
+			return nil, false, wrapped, ripgrepDisplayError(errors.New(msg), target, path, rp)
 		}
 	}
 	return out, truncated, wrapped, nil
