@@ -3,6 +3,9 @@
 
 export interface ProviderEntry {
   name: string;
+  // The label a person gave this source. Only ever shown: every ref, the
+  // default model and saved sessions keep pointing at name.
+  displayName?: string;
   kind: string;
   baseUrl: string;
   models: string[];

@@ -6,6 +6,7 @@ import type { Account, Port } from "./Providers";
 import { KIND_LABEL } from "./vendors";
 import { PROVIDER_EDIT_DISABLED, reason } from "../i18n/kernel";
 import { HttpError } from "../port/http_error";
+import { StudioIcon } from "./StudioIcon";
 
 // How a turn's context reaches the next one. Auto is vendor detection, which is
 // the only honest answer for an endpoint nobody has characterised; the other two
@@ -26,10 +27,10 @@ const CONTINUATION_WHY: Record<string, string> = {
 // than a fact on a row, because both entries are the same key at the same host;
 // 测试连接 is what turns "which protocol did we record" back into a finding.
 export function ProviderDetail({
-  a, port, busy, setBusy, kind, onProtocol, onRemove, onEdited, onFailed, declare,
+  a, port, busy, setBusy, kind, onProtocol, onRemove, onRename, onEdited, onFailed, declare,
 }: {
   a: Account; port: Port; busy: string; setBusy: (b: string) => void;
-  kind: string; onProtocol: (kind: string) => void; onRemove: (name: string) => void;
+  kind: string; onProtocol: (kind: string) => void; onRemove: (name: string) => void; onRename: () => void;
   onEdited: () => void; onFailed: (why: string) => void; declare?: string;
 }) {
   const [found, setFound] = useState<ProviderCheck | null>(null);
@@ -81,7 +82,12 @@ export function ProviderDetail({
     <section className="pdetail" aria-label={a.label}>
       <header className="pdetail-hd">
         <span className="tx">
-          <h3>{a.label}</h3>
+          <span className="pdetail-name">
+            <h3>{a.label}</h3>
+            <button className="pdetail-rename" data-action="provider.rename-start" data-target={a.key} disabled={busy !== ""}
+              aria-label={t("重命名 {name}（F2）", { name: a.label })} title={t("重命名 {name}（F2）", { name: a.label })}
+              onClick={onRename}><StudioIcon name="edit" /></button>
+          </span>
           <small>{t(KIND_LABEL[entry.kind] ?? entry.kind)} · {a.host}</small>
         </span>
         {inUse && <i className="pdetail-use">{t("正在用")}</i>}

@@ -1158,6 +1158,7 @@ type AgentConfig struct {
 // it (see agent compaction). 0 disables compaction for the instance.
 type ProviderEntry struct {
 	Name          string            `toml:"name"`
+	DisplayName   string            `toml:"display_name"` // what the UI calls this entry; Name stays the identity refs point at
 	Kind          string            `toml:"kind"`
 	BaseURL       string            `toml:"base_url"`
 	ChatURL       string            `toml:"chat_url"`    // legacy OpenAI chat endpoint override; retained with its historical semantics

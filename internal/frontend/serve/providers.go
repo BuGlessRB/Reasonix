@@ -41,6 +41,7 @@ func (s *Server) registerProviderRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /providers/probe", s.probeProvider)
 	mux.HandleFunc("POST /providers/remove", s.removeProvider)
 	mux.HandleFunc("POST /providers/edit", s.editProvider)
+	mux.HandleFunc("POST /providers/display-name", s.renameProvider)
 	mux.HandleFunc("POST /providers/websearch", s.setProviderWebSearch)
 	mux.HandleFunc("POST /providers/thinking", s.setProviderThinking)
 	mux.HandleFunc("POST /providers/continuation", s.setProviderContinuation)
@@ -55,10 +56,12 @@ var providerNameRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
 
 // providerView is one configured provider as the panel lists it.
 type providerView struct {
-	Name    string   `json:"name"`
-	Kind    string   `json:"kind"`
-	BaseURL string   `json:"baseUrl"`
-	Models  []string `json:"models"`
+	Name string `json:"name"`
+	// DisplayName is the label a person gave this entry; empty is none set.
+	DisplayName string   `json:"displayName,omitempty"`
+	Kind        string   `json:"kind"`
+	BaseURL     string   `json:"baseUrl"`
+	Models      []string `json:"models"`
 	// VisionModels is which of them read images, so the form shows the current
 	// answer instead of asking the user to remember it.
 	VisionModels []string `json:"visionModels"`
@@ -129,6 +132,7 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 		settable := visionSettableOf(cfg, p)
 		out = append(out, providerView{
 			Name:               p.Name,
+			DisplayName:        strings.TrimSpace(p.DisplayName),
 			Kind:               strings.ToLower(strings.TrimSpace(p.Kind)),
 			BaseURL:            p.BaseURL,
 			Models:             nonNilStrings(p.ChatModelList()),
@@ -301,9 +305,13 @@ func (s *Server) saveProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	// Adding writes a new account; only onboarding, filling in the entry a fresh
 	// install already names, replaces one, and it says so.
-	if _, taken := known.Provider(entry.Name); taken && !body.Replace {
+	prev, taken := known.Provider(entry.Name)
+	if taken && !body.Replace {
 		refuse(w, http.StatusConflict, "provider.name_taken", "a provider with this name already exists", map[string]any{"name": entry.Name})
 		return
+	}
+	if taken {
+		entry.DisplayName = prev.DisplayName
 	}
 	entry.APIKeyEnv, err = keyEnvForNewSource(known, entry.Name, entry.BaseURL, body.APIKey, body.Replace)
 	if err != nil {

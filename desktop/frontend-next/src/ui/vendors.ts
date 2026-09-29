@@ -50,24 +50,28 @@ export function nameFrom(baseUrl: string): string {
   }
 }
 
-// The name to put on an account. A name the user typed is the answer: a curated
-// entry carries our preset id, a new source is prefilled with derivedName, and
-// uniqueName's -2, -3 … suffix is ours too — so anything left is a name somebody
-// chose on purpose. Only when no entry has one does the shared host speak.
-export function accountLabel(host: string, entries: { name: string; preset?: boolean }[]): string {
+// The name to put on an account. A display name the user set wins outright.
+// Otherwise a name the user typed is the answer: a curated entry carries our
+// preset id, a new source is prefilled with derivedName, and uniqueName's -2,
+// -3 … suffix is ours too — so anything left is a name somebody chose on
+// purpose. Only when no entry has one does the shared host speak.
+export function accountLabel(host: string, entries: { name: string; preset?: boolean; displayName?: string }[]): string {
+  const shown = entries.find((e) => e.displayName?.trim())?.displayName?.trim();
+  if (shown) return shown;
   const auto = derivedName(host).toLowerCase();
   const own = entries.find((e) => !e.preset && e.name.trim().replace(/-\d+$/, "").toLowerCase() !== auto);
   return own ? own.name.trim() : vendorLabel(host);
 }
 
-// Two accounts on one host are both called by that host's name, which tells the
-// user nothing about which is which. Only then does the config entry's own name
-// earn a place on screen.
+// Two accounts on one host called the same thing tell the user nothing about
+// which is which. Only then does the config entry's own name earn a place on
+// screen; two labels the user already told apart are left as they are.
 export function disambiguate<T extends { host: string; label: string; hint: string }>(items: T[]): T[] {
   const seen = new Map<string, number>();
-  for (const it of items) seen.set(it.host, (seen.get(it.host) ?? 0) + 1);
+  const key = (it: T) => `${it.host}\u0000${it.label}`;
+  for (const it of items) seen.set(key(it), (seen.get(key(it)) ?? 0) + 1);
   return items.map((it) =>
-    (seen.get(it.host) ?? 0) > 1 && it.hint && it.hint !== it.label
+    (seen.get(key(it)) ?? 0) > 1 && it.hint && it.hint !== it.label
       ? { ...it, label: `${it.label} · ${it.hint}` }
       : it,
   );

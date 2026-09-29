@@ -777,7 +777,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             posture={posture(run, blocked)}
             plan={s.plan}
             wallet={wallet}
-            account={accountOf(status?.modelRef)}
+            account={status?.providerDisplayName || accountOf(status?.modelRef)}
             onRefreshWallet={refreshWallet}
             tree={tree}
             ctx={ctx}

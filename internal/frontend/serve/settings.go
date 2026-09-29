@@ -197,6 +197,9 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		if entry, ok := cfg.ResolveModel(currentModelRef(s.ctl())); ok {
 			sess["effort"] = entry.Effort
 			sess["modelRef"] = entry.Name + "/" + entry.Model
+			if label := strings.TrimSpace(entry.DisplayName); label != "" {
+				sess["providerDisplayName"] = label
+			}
 			// Whether this model reads images at all. A composer that cannot ask
 			// lets the user paste a screenshot into a text-only model and watch
 			// nothing happen.
@@ -222,8 +225,10 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 type modelEntry struct {
 	Ref      string `json:"ref"`
 	Provider string `json:"provider"`
-	Model    string `json:"model"`
-	Kind     string `json:"kind,omitempty"`
+	// DisplayName labels Provider on screen; Ref and Provider stay the identity.
+	DisplayName string `json:"displayName,omitempty"`
+	Model       string `json:"model"`
+	Kind        string `json:"kind,omitempty"`
 	// What this model produces, projected from the protocol table so a chooser
 	// filters on a declaration rather than on a kind's spelling.
 	Answers string `json:"answers,omitempty"`

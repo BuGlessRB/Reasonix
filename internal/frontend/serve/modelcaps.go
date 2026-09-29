@@ -26,6 +26,7 @@ func describeModel(e *config.ProviderEntry, into *modelEntry) {
 	}
 	into.Vendor = vendorOf(e.BaseURL)
 	into.KeyEnv = e.APIKeyEnv
+	into.DisplayName = strings.TrimSpace(e.DisplayName)
 	into.Preset = strings.TrimSpace(e.PresetID) != ""
 	into.Vision = config.EffectiveVision(e)
 	if capability := config.EffortCapabilityForEntry(e); capability.Supported {
@@ -61,6 +62,7 @@ func capabilitiesFor(cfg *config.Config, p *config.ProviderEntry, model string, 
 	if !ok || resolved.Name != p.Name || resolved.Model != model {
 		into.Vendor = vendorOf(p.BaseURL)
 		into.KeyEnv = p.APIKeyEnv
+		into.DisplayName = strings.TrimSpace(p.DisplayName)
 		into.Preset = strings.TrimSpace(p.PresetID) != ""
 		return
 	}
