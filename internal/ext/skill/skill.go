@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/text/unicode/norm"
+
 	"reasonix/internal/base/fileutil"
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/base/frontmatter"
@@ -639,7 +641,7 @@ func VisibleSlashSkills(skills []Skill) []Skill {
 // short name. A short plugin name is rejected when multiple plugin packages
 // contribute it; a higher-priority non-plugin winner keeps its short name.
 func ResolveSlashSkill(skills []Skill, name string) (Skill, bool) {
-	name = strings.TrimPrefix(strings.TrimSpace(name), "/")
+	name = norm.NFC.String(strings.TrimPrefix(strings.TrimSpace(name), "/"))
 	if name == "" {
 		return Skill{}, false
 	}
@@ -677,6 +679,7 @@ func (s *Store) Read(name string) (Skill, bool) {
 	if !IsValidName(name) {
 		return Skill{}, false
 	}
+	name = norm.NFC.String(name)
 	for _, sk := range s.enabledSkills() {
 		if sk.Name == name {
 			return sk, true
@@ -817,9 +820,13 @@ func (s *Store) parseSkill(path, stem string, scope Scope, requireSkillMarker bo
 	}
 
 	name := stem
-	if v := fm[skillFrontmatterName]; v != "" && IsValidName(v) {
+	if v := fm[skillFrontmatterName]; v != "" && IsValidName(v) &&
+		(config.IsValidMCPServerName(v) || !config.IsValidMCPServerName(stem)) {
+		// Before Unicode names were supported, a Unicode frontmatter name was
+		// ignored. Keep that existing ASCII stem as the skill ID on upgrade.
 		name = v
 	}
+	name = norm.NFC.String(name)
 	// Read from the document, never from the flat view: flattening drops the
 	// key a field was written under, which is the whole of what a namespace is.
 	delivery, err := deliveryFromDocument(doc)
@@ -949,6 +956,7 @@ func (s *Store) CreateWithContent(name string, scope Scope, content string) (str
 	if !IsValidName(name) {
 		return "", fmt.Errorf("invalid skill name %q — use letters, digits, '_', '-', '.'", name)
 	}
+	name = norm.NFC.String(name)
 	var root string
 	switch scope {
 	case ScopeProject:

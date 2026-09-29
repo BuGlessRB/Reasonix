@@ -329,6 +329,10 @@ func TestCleanSkillName(t *testing.T) {
 		"explore [🧬 subagent]": "explore",
 		"[🧬 subagent] explore": "explore",
 		" review ":             "review",
+		"中文技能":                 "中文技能",
+		"cafe\u0301 [manual]":  "cafe\u0301",
+		"myplugin:review":      "myplugin:review",
+		"foo/bar":              "foo/bar",
 		"[only a tag]":         "",
 		"":                     "",
 	}

@@ -21,7 +21,6 @@ import (
 	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/pluginpkg"
-	"reasonix/internal/ext/skill"
 )
 
 // MCPConnectResult is what the ConnectMCP callback returns. Disconnect is
@@ -496,34 +495,6 @@ func (t *Tool) uninstallActionsForScope(name, scope string) []action {
 	return actions
 }
 
-// resolveSkillPath finds the on-disk location of a previously installed
-// skill of the given name in the chosen scope. The bool reports whether
-// the path is a real install (Lstat succeeded). Both flat (<name>.md) and
-// directory (<name>/) layouts are checked.
-func (t *Tool) resolveSkillPath(name, scope string) (string, bool) {
-	if !config.IsValidSkillName(name) {
-		return "", false
-	}
-	var root string
-	if scope == "global" {
-		if t.reasonixHome == "" {
-			return "", false
-		}
-		root = filepath.Join(t.reasonixHome, skill.SkillsDirname)
-	} else {
-		root = filepath.Join(t.root, ".reasonix", skill.SkillsDirname)
-	}
-	flat := filepath.Join(root, name+".md")
-	if _, err := lstat(flat); err == nil {
-		return flat, true
-	}
-	dir := filepath.Join(root, name)
-	if _, err := lstat(filepath.Join(dir, skill.SkillFile)); err == nil {
-		return dir, true
-	}
-	return "", false
-}
-
 func (t *Tool) resolveRegisteredSkillRoot(name, scope, cfgPath string, cfg *config.Config) (action, bool) {
 	if !config.IsValidSkillName(name) {
 		return action{}, false
@@ -538,7 +509,7 @@ func (t *Tool) resolveRegisteredSkillRoot(name, scope, cfgPath string, cfg *conf
 		found := false
 		for _, cand := range cands {
 			names = append(names, cand.Name)
-			if cand.Name == name {
+			if config.SkillNameKey(cand.Name) == config.SkillNameKey(name) {
 				found = true
 			}
 		}
