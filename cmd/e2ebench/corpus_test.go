@@ -22,6 +22,12 @@ const verificationStressDir = "../../benchmarks/verification-stress"
 // must ship a solution/ proving its grader can be satisfied.
 const trainCorpusDir = "../../benchmarks/train"
 
+// memorybenchDir holds the recall-behavior corpus. It ships no solution/
+// fixtures (see #11329), so it only gets the pristine-seed half of the
+// authoring guard below; the mb-contradiction fix has its own targeted
+// grader test instead.
+const memorybenchDir = "../../benchmarks/memorybench"
+
 // protectedFiles reads the manifest embedded in a no-solution grader. The
 // manifest lives inside verify.sh precisely because e2ebench drops that file
 // in only after the run, so the agent never sees which files are watched.
@@ -174,7 +180,7 @@ func TestSolvableCorpusSeedsMustNotGradeClean(t *testing.T) {
 			t.Skipf("%s unavailable; the graders need a POSIX shell and python3", bin)
 		}
 	}
-	for _, dir := range []string{corpusDir, verificationStressDir, trainCorpusDir} {
+	for _, dir := range []string{corpusDir, verificationStressDir, trainCorpusDir, memorybenchDir} {
 		if !dirExists(dir) {
 			continue
 		}
@@ -346,5 +352,41 @@ func TestCorpusLetsTheAgentDecideWhenToStop(t *testing.T) {
 				t.Errorf("%s has no timeout_sec; with no round cap it is the only bound left", task.ID)
 			}
 		}
+	}
+}
+
+// mbContradictionDir is the fixture behind #11329: its grader required
+// "pnpm install" while also forbidding "npm install", a substring of the very
+// answer it demanded, so no answer.txt could ever satisfy both halves.
+const mbContradictionDir = "../../benchmarks/memorybench/tasks/mb-contradiction"
+
+// TestContradictionGraderAcceptsPnpmRejectsNpm pins the four cases #11329
+// worked through by hand: the intended answer must pass, the stale answer it
+// is meant to reject must still fail, and disambiguating the negative check
+// must not let a genuine "npm install" line through when both are present.
+func TestContradictionGraderAcceptsPnpmRejectsNpm(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash unavailable; the grader needs a POSIX shell")
+	}
+	cases := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{"pnpm install", "pnpm install\n", true},
+		{"npm install", "npm install\n", false},
+		{"both lines", "pnpm install\nnpm install\n", false},
+		{"pnpm install with flag", "pnpm install --frozen-lockfile\n", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			work := testenv.TempDir(t)
+			if err := os.WriteFile(filepath.Join(work, "answer.txt"), []byte(c.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := grade(work, mbContradictionDir); got != c.want {
+				t.Fatalf("answer.txt = %q: grade() = %v, want %v", c.content, got, c.want)
+			}
+		})
 	}
 }
