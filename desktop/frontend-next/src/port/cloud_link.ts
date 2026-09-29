@@ -25,8 +25,8 @@ export interface RemoteEnd {
 // Why a (re)connection attempt failed, as the account service or the relay
 // said it: "transient" is worth another attempt, the others are not.
 export class RemoteLinkError extends Error {
-  constructor(readonly kind: "reauth" | "ended" | "transient", message: string) {
-    super(message);
+  constructor(readonly kind: "reauth" | "ended" | "transient", readonly reason: string) {
+    super(reason);
   }
 }
 
@@ -39,13 +39,15 @@ export interface RemoteConnection {
   socket: WebSocket;
   channel: RemoteChannel;
   features: string[];
+  instance: string;
+  listen(onMessage: (data: string) => void, onClose: (code: number, reason: string) => void): void;
 }
 
 interface Pending {
   id: string;
   method: string;
   command: Record<string, unknown>;
-  sent: boolean;
+  sentTo: RemoteConnection | null;
   chunks: Map<number, string>;
   status?: number;
   contentType?: string;
@@ -100,6 +102,7 @@ export class RemoteLink {
   private reconnecting = false;
   private ended = false;
   private lastHeardAt = Date.now();
+  private sending: Promise<void> = Promise.resolve();
   private readonly options: RemoteLinkOptions;
 
   constructor(
@@ -122,7 +125,7 @@ export class RemoteLink {
     };
     return new Promise<Response>((resolve, reject) => {
       const entry: Pending = {
-        id, method: request.method.toUpperCase(), command, sent: false, chunks: new Map(), resolve, reject,
+        id, method: request.method.toUpperCase(), command, sentTo: null, chunks: new Map(), resolve, reject,
       };
       this.pending.set(id, entry);
       void this.send(entry);
@@ -132,23 +135,28 @@ export class RemoteLink {
   private attach(connection: RemoteConnection) {
     this.current = connection;
     this.lastHeardAt = Date.now();
-    connection.socket.addEventListener("message", (event) => {
+    connection.listen((data) => {
       if (this.current !== connection) return;
       this.lastHeardAt = Date.now();
-      void this.receive(connection, String(event.data));
-    });
-    connection.socket.addEventListener("close", (event) => {
-      if (this.current === connection) this.lost(event.code, event.reason);
+      void this.receive(connection, data);
+    }, (code, reason) => {
+      if (this.current === connection) this.lost(code, reason);
     });
   }
 
-  private async send(entry: Pending) {
+  // Commands are numbered as they are sealed, so they leave in sealing order.
+  private send(entry: Pending): Promise<void> {
+    this.sending = this.sending.then(() => this.sendNow(entry), () => this.sendNow(entry));
+    return this.sending;
+  }
+
+  private async sendNow(entry: Pending) {
     const connection = this.current;
-    if (!connection || connection.socket.readyState !== WebSocket.OPEN) return;
+    if (!connection || connection.socket.readyState !== WebSocket.OPEN || !this.pending.has(entry.id)) return;
     const wire = await connection.channel.seal(entry.command);
     if (this.current !== connection || connection.socket.readyState !== WebSocket.OPEN || !this.pending.has(entry.id)) return;
     entry.chunks.clear();
-    entry.sent = true;
+    entry.sentTo = connection;
     clearTimeout(entry.timer);
     entry.timer = setTimeout(() => this.timedOut(entry), this.options.requestTimeoutMs);
     connection.socket.send(wire);
@@ -170,24 +178,14 @@ export class RemoteLink {
 
   private lost(code: number, reason: string) {
     if (this.ended) return;
-    const features = this.current?.features ?? [];
     this.current = null;
     const action = closeAction(code);
     if (action !== "reconnect") {
       this.finish({ kind: action === "reauth" ? "reauth" : "ended", reason });
       return;
     }
-    const replays = features.includes("replay");
-    for (const entry of [...this.pending.values()]) {
-      clearTimeout(entry.timer);
-      const idempotent = entry.method === "GET" || entry.method === "HEAD";
-      if (entry.sent && !idempotent && !replays) {
-        this.pending.delete(entry.id);
-        entry.reject(new Error(t("连接中断，这次操作可能没有完成，请刷新后确认。")));
-        continue;
-      }
-      entry.sent = false;
-    }
+    for (const entry of this.pending.values()) clearTimeout(entry.timer);
+    this.settleUnanswered((sentTo) => sentTo.features.includes("replay"));
     if (!this.reconnecting) void this.reconnect();
   }
 
@@ -204,11 +202,13 @@ export class RemoteLink {
             return;
           }
           this.attach(connection);
+          this.settleUnanswered((sentTo) =>
+            sentTo.features.includes("replay") && sentTo.instance !== "" && sentTo.instance === connection.instance);
           for (const entry of this.pending.values()) void this.send(entry);
           return;
         } catch (error) {
           if (error instanceof RemoteLinkError && error.kind !== "transient") {
-            this.finish({ kind: error.kind, reason: error.message });
+            this.finish({ kind: error.kind, reason: error.reason });
             return;
           }
         }
@@ -216,6 +216,18 @@ export class RemoteLink {
       this.finish({ kind: "ended", reason: t("远程 Studio 暂无响应，请检查电脑是否在线后重试。") });
     } finally {
       this.reconnecting = false;
+    }
+  }
+
+  // A state change already sent is resent only where it cannot run twice: to
+  // the same desktop process, which answers a resend from its replay cache.
+  private settleUnanswered(canResend: (sentTo: RemoteConnection) => boolean) {
+    for (const entry of [...this.pending.values()]) {
+      const idempotent = entry.method === "GET" || entry.method === "HEAD";
+      if (entry.sentTo && !idempotent && !canResend(entry.sentTo)) {
+        this.pending.delete(entry.id);
+        entry.reject(new Error(t("连接中断，这次操作可能没有完成，请刷新后确认。")));
+      }
     }
   }
 

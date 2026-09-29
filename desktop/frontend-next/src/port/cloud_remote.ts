@@ -1,6 +1,7 @@
 import type { HubPort } from "./hub";
 import { SseHub } from "./hub";
 import { t } from "../i18n";
+import { reason } from "../i18n/kernel";
 import { linkCodec, RemoteLink, RemoteLinkError, type RemoteConnection, type RemoteEnd } from "./cloud_link";
 
 const ACCOUNT = (import.meta.env.VITE_ACCOUNTS_API || "https://id.reasonix.io").replace(/\/$/, "");
@@ -62,10 +63,21 @@ async function encryptedChannel(device: RemoteDevice, socket: WebSocket) {
   socket.send(JSON.stringify({
     v: 1, type: "hello", publicKey: bytesToBase64(publicKey), salt: bytesToBase64(salt),
   }));
+  // Once the desktop names this session, every command carries that name and
+  // an increasing number, so a relay cannot replay a command into a later
+  // session or twice into this one.
+  let bound: string | null = null;
+  let seq = 0;
   return {
+    bind(session: string) {
+      bound = session;
+    },
     async seal(value: unknown) {
       const nonce = crypto.getRandomValues(new Uint8Array(12));
-      const plain = new TextEncoder().encode(JSON.stringify(value));
+      const stamped = bound && value && typeof value === "object"
+        ? { ...(value as Record<string, unknown>), session: bound, seq: ++seq }
+        : value;
+      const plain = new TextEncoder().encode(JSON.stringify(stamped));
       const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce, additionalData: info }, key, plain);
       return JSON.stringify({ v: 1, nonce: bytesToBase64(nonce), ciphertext: bytesToBase64(new Uint8Array(ciphertext)) });
     },
@@ -232,11 +244,19 @@ async function connect(deviceId: string, nativeFetch: typeof fetch, useBootstrap
     performance.measure("reasonix:remote:handshake", "reasonix:remote:authorized", "reasonix:remote:ready");
     performance.measure("reasonix:remote:connect", "reasonix:remote:start", "reasonix:remote:ready");
     const features = Array.isArray(ready.features) ? ready.features.filter((item): item is string => typeof item === "string") : [];
-    return { socket, channel, features };
+    if (typeof ready.session === "string" && ready.session) channel.bind(ready.session);
+    const instance = typeof ready.instance === "string" ? ready.instance : "";
+    return {
+      socket, channel, features, instance,
+      listen(onMessage, onClose) {
+        socket.addEventListener("message", (event) => onMessage(String(event.data)));
+        socket.addEventListener("close", (event) => onClose(event.code, event.reason));
+      },
+    };
   } catch (error) {
     try { socket.close(1000, "Handshake failed"); } catch { /* never opened */ }
     if (error instanceof RemoteLinkError) throw error;
-    throw new RemoteLinkError("transient", error instanceof Error ? error.message : String(error));
+    throw new RemoteLinkError("transient", reason(error));
   }
 }
 

@@ -1,7 +1,12 @@
 package remotecloud
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"time"
@@ -29,9 +34,43 @@ const (
 // touches it.
 type relayLink struct {
 	deviceID     string
+	instanceID   string
 	sessions     map[string]*controllerSession
 	offlineSince time.Time
 	replay       replayCache
+}
+
+// instance names this process to controllers. A controller resends a
+// state-changing request only to the instance it sent it to, because only that
+// instance holds the answer in its replay cache.
+func (h *Host) instance() string {
+	if h.link.instanceID == "" {
+		h.link.instanceID, _ = randomToken()
+	}
+	return h.link.instanceID
+}
+
+func randomToken() (string, error) {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+// admit binds a command to this session. A controller that names the session
+// the desktop issued in `ready` must number its commands upward, so neither a
+// command from another session nor an earlier one of this session is accepted
+// again. Commands naming no session come from controllers built before binding.
+func (s *controllerSession) admit(command controllerCommand) error {
+	if command.Session == "" {
+		return nil
+	}
+	if command.Session != s.nonce || command.Seq <= s.lastSeq {
+		return errors.New("remote cloud: replayed or foreign controller command")
+	}
+	s.lastSeq = command.Seq
+	return nil
 }
 
 type relayHelloMessage struct {
@@ -59,6 +98,7 @@ func (m relayHelloMessage) interval() time.Duration {
 func (h *Host) adopt(deviceID string) map[string]*controllerSession {
 	if h.link.deviceID != deviceID {
 		h.dropControllers()
+		h.link.replay = replayCache{}
 		h.link.deviceID = deviceID
 	}
 	if h.link.sessions == nil {
@@ -101,12 +141,12 @@ func (h *Host) dropControllers() {
 		h.forgetController(id)
 	}
 	h.link.offlineSince = time.Time{}
-	h.link.replay = replayCache{}
 }
 
 // replayCache keeps the answer to each state-changing desktop request for a
 // while, so a controller that resends one after a reconnect gets the original
-// answer instead of running it twice. Idempotent requests are simply rerun.
+// answer instead of running it twice. It outlives controller sessions and is
+// reset only when the device identity or account changes.
 type replayCache struct {
 	entries map[string]replayEntry
 	bytes   int
@@ -116,6 +156,16 @@ type replayEntry struct {
 	at       time.Time
 	size     int
 	payloads []map[string]any
+}
+
+// replayKey binds a cached answer to the request it answered, not only its id.
+func replayKey(id, method, path string, body []byte) string {
+	sum := sha256.New()
+	for _, part := range [][]byte{[]byte(method), []byte(path), body} {
+		sum.Write([]byte{byte(len(part) >> 24), byte(len(part) >> 16), byte(len(part) >> 8), byte(len(part))})
+		sum.Write(part)
+	}
+	return id + ":" + hex.EncodeToString(sum.Sum(nil))
 }
 
 func replayable(method string) bool {

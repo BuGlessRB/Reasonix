@@ -35,9 +35,9 @@ function RemoteAwareApp({ hub, remote }: { hub: HubPort; remote: string | null }
               ? t("为了安全，远程控制在登录满 24 小时或退出登录后需要重新登录。")
               : t("这台电脑已停止网页控制。重新连接需要再次验证设备状态。")}</p>
           </div>
-          {reauth
-            ? <button onClick={() => void signInAgain(remote)}>{t("重新登录")}</button>
-            : <button onClick={() => location.reload()}>{t("重新连接")}</button>}
+          <button onClick={() => (reauth ? void signInAgain(remote) : location.reload())}>
+            {reauth ? t("重新登录") : t("重新连接")}
+          </button>
         </div>
       )}
     </>

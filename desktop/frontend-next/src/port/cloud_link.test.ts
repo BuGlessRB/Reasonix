@@ -34,13 +34,21 @@ class FakeSocket extends EventTarget {
   }
 }
 
-function connection(features: string[] = []): { conn: RemoteConnection; socket: FakeSocket } {
+function connection(features: string[] = [], instance = "desktop-1"): { conn: RemoteConnection; socket: FakeSocket } {
   const socket = new FakeSocket();
   return {
     socket,
     conn: {
       socket: socket as unknown as WebSocket,
       features,
+      instance,
+      listen(onMessage, onClose) {
+        socket.addEventListener("message", (event) => onMessage(String((event as MessageEvent).data)));
+        socket.addEventListener("close", (event) => {
+          const closed = event as Event & { code: number; reason: string };
+          onClose(closed.code, closed.reason);
+        });
+      },
       channel: {
         seal: async (value) => JSON.stringify(value),
         open: async (payload) => JSON.parse(payload) as Record<string, unknown>,
@@ -138,6 +146,43 @@ describe("remote link", () => {
     expect(second.socket.sent[0]?.id).toBe(id);
     second.socket.reply(id, "once");
     await expect((await answer).text()).resolves.toBe("once");
+  });
+
+  it("does not resend a state change to a restarted desktop, whose replay cache is empty", async () => {
+    const first = connection(["replay"], "desktop-1");
+    const second = connection(["replay"], "desktop-2");
+    const link = new RemoteLink(first.conn, async () => second.conn, (end) => ends.push(end));
+
+    const rejected = link.fetch(request("POST", "/rt/one/send")).catch((error: Error) => error);
+    const read = link.fetch(request());
+    await vi.advanceTimersByTimeAsync(0);
+    first.socket.close(1006, "");
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(await rejected).toBeInstanceOf(Error);
+    expect(second.socket.sent).toHaveLength(1);
+    expect(second.socket.sent[0]?.method).toBe("GET");
+    second.socket.reply(String(second.socket.sent[0]?.id), "read again");
+    await expect((await read).text()).resolves.toBe("read again");
+  });
+
+  it("sends commands in the order they were sealed, however long sealing takes", async () => {
+    const { conn, socket } = connection();
+    let slow = true;
+    conn.channel.seal = async (value) => {
+      if (slow) {
+        slow = false;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return JSON.stringify(value);
+    };
+    const link = new RemoteLink(conn, vi.fn(), (end) => ends.push(end));
+
+    void link.fetch(request("POST", "/first"));
+    void link.fetch(request("POST", "/second"));
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(socket.sent.map((command) => command.path)).toEqual(["/first", "/second"]);
   });
 
   it("asks for a sign-in instead of reconnecting when the relay says so", async () => {

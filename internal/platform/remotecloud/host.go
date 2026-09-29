@@ -97,6 +97,8 @@ type ControllerPresence interface {
 type controllerSession struct {
 	cipher  *sessionCipher
 	ordinal int
+	nonce   string
+	lastSeq int64
 }
 
 func New(client *account.Client, dialer *websocket.Dialer, relayURL, version string, tasks ...TaskService) *Host {
@@ -188,6 +190,7 @@ func (h *Host) Run(ctx context.Context) {
 		}
 		if errors.Is(err, errAccountChanged) {
 			h.dropControllers()
+			h.link.replay = replayCache{}
 		}
 		h.suspend(time.Now())
 		status := h.Status()
@@ -291,6 +294,8 @@ type controllerCommand struct {
 	Method  string `json:"method,omitempty"`
 	Path    string `json:"path,omitempty"`
 	Body    string `json:"body,omitempty"`
+	Session string `json:"session,omitempty"`
+	Seq     int64  `json:"seq,omitempty"`
 }
 
 func (h *Host) connect(ctx context.Context, token string, saved *identity, private *ecdh.PrivateKey) error {
@@ -427,11 +432,15 @@ func (h *Host) handle(
 		if h.presence != nil {
 			ordinal = h.presence.CloudControllerConnected(message.ConnectionID, "Web Studio")
 		}
-		sessions[message.ConnectionID] = &controllerSession{cipher: created, ordinal: ordinal}
+		nonce, err := randomToken()
+		if err != nil {
+			return err
+		}
+		sessions[message.ConnectionID] = &controllerSession{cipher: created, ordinal: ordinal, nonce: nonce}
 		ready, err := created.seal(map[string]any{
 			"v": protocolVersion, "type": "ready", "deviceId": saved.DeviceID,
 			"name": h.name, "platform": platformName(runtime.GOOS), "version": h.version,
-			"features": []string{"replay"},
+			"features": []string{"replay"}, "session": nonce, "instance": h.instance(),
 		})
 		if err != nil {
 			return err
@@ -447,6 +456,9 @@ func (h *Host) handle(
 	}
 	if command.Version != protocolVersion || command.ID == "" {
 		return errors.New("remote cloud: unsupported controller command")
+	}
+	if err := session.admit(command); err != nil {
+		return err
 	}
 	var response map[string]any
 	switch command.Type {
@@ -484,8 +496,9 @@ func (h *Host) desktopCommand(
 		return h.writeDesktopError(conn, session, connectionID, command.ID, "desktop request body is invalid")
 	}
 	replay := replayable(command.Method)
+	key := replayKey(command.ID, command.Method, command.Path, body)
 	if replay {
-		if payloads, ok := h.link.replay.get(command.ID, time.Now()); ok {
+		if payloads, ok := h.link.replay.get(key, time.Now()); ok {
 			return writeSealed(conn, session, connectionID, payloads)
 		}
 	}
@@ -495,13 +508,13 @@ func (h *Host) desktopCommand(
 	if err != nil {
 		payloads := []map[string]any{{"v": protocolVersion, "type": "error", "id": command.ID, "error": err.Error()}}
 		if replay {
-			h.link.replay.put(command.ID, payloads, len(err.Error()), time.Now())
+			h.link.replay.put(key, payloads, len(err.Error()), time.Now())
 		}
 		return writeSealed(conn, session, connectionID, payloads)
 	}
 	payloads := desktopPayloads(command.ID, response)
 	if replay {
-		h.link.replay.put(command.ID, payloads, len(response.Body), time.Now())
+		h.link.replay.put(key, payloads, len(response.Body), time.Now())
 	}
 	return writeSealed(conn, session, connectionID, payloads)
 }

@@ -115,9 +115,11 @@ func TestControllerSessionsSurviveADeviceReconnect(t *testing.T) {
 	go func() { first <- host.connect(ctx, "token", saved, device) }()
 	relay := (<-rounds).device
 	sendController(t, relay, connectionID, greeting)
-	if ready := readDirected(t, relay, channel); ready["type"] != "ready" {
+	ready := readDirected(t, relay, channel)
+	if ready["type"] != "ready" || ready["session"] == "" || ready["instance"] != host.instance() {
 		t.Fatalf("ready = %+v", ready)
 	}
+	sessionNonce, _ := ready["session"].(string)
 	relay.Close()
 	<-first
 	host.suspend(time.Now())
@@ -132,7 +134,7 @@ func TestControllerSessionsSurviveADeviceReconnect(t *testing.T) {
 	})); err != nil {
 		t.Fatal(err)
 	}
-	request, err := channel.seal(controllerCommand{Version: 1, Type: "desktop.request", ID: "post-1", Method: http.MethodPost, Path: "/send"})
+	request, err := channel.seal(controllerCommand{Version: 1, Type: "desktop.request", ID: "post-1", Method: http.MethodPost, Path: "/send", Session: sessionNonce, Seq: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +143,7 @@ func TestControllerSessionsSurviveADeviceReconnect(t *testing.T) {
 	if answer["type"] != "desktop.response" || answer["id"] != "post-1" {
 		t.Fatalf("answer after reconnect = %+v", answer)
 	}
-	resent, err := channel.seal(controllerCommand{Version: 1, Type: "desktop.request", ID: "post-1", Method: http.MethodPost, Path: "/send"})
+	resent, err := channel.seal(controllerCommand{Version: 1, Type: "desktop.request", ID: "post-1", Method: http.MethodPost, Path: "/send", Session: sessionNonce, Seq: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,5 +243,44 @@ func TestRelayHelloIntervalIsClamped(t *testing.T) {
 	}
 	if _, ok := parseRelayHello(mustJSON(t, map[string]any{"type": "controller_connected"})); ok {
 		t.Fatal("presence frame parsed as relay hello")
+	}
+}
+
+func TestBoundCommandsCannotBeReplayedIntoOrWithinASession(t *testing.T) {
+	session := &controllerSession{nonce: "current"}
+	if err := session.admit(controllerCommand{Session: "current", Seq: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.admit(controllerCommand{Session: "current", Seq: 1}); err == nil {
+		t.Fatal("a repeated sequence number was accepted")
+	}
+	if err := session.admit(controllerCommand{Session: "recorded-earlier", Seq: 9}); err == nil {
+		t.Fatal("a command bound to another session was accepted")
+	}
+	if err := session.admit(controllerCommand{Session: "current", Seq: 5}); err != nil {
+		t.Fatalf("a later command after a gap was refused: %v", err)
+	}
+	if err := session.admit(controllerCommand{}); err != nil {
+		t.Fatalf("an unbound command from an older controller was refused: %v", err)
+	}
+}
+
+func TestReplayAnswersOutliveControllerSessions(t *testing.T) {
+	host := &Host{}
+	host.adopt("device-a")["phone"] = &controllerSession{}
+	key := replayKey("post-1", http.MethodPost, "/send", []byte("{}"))
+	host.link.replay.put(key, []map[string]any{{"id": "post-1"}}, 1, time.Now())
+	start := time.Now()
+	host.suspend(start)
+	host.expireSuspended(start.Add(controllerGrace))
+	if _, ok := host.link.replay.get(key, time.Now()); !ok {
+		t.Fatal("the grace period discarded an answer a reconnecting phone may still ask for")
+	}
+	if _, ok := host.link.replay.get(replayKey("post-1", http.MethodPost, "/send", []byte("{\"x\":1}")), time.Now()); ok {
+		t.Fatal("a different request under the same id got the cached answer")
+	}
+	host.adopt("device-b")
+	if _, ok := host.link.replay.get(key, time.Now()); ok {
+		t.Fatal("answers survived a change of device identity")
 	}
 }
