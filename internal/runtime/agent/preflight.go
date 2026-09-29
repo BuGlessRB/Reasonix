@@ -119,7 +119,8 @@ func (a *contextWindow) invalidateProjection() {
 	a.sess.win.compactionState = sessionstore.CompactionState{}
 	a.sess.win.compactionMu.Unlock()
 	a.sess.win.compaction.restart()
-	if path != "" {
+	// This build never changes a 1.x log, so 1.x's projection of it stays valid.
+	if path != "" && !sessionstore.IsForeignSessionLog(path) {
 		if err := sessionstore.RemoveCompactionState(path); err != nil {
 			slog.Warn("agent: remove context projection", "err", err)
 		}
@@ -151,10 +152,9 @@ func (a *contextWindow) revalidateProjection() {
 	a.invalidateProjection()
 }
 
-// LoadProjectionSidecar loads the context sidecar into the agent. Corrupt or
-// incompatible state is dropped so the next request rebuilds from canonical.
-// Sidecars whose PromptCacheKey does not match the current agent lineage are
-// discarded without deleting the file (another model may still own it).
+// LoadProjectionSidecar loads the context sidecar into the agent. State it
+// cannot read or use is dropped in memory only, so the next request rebuilds
+// from canonical and the file stays with whichever release wrote it.
 func (a *Agent) LoadProjectionSidecar(sessionPath string) {
 	if a == nil {
 		return
@@ -174,8 +174,8 @@ func (a *contextWindow) loadProjectionSidecar(sessionPath string) {
 	}
 	st, ok, err := sessionstore.LoadCompactionState(sessionPath)
 	if err != nil {
-		slog.Warn("agent: load context projection", "err", err)
-		_ = sessionstore.RemoveCompactionState(sessionPath)
+		slog.Warn("agent: load context projection", "err", err,
+			"unsupported_schema", errors.Is(err, sessionstore.ErrContextSchemaUnsupported))
 		a.resetCompactionState()
 		return
 	}
@@ -212,11 +212,12 @@ func (a *contextWindow) loadProjectionSidecar(sessionPath string) {
 		a.sess.win.compactionMu.Unlock()
 		return
 	}
-	// Only rewrite legacy native-editing lineage keys; exact matches stay pure-read.
+	// Only rewrite legacy native-editing lineage keys; exact matches and
+	// another release line's file stay pure-read.
 	needsNormalization := false
 	if keyOK && key != "" && normalized != st.PromptCacheKey {
 		st.PromptCacheKey = normalized
-		needsNormalization = true
+		needsNormalization = !st.Foreign()
 	}
 	// Only mark restored when the projection still matches the transcript.
 	var msgs []provider.Message

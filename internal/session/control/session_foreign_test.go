@@ -99,3 +99,34 @@ func TestForeignSessionContinuesInItsOwnSession(t *testing.T) {
 		t.Fatalf("notices = %s, want %s", got, event.NoticeCodeSessionContinuedFrom1x)
 	}
 }
+
+// Dropping the projection of an open 1.x conversation leaves 1.x's own
+// sidecar alone: the log it covers never changes under this build.
+func TestForeignSessionKeepsTheContextSidecarWhenProjectionDrops(t *testing.T) {
+	dir := testenv.TempDir(t)
+	path := filepath.Join(dir, "20260925-130000.000000000-deepseek-flash.jsonl")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.SessionEventLog(path), []byte(foreignLog), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sidecar := store.SessionContext(path)
+	if err := os.WriteFile(sidecar, []byte(`{"schema_version":4,"projection":{"messages":[{"role":"user","content":"summary"}],"covered_count":2,"covered_prefix_hash":"stale"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sidecarSum := sumFile(t, sidecar)
+	loaded, err := sessionstore.LoadSession(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec := agent.New(nil, nil, sessionstore.NewSession("sys"), agent.Options{}, &foreignNoticeSink{})
+	c := New(Options{Executor: exec, SessionDir: dir, Label: "deepseek-flash", Sink: &foreignNoticeSink{}})
+	if err := c.Resume(loaded, path); err != nil {
+		t.Fatal(err)
+	}
+	exec.InvalidateProjection()
+	if sumFile(t, sidecar) != sidecarSum {
+		t.Fatal("the 1.x context sidecar changed")
+	}
+}

@@ -41,7 +41,7 @@ func (s *Session) writeRecoveryBranchAtPath(
 			return RecoveryBranchInfo{}, false, digestErr
 		}
 		if bytes.Equal(existingDigest[:], digest[:]) {
-			s.inheritParentProjection(opts.OriginalPath, path, msgs, version)
+			InheritCompactionState(opts.OriginalPath, path, msgs)
 			meta, err := s.saveRecoveryBranchMeta(path, opts, preview, turns, digestText, recoveryDepth)
 			if err != nil {
 				return RecoveryBranchInfo{}, false, err
@@ -74,7 +74,7 @@ func (s *Session) writeRecoveryBranchAtPath(
 	if err := writeSessionMessages(path, msgs); err != nil {
 		return RecoveryBranchInfo{}, false, err
 	}
-	s.inheritParentProjection(opts.OriginalPath, path, msgs, version)
+	InheritCompactionState(opts.OriginalPath, path, msgs)
 	meta, err := s.saveRecoveryBranchMeta(path, opts, preview, turns, digestText, recoveryDepth)
 	if err != nil {
 		return RecoveryBranchInfo{}, false, err
@@ -86,26 +86,28 @@ func (s *Session) writeRecoveryBranchAtPath(
 	return RecoveryBranchInfo{Path: path, Digest: digestText, Meta: meta, Preview: preview, Turns: turns}, false, nil
 }
 
-// inheritParentProjection copies a valid context projection from the parent
-// session onto the recovery fork and fails closed on content mismatch.
-func (s *Session) inheritParentProjection(originalPath, recoveryPath string, msgs []provider.Message, version uint64) {
-	if _, ok, err := LoadCompactionState(recoveryPath); err == nil && ok {
-		return
+// InheritCompactionState gives targetPath the context projection saved beside
+// sourcePath when it still covers msgs, written in this build's schema. It
+// reports whether targetPath now holds one; sourcePath's file is only read.
+func InheritCompactionState(sourcePath, targetPath string, msgs []provider.Message) bool {
+	if _, ok, err := LoadCompactionState(targetPath); err == nil && ok {
+		return true
 	}
-	st, ok, err := LoadCompactionState(originalPath)
+	st, ok, err := LoadCompactionState(sourcePath)
 	if err != nil || !ok {
-		return
+		return false
 	}
 	n := st.Projection.CoveredCount
 	if len(st.Projection.Messages) == 0 || n <= 0 || n > len(msgs) ||
 		st.Projection.CoveredPrefixHash == "" ||
 		CoveredPrefixHash(msgs, n) != st.Projection.CoveredPrefixHash {
-		return
+		return false
 	}
-	if err := SaveCompactionState(recoveryPath, st); err != nil {
-		slog.Warn("session: recovery branch did not inherit context projection",
-			"path", recoveryPath, "err", err)
+	if err := SaveCompactionState(targetPath, st); err != nil {
+		slog.Warn("session: context projection not inherited", "path", targetPath, "err", err)
+		return false
 	}
+	return true
 }
 
 // healEmptyCheckpointFromWAL rebuilds a missing or 0-byte checkpoint from its
