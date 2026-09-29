@@ -133,7 +133,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
               <span className="mkt-line">
                 <span className="nm">{p.name}</span>
                 <span className="mkt-kind">{t(KIND_NAME[p.kind] ?? p.kind)}</span>
-                {p.verified && <span className="mkt-badge" data-tone="ok">{t("已验证")}</span>}
+                {p.verified && <span className="mkt-badge" data-tone="ok">{t("管理员标记可信")}</span>}
                 {p.installed && (
                   <span className="mkt-badge">
                     {p.installed.version === p.latestVersion ? t("已安装") : t("可更新")}
@@ -259,7 +259,7 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
       <div className="mkt-hd">
         <span className="nm">{p.name}</span>
         <span className="mkt-kind">{t(KIND_NAME[p.kind] ?? p.kind)}</span>
-        {p.verified && <span className="mkt-badge" data-tone="ok">{t("已验证")}</span>}
+        {p.verified && <span className="mkt-badge" data-tone="ok">{t("管理员标记可信")}</span>}
       </div>
       {p.summary && <p className="mkt-sum">{p.summary}</p>}
       {p.description && <p className="mkt-desc">{p.description}</p>}
