@@ -50,3 +50,15 @@ func loadTasks(suite string) ([]task, error) {
 	sort.Slice(tasks, func(i, j int) bool { return tasks[i].ID < tasks[j].ID })
 	return tasks, nil
 }
+
+func copyTaskSeed(cfg suiteConfig, t task, work string) error {
+	seed := filepath.Join(t.dir, "workdir")
+	if !dirExists(seed) {
+		return nil
+	}
+	if err := copyDir(seed, work); err != nil {
+		return err
+	}
+	pinTapeTimes(cfg, work)
+	return nil
+}

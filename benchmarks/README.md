@@ -593,6 +593,24 @@ e2ebench -suite benchmarks/memorybench -budget 0 -policy memory-off -trajectorie
 e2ebench -mode compare on.json off.json     # Memory utility section
 ```
 
+MemoryBench requires an OS read sandbox. It runs on macOS and Linux and
+refuses to start on Windows, where the benchmark cannot isolate the committed
+`tasks/<id>/memory/` answers from a graded agent. Each run also audits every
+recorded trajectory leg for a successful read of those answers; an answer read
+invalidates the result and makes the suite command exit nonzero. A missing or
+unreadable trajectory marks only that run incomplete; other tasks still run.
+Trajectories are captured temporarily when `-trajectories` is omitted.
+
+The audit treats a completed `read_file` call naming a task-memory path as a
+read. For `bash` and `grep`, a task-memory path in the arguments plus an authored
+fact line in the result is **evidence** of a read, not a proof of how that text
+was obtained. `glob` and directory listings expose names but not fact bodies;
+the audit does not count them as answer reads. Commands that reach the answer
+through an indirect path, such as `cd` followed by a relative filename, may
+not be attributed by the trajectory check. The OS read sandbox is the primary
+boundary; this audit is a second check, not a proof that an unflagged run never
+accessed an answer.
+
 Utility delta = paired Pass(on) − Pass(off). Harmful attribution is paired,
 never judged: the same task passed without memory and failed with it while
 recall fired. Scenario classes: exact, paraphrase, cjk, symbol, distractor

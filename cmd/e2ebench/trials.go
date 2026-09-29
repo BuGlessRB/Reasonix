@@ -22,6 +22,9 @@ func runTrials(cfg suiteConfig, t task, total *int) []result {
 		r.Trial = trial
 		*total += r.PromptTokens + r.CompletionTokens
 		out = append(out, r)
+		if answerLeakDetected(r) {
+			break
+		}
 	}
 	return out
 }

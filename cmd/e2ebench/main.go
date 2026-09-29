@@ -124,10 +124,11 @@ type result struct {
 	Profile string `json:"profile"`
 	// Arm is the ablation arm the harness requested, not the arm the child
 	// reported, so a run that died before writing metrics is still attributable.
-	Arm     string `json:"arm"`
-	Passed  bool
-	Skipped bool
-	Note    string
+	Arm            string `json:"arm"`
+	Passed         bool
+	Skipped        bool
+	Note           string
+	answerAuditErr error
 	// Memory shadow: recall decisions and point-of-use evidence extracted from
 	// the trajectory (see memorybench.go). Zero for suites without seeds.
 	MemoryRecallEvents int `json:"memory_recall_events,omitempty"`
@@ -373,17 +374,22 @@ func runSuiteMode(cfg suiteConfig, suite, taskFilter, outMD, outJSON string) {
 	} else {
 		fmt.Print(report)
 	}
-	if outJSON == "" {
-		return
+	if outJSON != "" {
+		b, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "marshal json:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(outJSON, b, 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, "write json:", err)
+			os.Exit(1)
+		}
 	}
-	b, err := json.MarshalIndent(results, "", "  ")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "marshal json:", err)
-		os.Exit(1)
-	}
-	if err := os.WriteFile(outJSON, b, 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, "write json:", err)
-		os.Exit(1)
+	for _, r := range results {
+		if answerAuditFailed(r) {
+			fmt.Fprintln(os.Stderr, "MemoryBench answer audit:", r.Note)
+			os.Exit(1)
+		}
 	}
 }
 
@@ -480,7 +486,11 @@ func runSuite(cfg suiteConfig, tasks []task) []result {
 			continue
 		}
 		if cfg.trials > 1 {
-			results = append(results, runTrials(cfg, t, &total)...)
+			trials := runTrials(cfg, t, &total)
+			results = append(results, trials...)
+			if len(trials) > 0 && answerLeakDetected(trials[len(trials)-1]) {
+				return results
+			}
 			continue
 		}
 		var cumWallMs int64
@@ -493,6 +503,9 @@ func runSuite(cfg suiteConfig, tasks []task) []result {
 			}
 			total += r.PromptTokens + r.CompletionTokens
 			results = append(results, r)
+			if answerLeakDetected(r) {
+				return results
+			}
 			if r.Passed || (cfg.budget > 0 && total >= cfg.budget) {
 				break
 			}
@@ -520,12 +533,15 @@ func runTask(cfg suiteConfig, t task) result {
 	// to exist before the first child starts, and the digest below reads the
 	// last leg's file.
 	trajPath := ""
-	if cfg.trajDir != "" {
-		if err := os.MkdirAll(cfg.trajDir, 0o755); err != nil {
-			r.Note = "trajectory dir: " + err.Error()
-			return r
+	runTrajDir, dropTraj, err := answerTrajectoryDir(cfg.trajDir, t.answerRoot != "")
+	if err != nil {
+		r.Note = "trajectory dir: " + err.Error()
+		if t.answerRoot != "" {
+			markAnswerAuditIncomplete(&r, err)
 		}
+		return r
 	}
+	defer dropTraj()
 
 	work, err := taskWorkdir(cfg, t.ID)
 	if err != nil {
@@ -534,12 +550,9 @@ func runTask(cfg suiteConfig, t task) result {
 	}
 	defer os.RemoveAll(work)
 
-	if seed := filepath.Join(t.dir, "workdir"); dirExists(seed) {
-		if err := copyDir(seed, work); err != nil {
-			r.Note = "copy seed: " + err.Error()
-			return r
-		}
-		pinTapeTimes(cfg, work)
+	if err := copyTaskSeed(cfg, t, work); err != nil {
+		r.Note = "copy seed: " + err.Error()
+		return r
 	}
 	if err := stageAnswerIsolation(t.answerRoot, work); err != nil {
 		r.Note = "isolate answers: " + err.Error()
@@ -565,7 +578,7 @@ func runTask(cfg suiteConfig, t task) result {
 	startedAt := time.Now()
 	snap, dropSnapshots := attachSnapshotter(cfg, t, work, startedAt)
 	defer dropSnapshots()
-	runErr := runSegments(ctx, cfg, t, work, cfg.trajDir, extraEnv, &r)
+	runErr := runSegments(ctx, cfg, t, work, runTrajDir, extraEnv, &r)
 	r.WallMs = time.Since(startedAt).Milliseconds()
 	var taken []checkpoint
 	if snap != nil {
@@ -577,11 +590,11 @@ func runTask(cfg suiteConfig, t task) result {
 	}
 
 	mtr.record(&r)
-	if trajPath = lastSegmentTrajectory(cfg.trajDir, t.ID, r.Segments); trajPath != "" {
-		if summary, err := summarizeTrajectory(trajPath); err == nil {
-			r.Trajectory = summary
-		}
-		applyMemoryStats(&r, trajPath, t)
+	if trajPath = lastSegmentTrajectory(runTrajDir, t.ID, r.Segments); trajPath != "" {
+		recordTaskTrajectory(&r, trajPath, t)
+	}
+	if !auditAnswerRun(&r, runTrajDir, t) {
+		return r
 	}
 	// A killed child never writes metrics, so the deadline is the only place
 	// this failure mode is still observable.
