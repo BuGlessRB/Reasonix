@@ -264,7 +264,7 @@ func validateMCPEntry(e config.PluginEntry) error {
 	if name == "" {
 		return newErr(ErrInvalidManifest, "MCP server name is required")
 	}
-	if !config.IsValidSkillName(name) {
+	if !config.IsValidMCPServerName(name) {
 		return newErr(ErrInvalidManifest, "MCP server name %q is invalid; use letters, digits, '.', '_', or '-', starting with a letter or digit, up to 64 characters", e.Name)
 	}
 	// Reject explicit unknown transports. Without this check, normalizeTransport

@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/text/unicode/norm"
+
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/base/frontmatter"
 	"reasonix/internal/contract/config"
@@ -114,6 +116,7 @@ func (t *Tool) skillCanonicalPath(name, scope string) (string, error) {
 	if !config.IsValidSkillName(name) {
 		return "", newErr(ErrInvalidManifest, "invalid skill name %q", name)
 	}
+	name = norm.NFC.String(name)
 	root, err := t.skillInstallRoot(scope)
 	if err != nil {
 		return "", err
@@ -208,6 +211,7 @@ func parseSkillContent(content, fallbackName, source string, strict bool) (skill
 	if !config.IsValidSkillName(name) {
 		return skillCandidate{}, newErr(ErrInvalidManifest, "skill %q at %s has an invalid name", name, source)
 	}
+	name = norm.NFC.String(name)
 	desc := collapseSpaces(meta.Description)
 	if desc == "" {
 		desc = collapseSpaces(fm["description"])

@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 
+	"golang.org/x/text/unicode/norm"
+
 	"reasonix/internal/base/netclient"
 	"reasonix/internal/contract/provider"
 )
@@ -872,6 +874,7 @@ func (c *Config) DisabledSkillNames() []string {
 		if !IsValidSkillName(name) {
 			continue
 		}
+		name = norm.NFC.String(name)
 		key := SkillNameKey(name)
 		if seen[key] {
 			continue

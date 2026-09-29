@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
@@ -663,7 +665,8 @@ func cleanSkillName(raw string) string {
 	}
 	stripped := strings.TrimSpace(bracketTagRe.ReplaceAllString(raw, " "))
 	for tok := range strings.FieldsSeq(stripped) {
-		if c := tok[0]; (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+		first, _ := utf8.DecodeRuneInString(tok)
+		if unicode.IsLetter(first) || unicode.IsNumber(first) {
 			return tok
 		}
 	}
