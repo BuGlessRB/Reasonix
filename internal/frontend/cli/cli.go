@@ -85,7 +85,7 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 		if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
 			return runTUI(args, version)
 		}
-		return bareUsage()
+		return bareUsage(len(args) == 0)
 	}
 
 	rest := args[1:]
@@ -1335,19 +1335,6 @@ func normalizeCommand(args []string) (string, []string) {
 
 func usage() {
 	fmt.Print(i18n.M.UsageBody)
-}
-
-// bareUsage answers bare argv: there is no interactive session to fall into.
-// A console this process owns alone was opened by a double-click and closes
-// on exit, so it points at Studio and waits instead of vanishing.
-func bareUsage() int {
-	configureThemeForTTYOutput()
-	usage()
-	if ownsConsoleAlone() {
-		fmt.Print("\n" + i18n.M.StandaloneConsoleHint)
-		_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
-	}
-	return 2
 }
 
 type ctrlKillerAdapter struct{ ctrl *control.Controller }
