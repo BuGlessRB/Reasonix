@@ -12,6 +12,8 @@ and code extensions behind one installable unit.
 
 For a copyable local package and the community review path, see the
 [community author guide](MARKET_AUTHOR_GUIDE.md).
+The [multi-file skill example](../examples/release-note-kit/README.md) shows
+how a plugin keeps a required reference file with its skill.
 
 ## CLI Mode
 
