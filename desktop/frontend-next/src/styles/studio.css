@@ -2768,6 +2768,7 @@ body { font-size: 14px; line-height: 1.75; }
 .flow .ask { width: 100%; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .flow .ask-pane { padding: 15px 15px 5px; }
 .flow .ask-q { margin-bottom: 4px; color: var(--text); font-size: 12.5px; font-weight: var(--w-semi); line-height: 1.5; }
+.flow .ask-q .md { font-weight: var(--w-reg); }
 .flow .ask-hint { margin-bottom: 10px; color: var(--faint); font: 500 10px/1.4 var(--ui); }
 .flow .opts { gap: 6px; }
 .flow .opt {

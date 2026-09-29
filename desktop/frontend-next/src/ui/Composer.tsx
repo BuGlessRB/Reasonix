@@ -519,7 +519,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
           ›
         </span>
         <textarea
-          data-action-keydown="session.send"
+          data-action-keydown="session.send" data-window-keys=""
           ref={box}
           rows={1}
           value={text}

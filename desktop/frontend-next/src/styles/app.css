@@ -1945,7 +1945,7 @@
   }
 
   ::highlight(rx-find) { background-color: color-mix(in srgb, var(--warn) 26%, transparent); color: var(--text) }
-  ::highlight(rx-find-now) { background-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--text) }
+  ::highlight(rx-find-now) { background-color: var(--accent); color: var(--accent-fg) }
 
   .acctrow {
     display: flex; align-items: center; gap: 9px; width: 100%; flex: none; text-align: left;

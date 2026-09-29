@@ -57,3 +57,9 @@ class StubIntersectionObserver implements IntersectionObserver {
   takeRecords(): IntersectionObserverEntry[] { return []; }
 }
 globalThis.IntersectionObserver ??= StubIntersectionObserver;
+
+// jsdom lays nothing out, so a Range has no box. Zero is the honest answer:
+// where a found occurrence lands on screen is what the browser guards measure.
+Range.prototype.getBoundingClientRect ??= function getBoundingClientRect() {
+  return { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON() {} } as DOMRect;
+};

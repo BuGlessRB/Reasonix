@@ -11,7 +11,8 @@ export interface Finding {
   focus: number;
   total: number;
   capped: boolean;
-  at: { id: string; n: number } | null;
+  // n moves on every step, so landing on the same occurrence twice is asked for.
+  at: { id: string; nth: number; n: number } | null;
   ask: (query: string) => void;
   step: (by: 1 | -1) => void;
   close: () => void;
@@ -22,7 +23,11 @@ export interface Finding {
 export function useFind(items: Item[], pulse: number, active: boolean, onOpen: () => void): Finding {
   const [held, setHeld] = useState<{ q: string; i: number; focus: number } | null>(null);
   const hits = useMemo(() => (held ? search(items, held.q) : NO_HITS), [items, held]);
-  const at = held && hits.length > 0 ? hits[Math.min(held.i, hits.length - 1)] : null;
+  const i = held ? Math.min(held.i, hits.length - 1) : -1;
+  const at = i >= 0 ? hits[i] : null;
+  // Hits come in reading order, so a row's occurrences sit together.
+  let nth = 0;
+  while (at && i - nth > 0 && hits[i - nth - 1].id === at.id) nth++;
 
   const [nonce, setNonce] = useState(0);
   useEffect(() => {
@@ -50,7 +55,7 @@ export function useFind(items: Item[], pulse: number, active: boolean, onOpen: (
     focus: held?.focus ?? 0,
     total,
     capped: total >= MAX,
-    at: at ? { id: at.id, n: nonce } : null,
+    at: at ? { id: at.id, nth, n: nonce } : null,
     ask,
     step,
     close,

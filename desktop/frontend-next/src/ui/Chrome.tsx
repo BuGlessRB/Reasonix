@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import type { HubPort } from "../port/hub";
 import type { AccountState, AgentPort, SessionStatus, WorkspaceInfo } from "../port/port";
 import { DeviceBar } from "./DeviceBar";
+import { ariaChord, chord } from "./keys";
 import { PhonePop } from "./PhonePop";
 import { WindowControls, zoomOnTitleBar } from "./WindowControls";
 
@@ -30,12 +31,13 @@ interface Props {
   theme: string;
   onRail: () => void;
   onTheme: () => void;
+  onFind: () => void;
   // The window's port, for what belongs to the window rather than a pane.
   hub?: HubPort;
   onError?: (e: unknown) => void;
 }
 
-export function Chrome({ port, status, title, steer, onSettings, onBrowser, browser, account, host, rail, theme, onRail, onTheme, hub, onError }: Props) {
+export function Chrome({ port, status, title, steer, onSettings, onBrowser, browser, account, host, rail, theme, onRail, onTheme, onFind, hub, onError }: Props) {
   const root = status?.workspaceRoot || status?.cwd || "";
   const project = root ? base(root) : "—";
   // Only for the "隔离" tag: the folder list and the switch itself moved to the
@@ -80,6 +82,19 @@ export function Chrome({ port, status, title, steer, onSettings, onBrowser, brow
 
       <div className="r">
         {hub && onError && <PhonePop hub={hub} />}
+        {port && (
+          <button
+            className="thbtn find-action"
+            data-action="transcript.find"
+            data-value="open"
+            onClick={onFind}
+            aria-label={t("在这段对话里查找")}
+            aria-keyshortcuts={ariaChord("f")}
+            title={`${t("在这段对话里查找")}  ${chord("F")}`}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.2 3.1a4.1 4.1 0 1 0 0 8.2 4.1 4.1 0 0 0 0-8.2M10.3 10.3 13 13" /></svg>
+          </button>
+        )}
         <button
           className="thbtn theme-toggle"
           data-action="appearance.theme"

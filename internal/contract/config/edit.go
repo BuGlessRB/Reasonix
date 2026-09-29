@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"golang.org/x/text/unicode/norm"
 
 	"reasonix/internal/base/fileutil"
 	fileencoding "reasonix/internal/base/fileutil/encoding"
@@ -735,8 +736,9 @@ func (c *Config) SetSkillEnabled(name string, enabled bool) error {
 	name = strings.TrimSpace(name)
 	key := SkillNameKey(name)
 	if key == "" {
-		return fmt.Errorf("skill name %q: use letters, digits, '_', '-', '.', 1-64 chars, starting alphanumeric", name)
+		return fmt.Errorf("skill name %q: use Unicode letters or numbers and '_', '-', '.', 1-64 characters, starting alphanumeric", name)
 	}
+	name = norm.NFC.String(name)
 	next := c.DisabledSkillNames()
 	idx := -1
 	for i, existing := range next {
