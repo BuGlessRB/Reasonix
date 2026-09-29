@@ -217,14 +217,11 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	// so a failed start still releases the lease.
 	prepared, probe, lease, err := b.prepareLaunch(ctx, sh, p, args)
 	if err != nil {
-		ex.State = tool.ShellStateNotRun
-		ex.FailurePhase = tool.ShellPhaseAuthorization
+		phase := tool.ShellPhaseAuthorization
 		if errors.Is(err, errSessionTemp) {
-			ex.FailurePhase = tool.ShellPhaseLaunch
+			phase = tool.ShellPhaseLaunch
 		}
-		ex.MutationRisk = tool.ShellMutationNotStarted
-		ex.DurationMs = time.Since(start).Milliseconds()
-		return tool.DetailedResult{Execution: ex}, err
+		return refusedBeforeLaunch(ex, start, phase, err)
 	}
 	nul := armNULWatch(runtime.GOOS, sh, b.workDir)
 	// Background jobs take ownership of the lease until the job goroutine ends.
@@ -254,6 +251,9 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 
 	argv, wrapped := prepared.Argv, prepared.Wrapped
 	cmdEnv := applyEnvOverrides(bashCommandEnv(ctx), append(shellEnvOverrides(b.sb.ShellEnv), prepared.EnvOverrides...))
+	if err := checkCommandLine(argv); err != nil {
+		return refusedBeforeLaunch(ex, start, tool.ShellPhasePreflight, err)
+	}
 
 	if p.RunInBackground {
 		jm, ok := jobs.FromContext(ctx)
