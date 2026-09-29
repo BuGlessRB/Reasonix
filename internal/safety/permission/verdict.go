@@ -72,11 +72,7 @@ func (g *Gate) Verdict(ctx context.Context, toolName string, args json.RawMessag
 	}
 	switch decision {
 	case Deny:
-		reason := "denied by permission policy — this tool/command is on the deny list. Do not retry it; choose another approach or stop and explain."
-		if ruleReason != "" {
-			reason = ruleReason + "\n" + reason
-		}
-		return Verdict{Reason: reason, Code: RefusalDenyRule}, nil
+		return g.denial(ruleReason), nil
 	case Ask:
 		return g.ask(ctx, toolName, args, ruleReason)
 	default:
@@ -116,4 +112,51 @@ func (g *Gate) ask(ctx context.Context, toolName string, args json.RawMessage, r
 		}
 	}
 	return Verdict{Allow: true}, nil
+}
+
+const postureRefusal = "this session's permission mode refuses anything that would need approval, and this call would. Nobody declined it and no deny rule matched; do the part that needs no approval, or report what was refused."
+
+// denial names what refused a call: a matched deny rule, the read-only
+// posture, or a mode that refuses whatever it would otherwise ask about.
+func (g *Gate) denial(ruleReason string) Verdict {
+	switch {
+	case ruleReason != "":
+		return Verdict{Reason: ruleReason + "\ndenied by permission policy — this tool/command is on the deny list. Do not retry it; choose another approach or stop and explain.", Code: RefusalDenyRule}
+	case g.Policy.ReadOnly:
+		return Verdict{Reason: readOnlyRefusal, Code: RefusalReadOnly}
+	default:
+		return Verdict{Reason: postureRefusal, Code: RefusalUnattended}
+	}
+}
+
+// Checker is any gate a tool call is put to.
+type Checker interface {
+	Check(ctx context.Context, toolName string, args json.RawMessage, readOnly bool) (bool, string, error)
+}
+
+// VerdictOf asks g for its verdict, falling back to Check for a gate that
+// names no refusal code.
+func VerdictOf(ctx context.Context, g Checker, toolName string, args json.RawMessage, readOnly bool) (Verdict, error) {
+	if vg, ok := g.(interface {
+		Verdict(context.Context, string, json.RawMessage, bool) (Verdict, error)
+	}); ok {
+		return vg.Verdict(ctx, toolName, args, readOnly)
+	}
+	allow, reason, err := g.Check(ctx, toolName, args, readOnly)
+	return Verdict{Allow: allow, Reason: reason}, err
+}
+
+// PostureRefusal is g's refusal of a writer that skips the ordinary gate, such
+// as an authorized MCP server, while g's posture is read-only. Authorizing the
+// server answered whether it may be called, not whether this session writes.
+func PostureRefusal(ctx context.Context, g Checker, toolName string, args json.RawMessage, readOnly bool) (Verdict, bool) {
+	dg, ok := g.(interface{ DeniesWriters() bool })
+	if readOnly || !ok || !dg.DeniesWriters() {
+		return Verdict{}, false
+	}
+	v, err := VerdictOf(ctx, g, toolName, args, readOnly)
+	if err == nil && v.Allow {
+		return Verdict{}, false
+	}
+	return v, true
 }

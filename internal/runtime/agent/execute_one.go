@@ -496,18 +496,11 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 				errMsg:  "blocked: MCP server identity is not authorized",
 			}, true
 		}
-		if outcome, blocked := readOnlyPostureBlock(ctx, a.svc.gate, plan.permName, gateArgs, plan.readOnly); blocked {
+		if outcome, blocked := mcpFastPathBlock(ctx, a.svc.gate, plan.permName, gateArgs, plan.readOnly); blocked {
 			return outcome, true
 		}
-		if denyGate, ok := a.svc.gate.(ExplicitDenyGate); ok && denyGate.ExplicitlyDenies(plan.permName, gateArgs) {
-			return toolOutcome{
-				output:  "blocked: denied by permission policy — this tool/command is on the deny list. Do not retry it; choose another approach or stop and explain.",
-				blocked: true,
-				errMsg:  "blocked by permission policy",
-			}, true
-		}
 	} else if a.svc.gate != nil {
-		v, err := gateVerdict(ctx, a.svc.gate, plan.permName, gateArgs, plan.readOnly)
+		v, err := permission.VerdictOf(ctx, a.svc.gate, plan.permName, gateArgs, plan.readOnly)
 		if err != nil {
 			return toolOutcome{
 				output:    fmt.Sprintf("blocked: %s (%v)", v.Reason, err),

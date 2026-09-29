@@ -538,6 +538,7 @@ func runAgent(args []string, version string) int {
 		permissions.approval = ctrl.DefaultApprovalMode()
 	}
 	ctrl.ApplyHeadlessApprovalMode(permissions.approval)
+	resultOutput.SetPermissionMode(permissions.approval)
 
 	if err := bindRunSession(ctrl, leases, resumeSession, resumePath); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)

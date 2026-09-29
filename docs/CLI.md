@@ -232,14 +232,17 @@ The final structured object has this shape:
   },
   "permission_denials": [
     {"tool_name": "write_file", "tool_use_id": "call_1", "code": "permission.unattended"}
-  ]
+  ],
+  "permission_mode": "ask"
 }
 ```
 
-`permission_denials` lists every call a permission gate refused; it is empty
-when nothing was, and a refusal never changes the exit code. The same `code`
-rides the refused tool result: `refusalCode` in `stream-json`, `refusal_code`
-in `--events-jsonl`.
+`permission_denials` lists the calls the run's permission gate refused; it is
+empty when nothing was, and a refusal never changes the exit code. The same
+`code` rides the refused tool result: `refusalCode` in `stream-json`,
+`refusal_code` in `--events-jsonl`.
+
+`permission_mode` is the posture the run settled on, named or defaulted.
 
 | `code` | Cause |
 | --- | --- |
@@ -370,7 +373,7 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 
 | Mode | Behavior |
 | --- | --- |
-| `read-only` | Refuse every call that is not a read — file writes, shell commands not known to be reads, tools not declared read-only — whatever allow rules say. Nothing is asked. |
+| `read-only` | Refuse every call that is not a read — file writes, shell commands not known to be reads, tools not declared read-only — whatever allow rules say. Nothing is asked. An installed extension's permission hook can still overrule it. |
 | `manual`, `ask` | Ask for ordinary approval decisions. |
 | `auto` | Automatically approve normal fallback operations while preserving explicit ask and deny rules. |
 | `acceptEdits` | Allow file-editing tools; this is not full Auto mode. |
@@ -392,10 +395,17 @@ With no mode named, a session opens in `auto` only when both hold:
 
 Otherwise it opens in `ask`; on Windows, which has no OS sandbox, always.
 
+What `auto` then allows without asking is bounded by that sandbox, not by the
+folder alone: shell commands may also write temp and toolchain caches (`~/go`,
+`~/.cargo`, `~/.cache` and the like), and reach the network unless
+`[sandbox] network = false`.
+
 - The terminal UI asks once per folder whether to trust it, never for a home
   directory or a filesystem root, and keeps the answer in your Reasonix home.
 - `reasonix trust` trusts the current folder; `reasonix trust --revoke`
   forgets it. A project's own files cannot record trust.
+- Trust belongs to the folder's path, not its contents: whatever is checked out
+  there later is trusted too.
 - Headless runs never ask. In `ask` they refuse writes and list them in
   `permission_denials`.
 

@@ -120,3 +120,40 @@ func TestHeadlessRefusalsNameNobodyAsTheCause(t *testing.T) {
 		t.Fatalf("a fresh human decision with nobody there is %+v", v)
 	}
 }
+
+// Under an attended Auto a sub-agent gets no more than its parent: a shell
+// shape the parent would put to the person stays refused, since the sub-agent
+// cannot ask. A headless Auto, which nobody watches, keeps opening it.
+func TestAttendedAutoKeepsSubagentsOffDynamicShell(t *testing.T) {
+	ctx := context.Background()
+	inline := json.RawMessage(`{"command":"python3 -c 'print(1)'"}`)
+	gate := NewSharedHeadlessGate(permission.New("ask", nil, nil, nil), ToolApprovalAsk)
+	gate.UpdateAttended(ToolApprovalAuto)
+	if v, _ := gate.Verdict(ctx, "bash", inline, false); v.Allow {
+		t.Fatal("an attended Auto let a sub-agent run inline interpreter code its parent would ask about")
+	}
+	if v, _ := gate.Verdict(ctx, "write_file", json.RawMessage(`{"path":"a"}`), false); !v.Allow {
+		t.Fatalf("an attended Auto still lets a sub-agent write: %+v", v)
+	}
+	gate.Update(ToolApprovalAuto)
+	if v, _ := gate.Verdict(ctx, "bash", inline, false); !v.Allow {
+		t.Fatalf("a headless Auto opens dynamic shell as before: %+v", v)
+	}
+	configured := permission.New("ask", nil, nil, nil).WithAllowDynamicBashFallback(true)
+	opted := NewSharedHeadlessGate(configured, ToolApprovalAsk)
+	opted.UpdateAttended(ToolApprovalAuto)
+	if v, _ := opted.Verdict(ctx, "bash", inline, false); !v.Allow {
+		t.Fatalf("a configured allow_dynamic_bash still applies to sub-agents: %+v", v)
+	}
+}
+
+// A decision only a person may make stays theirs in read-only mode, even for a
+// tool that calls itself a reader.
+func TestReadOnlyKeepsFreshHumanDecisionsHuman(t *testing.T) {
+	gate := BuildHeadlessApprovalGate(permission.New("ask", nil, nil, nil), ToolApprovalReadOnly)
+	gate.allowLowRiskFreshAction = func(string, json.RawMessage) bool { return true }
+	v, _ := gate.Verdict(context.Background(), SandboxEscapeApprovalTool, json.RawMessage(`{}`), true)
+	if v.Allow || v.Code != permission.RefusalUnattended {
+		t.Fatalf("a fresh human decision passed a read-only gate: %+v", v)
+	}
+}

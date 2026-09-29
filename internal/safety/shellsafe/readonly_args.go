@@ -22,25 +22,8 @@ func ArgsMakeReadOnlyCommandWrite(base, sub string, fields []string) bool {
 		}
 		args = args[1:]
 	}
-	switch base {
-	case "find":
-		return hasAnyArg(args, "-exec", "-execdir", "-delete", "-ok", "-okdir", "-fls", "-fprint", "-fprint0", "-fprintf")
-	case "sort":
-		return hasArgWithPrefix(args, "-o") || hasAnyArg(args, "--output") || hasArgWithPrefix(args, "--output=")
-	case "git":
-		switch sub {
-		case "diff", "show", "log":
-			return hasAnyArg(args, "--output") || hasArgWithPrefix(args, "--output=")
-		case "tag":
-			return !gitTagIsListing(args)
-		}
-	case "go":
-		return sub == "env" && hasAnyArg(args, "-w", "-u")
-	case "gofmt":
-		// -w rewrites in place; -l, -d and the default all report to stdout.
-		return hasAnyArg(args, "-w", "--w")
-	case "env":
-		return envRunsAProgram(args)
+	if rule, ok := argRules[base]; ok {
+		return rule(sub, args)
 	}
 	return false
 }

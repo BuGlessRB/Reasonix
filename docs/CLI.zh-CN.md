@@ -204,13 +204,16 @@ reasonix run "运行测试" --output-format stream-json
   },
   "permission_denials": [
     {"tool_name": "write_file", "tool_use_id": "call_1", "code": "permission.unattended"}
-  ]
+  ],
+  "permission_mode": "ask"
 }
 ```
 
-`permission_denials` 列出被权限门拒绝的每个调用，没有被拒时为空数组；被拒不改变退出码。
+`permission_denials` 列出本次运行的权限门拒绝的调用，没有被拒时为空数组；被拒不改变退出码。
 同一个 `code` 也随被拒的工具结果出现：`stream-json` 里是 `refusalCode`，`--events-jsonl`
 里是 `refusal_code`。
+
+`permission_mode` 是本次运行实际采用的档位（指定的或默认的）。
 
 | `code` | 原因 |
 | --- | --- |
@@ -327,7 +330,7 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 
 | 模式 | 行为 |
 | --- | --- |
-| `read-only` | 拒绝一切非读取调用——写文件、不能确认是读取的 shell 命令、未声明只读的工具——allow 规则也放不过；不弹审批。 |
+| `read-only` | 拒绝一切非读取调用——写文件、不能确认是读取的 shell 命令、未声明只读的工具——allow 规则也放不过；不弹审批。已安装扩展的权限钩子仍可推翻它。 |
 | `manual`、`ask` | 普通权限决策会弹出审批。 |
 | `auto` | 自动批准普通 fallback 操作，同时保留显式 ask 和 deny 规则。 |
 | `acceptEdits` | 允许文件编辑工具；不等同于完整 Auto 模式。 |
@@ -348,8 +351,12 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 
 否则以 `ask` 打开；Windows 没有 OS 沙盒，始终如此。
 
+此时 `auto` 不经询问放行的范围由沙盒决定，不只是这个文件夹：shell 命令还能写临时目录和工具链缓存
+（`~/go`、`~/.cargo`、`~/.cache` 等），并且能访问网络，除非设置 `[sandbox] network = false`。
+
 - 终端界面对每个文件夹问一次是否信任（家目录和文件系统根目录从不问），答案记在你的 Reasonix 主目录。
 - `reasonix trust` 信任当前文件夹，`reasonix trust --revoke` 撤销；项目自己的文件不能写入信任记录。
+- 信任跟着文件夹路径走，不看内容：以后在同一路径检出的任何东西也被信任。
 - 无头运行从不询问；`ask` 下写入被拒，并列在 `permission_denials` 中。
 
 终端界面里 Shift+Tab 按 只读 → 询问 → 自动 → YOLO → 计划 循环（YOLO 确认过后才进入循环）；

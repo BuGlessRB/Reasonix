@@ -60,11 +60,14 @@ func confirmYolo(home string, in *bufio.Scanner, out io.Writer) error {
 	return nil
 }
 
+// trustScope is what the sandbox confines a trusted folder's commands to.
+const trustScope = "The OS sandbox limits their writes to this folder, temp and toolchain caches (~/go, ~/.cargo, ~/.cache and\nthe like); network access follows [sandbox] network, and deny rules still apply."
+
 // askWorkspaceTrust records the answer either way: a folder declined once is
 // not asked about again, and `reasonix trust` changes it later.
 func askWorkspaceTrust(ctrl postureHost, in *bufio.Scanner, out io.Writer) {
-	fmt.Fprintf(out, "Reasonix can edit files in %s without asking each time:\n", ctrl.WorkspaceRoot())
-	fmt.Fprintln(out, "the OS sandbox keeps shell writes inside this folder, and deny rules still apply.")
+	fmt.Fprintf(out, "In a trusted folder, edits and shell commands run without asking, here and in `reasonix run`:\n%s\n", ctrl.WorkspaceRoot())
+	fmt.Fprintln(out, trustScope)
 	trust := config.WorkspaceTrustDeclined
 	if strings.EqualFold(ask(in, out, "Trust this folder? (`reasonix trust --revoke` undoes it)", "y/N"), "y") {
 		trust = config.WorkspaceTrusted

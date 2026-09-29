@@ -7,36 +7,22 @@ import (
 	"reasonix/internal/safety/permission"
 )
 
-// verdictGate is a Gate that also names why it refused.
-type verdictGate interface {
-	Verdict(ctx context.Context, toolName string, args json.RawMessage, readOnly bool) (permission.Verdict, error)
-}
-
-// writerDenyingGate is a Gate whose posture refuses every call that is not a
-// read, which a path around the gate has to honour as well.
-type writerDenyingGate interface {
-	DeniesWriters() bool
-}
-
-func gateVerdict(ctx context.Context, g Gate, toolName string, args json.RawMessage, readOnly bool) (permission.Verdict, error) {
-	if vg, ok := g.(verdictGate); ok {
-		return vg.Verdict(ctx, toolName, args, readOnly)
-	}
-	allow, reason, err := g.Check(ctx, toolName, args, readOnly)
-	return permission.Verdict{Allow: allow, Reason: reason}, err
-}
-
-// readOnlyPostureBlock refuses a writer that skips the ordinary gate — an
-// authorized MCP server — while the posture is read-only. Authorizing a server
-// answered whether it may be called, not whether a read-only session may write.
-func readOnlyPostureBlock(ctx context.Context, g Gate, toolName string, args json.RawMessage, readOnly bool) (toolOutcome, bool) {
-	dg, ok := g.(writerDenyingGate)
-	if readOnly || !ok || !dg.DeniesWriters() {
+// mcpFastPathBlock is what still applies to an authorized MCP server, which
+// skips the ordinary gate: a read-only posture and an explicit deny rule.
+func mcpFastPathBlock(ctx context.Context, g Gate, toolName string, args json.RawMessage, readOnly bool) (toolOutcome, bool) {
+	if g == nil {
 		return toolOutcome{}, false
 	}
-	v, err := gateVerdict(ctx, g, toolName, args, readOnly)
-	if err == nil && v.Allow {
-		return toolOutcome{}, false
+	if v, blocked := permission.PostureRefusal(ctx, g, toolName, args, readOnly); blocked {
+		return toolOutcome{output: "blocked: " + v.Reason, blocked: true, errMsg: "blocked by permission policy", refusalCode: v.Code}, true
 	}
-	return toolOutcome{output: "blocked: " + v.Reason, blocked: true, errMsg: "blocked by permission policy", refusalCode: v.Code}, true
+	if denyGate, ok := g.(ExplicitDenyGate); ok && denyGate.ExplicitlyDenies(toolName, args) {
+		return toolOutcome{
+			output:      "blocked: denied by permission policy — this tool/command is on the deny list. Do not retry it; choose another approach or stop and explain.",
+			blocked:     true,
+			errMsg:      "blocked by permission policy",
+			refusalCode: permission.RefusalDenyRule,
+		}, true
+	}
+	return toolOutcome{}, false
 }

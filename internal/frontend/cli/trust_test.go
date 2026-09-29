@@ -90,3 +90,18 @@ func TestTrustRecordsTheFolderAndRevokeForgetsIt(t *testing.T) {
 		t.Fatalf("--yes = %d, trust %q", code, trust())
 	}
 }
+
+func TestTrustNeverTrustsAHomeDirectoryWholesale(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	home := homeDir(t)
+	var out bytes.Buffer
+	if code := runTrust([]string{"--dir", home, "--yes"}, bufio.NewScanner(strings.NewReader("")), &out, false); code != 0 {
+		t.Fatalf("trust in a home directory = %d: %s", code, out.String())
+	}
+	if got, _ := config.NewProjectGrantStore(config.Roots{}.Home()).Trust(home); got != config.WorkspaceTrustUndecided {
+		t.Fatalf("a home directory was recorded as %q", got)
+	}
+	if !strings.Contains(out.String(), "not trusted as a whole") {
+		t.Fatalf("the refusal is not said: %s", out.String())
+	}
+}

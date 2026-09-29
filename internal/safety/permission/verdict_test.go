@@ -3,6 +3,7 @@ package permission
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -96,5 +97,33 @@ func TestVerdictNamesWhoRefused(t *testing.T) {
 	allow, reason, _ := declined.Check(ctx, "write_file", write, false)
 	if allow || reason == "" {
 		t.Fatalf("Check drops the verdict's reason: allow=%v reason=%q", allow, reason)
+	}
+}
+
+type checkOnly struct{}
+
+func (checkOnly) Check(context.Context, string, json.RawMessage, bool) (bool, string, error) {
+	return false, "no", nil
+}
+
+// A refusal no rule produced names the posture that produced it, not a deny
+// list nobody wrote.
+func TestDenialWithoutARuleNamesThePosture(t *testing.T) {
+	ctx := context.Background()
+	dontAsk := NewGate(New("deny", nil, nil, nil), nil)
+	if v, _ := dontAsk.Verdict(ctx, "write_file", json.RawMessage(`{"path":"a"}`), false); v.Code != RefusalUnattended || strings.Contains(v.Reason, "deny list") {
+		t.Fatalf("a fallback refusal reads as a deny rule: %+v", v)
+	}
+	p := New("deny", nil, nil, nil)
+	p.ReadOnly = true
+	ro := NewGate(p, nil)
+	if v, _ := ro.Verdict(ctx, "bash", commandArgs("env"), false); v.Allow || v.Code != RefusalReadOnly {
+		t.Fatalf("a read the host cannot confirm is refused as read-only, got %+v", v)
+	}
+	if v, _ := VerdictOf(ctx, checkOnly{}, "x", nil, false); v.Allow || v.Reason != "no" || v.Code != "" {
+		t.Fatalf("a Check-only gate keeps its answer and names no code: %+v", v)
+	}
+	if _, refused := PostureRefusal(ctx, checkOnly{}, "x", nil, false); refused {
+		t.Fatal("a gate with no posture to report is not read-only")
 	}
 }

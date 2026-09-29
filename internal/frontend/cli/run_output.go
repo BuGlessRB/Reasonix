@@ -54,6 +54,13 @@ type runResultUsage struct {
 	Estimated                bool `json:"estimated,omitempty"`
 }
 
+// runPermissionRecord is what the result says about permissions: the posture
+// the run settled on and every call its gate refused.
+type runPermissionRecord struct {
+	mode    string
+	denials []runPermissionDenial
+}
+
 type runPermissionDenial struct {
 	ToolName  string `json:"tool_name"`
 	ToolUseID string `json:"tool_use_id"`
@@ -86,6 +93,8 @@ type runResult struct {
 	// PermissionDenials lists every call a permission gate refused, by the
 	// refusal's code; a run that wrote nothing says why here, not only in prose.
 	PermissionDenials []runPermissionDenial `json:"permission_denials"`
+	// PermissionMode is the posture the run settled on, named or defaulted.
+	PermissionMode string `json:"permission_mode,omitempty"`
 }
 
 type machineEventUsage struct {
@@ -164,7 +173,7 @@ type runOutputSink struct {
 	machineToolNames    map[string]string
 	nextMachineToolID   uint64
 	nextMachineToolName uint64
-	denials             []runPermissionDenial
+	permissions         runPermissionRecord
 	err                 error
 }
 
@@ -239,7 +248,7 @@ func (s *runOutputSink) Emit(e event.Event) {
 		s.turns++
 	}
 	if e.Kind == event.ToolResult && permission.IsRefusalCode(e.Tool.RefusalCode) {
-		s.denials = append(s.denials, runPermissionDenial{ToolName: e.Tool.Name, ToolUseID: e.Tool.ID, Code: e.Tool.RefusalCode})
+		s.permissions.denials = append(s.permissions.denials, runPermissionDenial{ToolName: e.Tool.Name, ToolUseID: e.Tool.ID, Code: e.Tool.RefusalCode})
 	}
 	// stdout carries the answer alone, so a warning had nowhere to go and was
 	// dropped — a planner fallback, a folded user turn, an unread check. stderr
@@ -359,7 +368,8 @@ func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr err
 		OriginalTotals:    s.originalTotals,
 		CostQuote:         aggQuote,
 		Usage:             s.usage,
-		PermissionDenials: append([]runPermissionDenial{}, s.denials...),
+		PermissionDenials: append([]runPermissionDenial{}, s.permissions.denials...),
+		PermissionMode:    s.permissions.mode,
 	})
 }
 
@@ -445,4 +455,15 @@ func machineEventKind(kind event.Kind) string {
 		return names[kind]
 	}
 	return "unknown"
+}
+
+// SetPermissionMode records the posture the run settled on. A nil sink, which
+// a text run without a result object has, takes nothing.
+func (s *runOutputSink) SetPermissionMode(mode string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.permissions.mode = mode
+	s.mu.Unlock()
 }

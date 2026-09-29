@@ -53,12 +53,16 @@ func runTrust(args []string, in *bufio.Scanner, out io.Writer, interactive bool)
 		return 1
 	}
 	trust, _ := grants.Trust(root)
-	if len(pending) == 0 && trust == config.WorkspaceTrusted {
-		fmt.Fprintf(out, "%s is trusted and nothing in it is waiting for approval.\n", root)
+	canTrust := trustPromptable(root)
+	if !canTrust {
+		fmt.Fprintf(out, "%s is a home directory or filesystem root; it is not trusted as a whole.\n", root)
+	}
+	if len(pending) == 0 && (trust == config.WorkspaceTrusted || !canTrust) {
+		fmt.Fprintf(out, "Nothing in %s is waiting for approval.\n", root)
 		return 0
 	}
-	if trust != config.WorkspaceTrusted {
-		fmt.Fprintf(out, "Trusting %s lets edits inside it run without asking where the OS sandbox confines them.\n", root)
+	if trust != config.WorkspaceTrusted && canTrust {
+		fmt.Fprintf(out, "Trusting %s lets edits and shell commands in it run without asking, in the terminal UI and in `reasonix run`.\n%s\n", root, trustScope)
 	}
 	if len(pending) > 0 {
 		fmt.Fprintf(out, "%s names programs Reasonix would run on your machine:\n", root)
@@ -85,9 +89,11 @@ func runTrust(args []string, in *bufio.Scanner, out io.Writer, interactive bool)
 			return 1
 		}
 	}
-	if err := grants.SetTrust(root, config.WorkspaceTrusted); err != nil {
-		fmt.Fprintln(out, "trust:", err)
-		return 1
+	if canTrust {
+		if err := grants.SetTrust(root, config.WorkspaceTrusted); err != nil {
+			fmt.Fprintln(out, "trust:", err)
+			return 1
+		}
 	}
 	fmt.Fprintln(out, "Approved. Any change to a program it names needs approval again.")
 	return 0

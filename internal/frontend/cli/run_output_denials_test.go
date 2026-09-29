@@ -19,18 +19,20 @@ func TestRunResultListsPermissionDenials(t *testing.T) {
 	sink.Emit(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "c2", Name: "bash", Err: "exit 1"}})
 	sink.Emit(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "c3", Name: "edit_file", Err: "stale", RefusalCode: "tool.stale_anchor"}})
 	sink.Emit(event.Event{Kind: event.Message, Text: "could not write"})
+	sink.SetPermissionMode("ask")
 	if err := sink.Finalize("s", time.Now(), nil); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {
 		IsError bool                  `json:"is_error"`
+		Mode    string                `json:"permission_mode"`
 		Denials []runPermissionDenial `json:"permission_denials"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("%v: %s", err, out.String())
 	}
 	want := []runPermissionDenial{{ToolName: "write_file", ToolUseID: "c1", Code: permission.RefusalUnattended}}
-	if got.IsError || len(got.Denials) != 1 || got.Denials[0] != want[0] {
+	if got.IsError || got.Mode != "ask" || len(got.Denials) != 1 || got.Denials[0] != want[0] {
 		t.Fatalf("result = %+v, want only the permission refusal listed and no error", got)
 	}
 
