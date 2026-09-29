@@ -37,17 +37,24 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
   const [loadingMore, setLoadingMore] = useState(false);
   const [open, setOpen] = useState("");
   const asked = useRef(0);
+  const nextOffset = useRef(0);
 
   const load = (offset: number) => {
     const n = ++asked.current;
     setError("");
     setFilterUnsupported(false);
     if (offset > 0) setLoadingMore(true);
+    else setMore(false);
     port
       .marketList({ kind, q: q.trim(), sort, offset, pinned })
       .then((page) => {
         if (n !== asked.current) return;
-        setRows((prev) => (offset > 0 && prev ? [...prev, ...page.packages] : page.packages));
+        nextOffset.current = offset + page.packages.length;
+        setRows((prev) => {
+          if (offset === 0 || !prev) return page.packages;
+          const seen = new Set(prev.map((p) => p.slug));
+          return [...prev, ...page.packages.filter((p) => !seen.has(p.slug))];
+        });
         setMore(page.packages.length >= page.limit);
         setLoadingMore(false);
       })
@@ -64,6 +71,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
     ++asked.current;
     setRows(null);
     setMore(false);
+    nextOffset.current = 0;
     setError("");
     setLoadingMore(false);
     const timer = setTimeout(() => load(0), q ? 250 : 0);
@@ -155,7 +163,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
         ))}
       </ul>
       {more && (
-        <button className="act" data-action="market.more" disabled={loadingMore} onClick={() => load(rows?.length ?? 0)}>
+        <button className="act" data-action="market.more" disabled={loadingMore} onClick={() => load(nextOffset.current)}>
           {t("加载更多")}
         </button>
       )}
