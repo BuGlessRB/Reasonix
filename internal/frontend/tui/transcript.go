@@ -351,6 +351,9 @@ func mergeTool(prev, next eventwire.Tool) eventwire.Tool {
 	if next.RefusalCode != "" {
 		out.RefusalCode = next.RefusalCode
 	}
+	if next.OutputDiff {
+		out.OutputDiff = true
+	}
 	if next.Diff != "" {
 		out.Diff, out.Added, out.Removed = next.Diff, next.Added, next.Removed
 	}

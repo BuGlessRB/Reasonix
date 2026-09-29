@@ -145,8 +145,8 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	} else if projectMeta.IsDefined("agent", "system_prompt_file") {
 		cfg.systemPromptFileSource = promptFileSourceProject
 	}
-	// The native CLI update channel controls the one user-installed binary.
-	// A repository-local reasonix.toml must never switch that global choice.
+	// The whole [cli] table is user-global: the update channel picks the one
+	// installed binary, and a repository must not run a formatter or redraw diffs.
 	cfg.CLI = globalCLI
 	// Secret protection is a user-global security control: a cloned repo's
 	// reasonix.toml must not be able to flip on the workflow-breaking env/path

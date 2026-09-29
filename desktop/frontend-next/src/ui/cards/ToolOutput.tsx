@@ -355,7 +355,7 @@ function Clip({ id, deps, children }: { id?: string; deps?: unknown; children: R
 // The three outcomes are not the same news, and a card that renders them alike
 // is why "folded" and "the model never saw this" looked identical. Only
 // truncation is a warning; the other two say where the rest is.
-function BoundNote({ bound }: { bound?: Bound }) {
+export function BoundNote({ bound }: { bound?: Bound }) {
   if (!bound) return null;
   if (bound.kind === "spilled") {
     return (

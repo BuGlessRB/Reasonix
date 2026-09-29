@@ -780,6 +780,7 @@ export function fromHistory(msgs: HistoryMessage[]): { items: Item[]; executions
           tool: {
             ...prev.tool,
             output: m.content,
+            ...(m.outputDiff ? { outputDiff: true } : {}),
             ...(m.toolFailed ? { err: m.content, refusalCode: m.toolRefusalCode } : {}),
           },
         };

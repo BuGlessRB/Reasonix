@@ -48,6 +48,9 @@ type block struct {
 	hideRail bool
 	cells    ansi.Method
 	lines    []string
+	// diff marks a block whose rows draw through the diff formatter, so a
+	// landed background run must drop its cached lines.
+	diff bool
 	// row is the settled row the block draws, when it draws one: a shell
 	// call's output opens and shuts through it.
 	row *Item
@@ -113,6 +116,8 @@ func wrapLines(out string, width int) []string {
 type settledPrint struct {
 	render func(width int, hideRail bool) string
 	row    *Item
+	// diff marks a print whose rows draw through the diff formatter.
+	diff bool
 }
 
 // settledRow keeps a copy of the row to draw from. Full screen, a shell
@@ -121,7 +126,7 @@ func (m *model) settledRow(row Item, shown int) settledPrint {
 	if m.scr != nil && (row.Kind == ItemTool || row.Kind == ItemSay && row.Reasoning != "" && shown == 0) {
 		row.Fold = foldShut
 	}
-	return settledPrint{render: func(w int, hideRail bool) string { return renderItem(&row, w, shown, hideRail) }, row: &row}
+	return settledPrint{render: func(w int, hideRail bool) string { return renderItem(&row, w, shown, hideRail) }, row: &row, diff: drawsThroughDiffFormatter(&row)}
 }
 
 // publish sends what settled where this screen keeps it: blocks of the full
@@ -129,7 +134,7 @@ func (m *model) settledRow(row Item, shown int) settledPrint {
 func (m *model) publish(out []settledPrint) tea.Cmd {
 	if m.scr != nil {
 		for _, p := range out {
-			m.scr.blocks = append(m.scr.blocks, block{render: p.render, row: p.row})
+			m.scr.blocks = append(m.scr.blocks, block{render: p.render, row: p.row, diff: p.diff})
 		}
 		return nil
 	}
@@ -144,6 +149,21 @@ func (m *model) publish(out []settledPrint) tea.Cmd {
 
 func (m *model) emit(render func(int, bool) string) tea.Cmd {
 	return m.publish([]settledPrint{{render: render}})
+}
+
+// invalidateDiffBlocks drops the cached rows of every block that draws through
+// the diff formatter. A background run reports its result long after the block
+// that asked for it was drawn and its rows cached, so without this the built-in
+// rows it showed while the run was in flight would stay on screen.
+func (m *model) invalidateDiffBlocks() {
+	if m.scr == nil {
+		return
+	}
+	for i := range m.scr.blocks {
+		if m.scr.blocks[i].diff {
+			m.scr.blocks[i].lines = nil
+		}
+	}
 }
 
 // fillScreen pushes whatever the terminal shows into its scrollback before a

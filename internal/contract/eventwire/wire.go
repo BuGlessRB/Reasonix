@@ -431,7 +431,8 @@ func toWireTool(t event.Tool) *Tool {
 		ID: t.ID, Name: t.Name, Args: t.Args,
 		ResolvedName: t.ResolvedName, CapabilityID: t.CapabilityID,
 		Output: t.Output, Images: t.Images, Err: t.Err, RefusalCode: t.RefusalCode,
-		ReadOnly: t.ReadOnly, Truncated: t.Bound.Lossy(),
+		OutputDiff: t.OutputDiff,
+		ReadOnly:   t.ReadOnly, Truncated: t.Bound.Lossy(),
 		DurationMs: t.DurationMs, ContextTokens: t.ContextTokens(),
 		Partial: t.Partial, StartedAt: t.StartedAt, EndedAt: t.EndedAt,
 		ArgChars: t.ArgChars, Refreshed: t.Refreshed,
@@ -485,7 +486,11 @@ type Tool struct {
 	// wording, and a reader that has to tell one refusal from another cannot
 	// use a sentence.
 	RefusalCode string `json:"refusalCode,omitempty"`
-	ReadOnly    bool   `json:"readOnly"`
+	// OutputDiff marks a shell result whose whole output is a unified diff, so a
+	// frontend renders it as a diff. Set only when [agent].embedded_diff_detection
+	// is on.
+	OutputDiff bool `json:"outputDiff,omitempty"`
+	ReadOnly   bool `json:"readOnly"`
 	// Truncated is the compatibility projection of Bound for journals written
 	// before it existed; Bound is what a current frontend reads.
 	Truncated  bool   `json:"truncated,omitempty"`

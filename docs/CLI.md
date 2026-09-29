@@ -127,6 +127,46 @@ more context before compaction. Project `reasonix.toml` takes precedence over
 the user config. Changes apply to new CLI sessions; an already-running session
 keeps the threshold it loaded at startup.
 
+## Diff rendering
+
+`[cli].diff_fences = true` renders a fenced ` ```diff ` / ` ```patch ` block
+through the colourised diff renderer (add/remove backgrounds, `+`/`-` gutter,
+line numbers) instead of the plain code rail.
+
+It is **off by default**: a model writes headerless diff fences often, and the
+plain rail is the lossless default.
+
+A fence section with no `--- `/`+++ ` file header falls back to the plain rail so
+no line is dropped. Like `[cli].diff_formatter` it is user/global only — a
+project-local `reasonix.toml` cannot set it.
+
+`[cli].diff_formatter` names an optional external command that formats a diff
+for the CLI/TUI to render — a fenced ` ```diff ` / ` ```patch ` block, a writer
+tool's diff card, and a shell result whose whole output is a diff (see
+`[agent].embedded_diff_detection` below).
+
+It is an argv line run without a shell, e.g. `delta --color-only --paging=never`.
+
+The whole diff is written to the command's stdin; its stdout is re-emitted with
+non-SGR control sequences stripped, so the formatter's colours survive but a
+cursor or clipboard escape cannot.
+
+In the full-screen TUI it runs off the render path: the built-in rows are drawn
+first and replaced once its output is ready, so a slow formatter cannot freeze
+the UI.
+
+On any failure, timeout, or empty output the built-in renderer is kept. Like
+`[cli].update_channel` it is user/global only — a project-local `reasonix.toml`
+cannot set it.
+
+`[agent].embedded_diff_detection = true` marks a shell result whose whole output
+is a unified diff — e.g. `bash` running `git diff` — so the CLI/TUI and desktop
+render it as a coloured diff instead of flat text.
+
+Detection is whole-text: `git show` and `git log -p` are recognised by their
+`commit …` header, while mixed output and `--stat` stay prose. The default is
+`false`.
+
 ## One-shot and automation
 
 Use `-p` / `--print` when a script needs only the final answer:

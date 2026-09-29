@@ -91,6 +91,10 @@ theme = "auto"
 cursor_shape = "bar"         # CLI/TUI text cursor: underline|block|bar
 show_turn_usage = false       # hide per-request token/cost receipts in the TUI; default true
 
+[cli]
+diff_fences = true                                     # render a fenced diff/patch block through the colourised diff renderer; default false; user/global only
+diff_formatter = "delta --color-only --paging=never"   # external formatter for a fenced diff block, a writer diff card, and a whole-diff shell result; user/global only
+
 [desktop]
 provider_access = ["deepseek"]
 
@@ -119,6 +123,10 @@ visible without covering double-width CJK characters; use `block` or
 `[ui].show_turn_usage = false` hides the token and cost receipt appended to the
 TUI transcript after each model request. Accounting and live status updates
 remain active. The default is `true`.
+
+The diff-rendering options (`[cli].diff_fences`, `[cli].diff_formatter`,
+`[agent].embedded_diff_detection`) are documented in the
+[CLI reference](./CLI.md#diff-rendering).
 
 ### Custom provider `api_key_env` names
 

@@ -260,16 +260,6 @@ type UIConfig struct {
 	CommandMode    string `toml:"commandmode"`     // ""|vi; vi gives the composer a vi command mode (empty = insert-always)
 }
 
-// CLIConfig controls user-global native CLI behavior. It is separate from
-// project runtime settings so a repository cannot change the installed
-// binary's update channel.
-type CLIConfig struct {
-	// UpdateChannel is decoded for compatibility with pre-single-channel
-	// configurations. Runtime behavior is always the official release channel,
-	// and the canonical renderer intentionally drops this field.
-	UpdateChannel string `toml:"update_channel"`
-}
-
 // DesktopExternalOpener returns the selected opener id; unavailable ids fall
 // back to the platform file manager in the desktop shell.
 func (c *Config) DesktopExternalOpener() string {
@@ -1142,6 +1132,10 @@ type AgentConfig struct {
 	// ColdResumePrune elides stale tool results when a session reopens past the
 	// provider cache window. nil = default enabled.
 	ColdResumePrune *bool `toml:"cold_resume_prune"`
+	// EmbeddedDiffDetection opts into marking a shell result whose whole output
+	// is a unified diff, so a frontend renders it as a diff instead of flat text.
+	// nil = default off.
+	EmbeddedDiffDetection *bool `toml:"embedded_diff_detection"`
 	// PlanModeReadOnlyCommands is retained for old config/session round trips. Main
 	// Plan bash calls now use the ordinary Permissions classifier and Sandbox.
 	PlanModeReadOnlyCommands []string `toml:"plan_mode_read_only_commands"`

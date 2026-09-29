@@ -112,6 +112,40 @@ reasonix config compact-ratio --local 75   # 写入 ./reasonix.toml 项目覆盖
 缓存复用率；数值越高则会在压缩前保留更多上下文。项目 `reasonix.toml` 的优先级高于
 用户全局配置。修改会应用于新启动的 CLI 会话；已经运行的会话继续使用启动时加载的阈值。
 
+## Diff 渲染
+
+`[cli].diff_fences = true` 会把围栏 ` ```diff ` / ` ```patch ` 块交给彩色 diff
+渲染器（增删背景、`+`/`-` 侧栏、行号），而不是普通代码栏。
+
+它**默认关闭**：模型经常写出没有文件头的 diff 围栏，普通代码栏才是无损的默认。
+
+没有 `--- `/`+++ ` 文件头的分段会回退到普通代码栏，不会丢行。与
+`[cli].diff_formatter` 一样，它仅属于用户/全局配置，项目内的 `reasonix.toml`
+无法设置。
+
+`[cli].diff_formatter` 指定一个可选的外部命令，为 CLI/TUI 渲染 diff 时对其格式化：
+既包括回答流中的围栏 ` ```diff ` / ` ```patch ` 块，也包括 transcript 中写文件工具的
+diff 卡片，以及整段输出就是 diff 的 shell 结果（见下方
+`[agent].embedded_diff_detection`）。
+
+它是 argv 形式、不经过 shell，例如 `delta --color-only --paging=never`。
+
+整个 diff 写入该命令的 stdin，其 stdout 在去掉非 SGR 控制序列后回写，因此格式化器的
+颜色得以保留，而光标或剪贴板转义无法生效。
+
+全屏 TUI 中它在渲染路径之外运行：先画内置行，待其输出就绪后再替换，因此慢格式化器不会
+卡住界面。
+
+命令失败、超时或输出为空时保留内置渲染器。与 `[cli].update_channel` 一样，它仅属于
+用户/全局配置，项目内的 `reasonix.toml` 无法设置。
+
+`[agent].embedded_diff_detection = true` 会把整段输出为 unified diff 的 shell 结果
+（例如 `bash` 运行 `git diff`）标记出来，让 CLI/TUI 与桌面端把它画成彩色 diff 而不是
+平文本。
+
+检测是整段文本的：`git show` / `git log -p` 由 `commit …` 头识别，混合输出与
+`--stat` 仍按普通文本处理。默认值为 `false`。
+
 ## 一次性运行与自动化
 
 脚本只需要最终回答时，使用 `-p` / `--print`：

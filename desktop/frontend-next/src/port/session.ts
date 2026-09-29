@@ -31,6 +31,9 @@ export interface HistoryMessage {
   // rebuilt card has only the words, which a tool's own output can imitate.
   toolFailed?: boolean;
   toolRefusalCode?: string;
+  // outputDiff marks a rebuilt shell result whose whole output is a unified
+  // diff, re-derived by the host so a reopened transcript renders it as one.
+  outputDiff?: boolean;
 }
 
 // One call inside a history message. resolvedName/capabilityId say what a

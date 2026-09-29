@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"reasonix/internal/state/sessionstore"
 
+	"reasonix/internal/base/diff"
 	"reasonix/internal/contract/eventwire"
 	"reasonix/internal/contract/provider"
+	"reasonix/internal/contract/tool"
 )
 
 type historyToolCall struct {
@@ -53,6 +55,10 @@ type historyMessage struct {
 	ToolFailed      bool   `json:"toolFailed,omitempty"`
 	ToolRefusalCode string `json:"toolRefusalCode,omitempty"`
 	ToolName        string `json:"toolName,omitempty"`
+	// OutputDiff marks a rebuilt shell result whose whole output is a unified
+	// diff, so a reopened session renders it the way the live sink did. It is
+	// re-derived here because the event stream is live-only.
+	OutputDiff bool `json:"outputDiff,omitempty"`
 }
 
 func historyMessages(msgs []provider.Message) []historyMessage {
@@ -110,5 +116,24 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 // if the client sends If-None-Match with the current ETag, the server returns
 // 304 Not Modified with no body, saving bandwidth on reconnects.
 func (s *Server) history(w http.ResponseWriter, r *http.Request) {
-	writeJSONCached(w, r, historyMessages(s.ctl().History()))
+	msgs := historyMessages(s.ctl().History())
+	markHistoryDiffs(msgs, s.ctl().EmbeddedDiffDetectionEnabled())
+	writeJSONCached(w, r, msgs)
+}
+
+// markHistoryDiffs re-derives the whole-diff tag on a rebuilt transcript, since
+// the live sink that sets it is gone once the session is recorded. Without this
+// a shell `git diff` renders as a diff live and as flat text after reopening.
+// The grammar itself rejects a truncated result, whose appended note leaves the
+// text unparseable, so only the failure flag needs checking here.
+func markHistoryDiffs(msgs []historyMessage, enabled bool) {
+	if !enabled {
+		return
+	}
+	for i := range msgs {
+		m := &msgs[i]
+		if m.Role == string(provider.RoleTool) && !m.ToolFailed && tool.IsShellTool(m.ToolName) {
+			m.OutputDiff = diff.IsUnifiedDiff(m.Content)
+		}
+	}
 }

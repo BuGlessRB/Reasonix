@@ -135,9 +135,17 @@ func renderTool(it *Item, width int) string {
 			lines = append(lines, termrender.Dim(connector+oneLine(last, avail)))
 		}
 	case termrender.IsShellTool(t.Name):
-		lines = append(lines, outputSummary(t.Name, it.shellOutput(), avail, it.Fold)...)
+		if t.OutputDiff {
+			lines = append(lines, diffRows(it.shellOutput(), width, it.Fold)...)
+		} else {
+			lines = append(lines, outputSummary(t.Name, it.shellOutput(), avail, it.Fold)...)
+		}
 	default:
-		lines = append(lines, outputSummary(t.Name, t.Output, avail, it.Fold)...)
+		if t.OutputDiff {
+			lines = append(lines, diffRows(t.Output, width, it.Fold)...)
+		} else {
+			lines = append(lines, outputSummary(t.Name, t.Output, avail, it.Fold)...)
+		}
 	}
 	if n := len(it.Children); n > 0 {
 		lines = append(lines, termrender.Dim(connector+fmt.Sprintf(i18n.M.TUISubagentCallsFmt, n)))
@@ -178,6 +186,47 @@ func outputSummary(name, out string, width int, f outputFold) []string {
 		lines = append(lines, termrender.Dim(strings.Repeat(" ", len([]rune(connector)))+fmt.Sprintf("… %d more lines", extra)+hint))
 	}
 	return lines
+}
+
+// diffRows renders a marked whole-diff shell result as diff rows, opening the
+// fold to show more of it. The rows carry the card's "⎿" connector on the first
+// line and an aligned gutter after, matching every other tool card's body.
+func diffRows(out string, width int, f outputFold) []string {
+	maxLines := diffPreviewLines
+	if f == foldOpen {
+		maxLines = shellExpandLines
+	}
+	// DiffText lays each row out to the width it is given, under a two-space
+	// card indent; the connector below is three cells wider than that indent, so
+	// the body is laid out three cells narrower and every row still fits.
+	body := max(width-len([]rune(connector))+2, 1)
+	rows := termrender.DiffText(out, body, maxLines)
+	gutter := strings.Repeat(" ", len([]rune(connector)))
+	for i, r := range rows {
+		mark := gutter
+		if i == 0 {
+			mark = termrender.Dim(connector)
+		}
+		// DiffText rows carry a 2-space card indent; replace it with the
+		// connector/gutter so the body aligns under the card header.
+		rows[i] = mark + strings.TrimPrefix(r, "  ")
+	}
+	return rows
+}
+
+// drawsThroughDiffFormatter reports a row whose settled render may consult the
+// configured [cli].diff_formatter: a tool card with a diff body, or an answer
+// carrying a ```diff / ```patch fence. A block drawn from one must drop its
+// cached rows when a background run lands, or it keeps the built-in rows it
+// showed while the run was in flight.
+func drawsThroughDiffFormatter(it *Item) bool {
+	switch it.Kind {
+	case ItemTool:
+		return it.Tool != nil && (it.Tool.Diff != "" || it.Tool.OutputDiff)
+	case ItemSay:
+		return strings.Contains(it.Text, "```diff") || strings.Contains(it.Text, "```patch")
+	}
+	return false
 }
 
 // renderUsage is what one model request cost, under a quiet rule: history,

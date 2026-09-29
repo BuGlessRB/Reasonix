@@ -64,6 +64,9 @@ func diffPath(args string) string {
 
 // DiffBlock renders a writer call as a header line ("✎ name path  +A -B") plus
 // the highlighted, folded diff body. Returns nil when there's no textual diff.
+// A configured [cli].diff_formatter (e.g. delta) takes the whole diff on stdin
+// and its stdout is re-emitted under the header with non-SGR escapes stripped,
+// mirroring the fenced-diff path — the built-in body (and its fold) is the fallback.
 func DiffBlock(name, args string, d event.FileDiff, width, maxLines int) []string {
 	if d.Diff == "" {
 		return nil
@@ -73,7 +76,22 @@ func DiffBlock(name, args string, d event.FileDiff, width, maxLines int) []strin
 	if stat := DiffStat(d); stat != "" {
 		header += "  " + stat
 	}
+	if rows, ok := formatToolDiff(dropFileHeaderPair(d.Diff), width); ok {
+		return append([]string{header}, rows...)
+	}
 	return append([]string{header}, diffBody(d, path, width, maxLines)...)
+}
+
+// dropFileHeaderPair removes a leading "--- "/"+++ " pair, the same pair the
+// built-in body drops positionally. The external formatter would otherwise
+// re-emit that raw header — including an absolute host path in the label — which
+// the card header already names.
+func dropFileHeaderPair(diff string) string {
+	lines := strings.SplitN(diff, "\n", 3)
+	if len(lines) == 3 && strings.HasPrefix(lines[0], "--- ") && strings.HasPrefix(lines[1], "+++ ") {
+		return lines[2]
+	}
+	return diff
 }
 
 // diffBody renders the hunks with a line-number gutter, dropping the file and
@@ -82,6 +100,12 @@ func DiffBlock(name, args string, d event.FileDiff, width, maxLines int) []strin
 func diffBody(d event.FileDiff, path string, width, maxLines int) []string {
 	if d.Diff == "" {
 		return nil
+	}
+	// A diff that already carries colour (a formatter's output pasted back, a
+	// file whose own content is coloured) must not be re-parsed: the SGR-prefixed
+	// lines would be mis-read and the colours dropped, so show it verbatim.
+	if hasSGR(d.Diff) {
+		return verbatimDiffBody(d.Diff, width, maxLines)
 	}
 	src := strings.Split(strings.TrimRight(d.Diff, "\n"), "\n")
 	// Drop the "--- a/… / +++ b/…" header pair positionally — matching the prefix
@@ -134,18 +158,94 @@ func diffBody(d event.FileDiff, path string, width, maxLines int) []string {
 	return rows
 }
 
+// hasSGR reports whether s carries an ANSI CSI/SGR introducer. A diff already
+// containing one was colourised externally and must not be re-parsed.
+func hasSGR(s string) bool {
+	return strings.Contains(s, "\x1b[")
+}
+
+// verbatimDiffBody renders an externally colourised diff as-is: no gutter, no
+// background bars, no header-drop, no syntax re-highlight — just the lines,
+// width-clamped and sanitised so a hostile payload cannot drive the terminal.
+func verbatimDiffBody(diff string, width, maxLines int) []string {
+	lines := strings.Split(strings.TrimRight(diff, "\n"), "\n")
+	rows := make([]string, 0, len(lines))
+	for _, ln := range lines {
+		if ln == "" {
+			continue
+		}
+		rows = append(rows, "  "+clampPlain(sgrOnly(ln), max(width-2, 1)))
+	}
+	if maxLines > 0 && len(rows) > maxLines {
+		folded := len(rows) - (maxLines - 1)
+		rows = rows[:maxLines-1]
+		rows = append(rows, "  "+Dim(fmt.Sprintf(i18n.M.DiffFoldedFmt, folded)))
+	}
+	return rows
+}
+
+// sgrOnly keeps SGR (colour/style) escape sequences and drops every other
+// control sequence — OSC (clipboard pokes), cursor moves, non-SGR CSI — so an
+// externally rendered diff can colour the terminal without hijacking it.
+func sgrOnly(s string) string {
+	if !strings.ContainsRune(s, 0x1b) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] != 0x1b {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		if i+1 >= len(s) {
+			break
+		}
+		switch s[i+1] {
+		case '[': // CSI … final byte in 0x40–0x7e
+			j := i + 2
+			for j < len(s) && (s[j] < 0x40 || s[j] > 0x7e) {
+				j++
+			}
+			if j >= len(s) {
+				return b.String() // unterminated: drop the tail
+			}
+			if s[j] == 'm' {
+				b.WriteString(s[i : j+1])
+			}
+			i = j + 1
+		case ']': // OSC … BEL or ST
+			j := i + 2
+			for j < len(s) {
+				if s[j] == 0x07 {
+					j++
+					break
+				}
+				if s[j] == 0x1b && j+1 < len(s) && s[j+1] == '\\' {
+					j += 2
+					break
+				}
+				j++
+			}
+			i = j
+		default: // other escape: drop ESC and its introducer byte
+			i += 2
+		}
+	}
+	return b.String()
+}
+
 // diffBar draws one added/removed row on a full-width coloured background. The
 // bg is re-applied after every chroma reset — \033[0m would otherwise end the
 // bar mid-line — and padded to the bar width so it runs edge to edge.
 func diffBar(sign byte, code, path string, width int, bg, signFg string, lineNo, gw int) string {
 	gutter := Dim(lpad(strconv.Itoa(lineNo), gw))
 	barW := max(width-2-gw-1, 4)
-	code = clampPlain(code, barW-2)
 	if !colorOn() {
-		return "  " + gutter + " " + string(sign) + " " + code
+		return "  " + gutter + " " + string(sign) + " " + clampPlain(code, barW-2)
 	}
-	hl := reapplyBG(highlightCode(path, code), bg)
-	pad := max(barW-2-VisibleWidth(code), 0)
+	hl := reapplyBG(highlightClamped(code, path, barW-2), bg)
+	pad := max(barW-2-VisibleWidth(hl), 0)
 	return "  " + gutter + " " + bg + signFg + string(sign) + ansiReset + bg + " " + hl + strings.Repeat(" ", pad) + ansiReset
 }
 
@@ -153,7 +253,7 @@ func diffBar(sign byte, code, path string, width int, bg, signFg string, lineNo,
 // under the +/- rows' code column.
 func diffContext(code, path string, width, lineNo, gw int) string {
 	gutter := Dim(lpad(strconv.Itoa(lineNo), gw))
-	return "  " + gutter + "   " + highlightClamped(code, path, width-4-gw)
+	return "  " + gutter + "   " + highlightClamped(code, path, width-5-gw)
 }
 
 func gutterWidth(lines []string) int {
@@ -193,12 +293,19 @@ func atoi(s string) int {
 	return n
 }
 
+// highlightClamped highlights the whole line, then clamps it to w columns with
+// every escape sequence kept. Clamping first would cut a token in two — a line
+// ending inside an open string lexes the lone quote as an Error token, and the
+// light theme's Error background then paints over the diff bar's own colour.
 func highlightClamped(code, path string, w int) string {
-	c := clampPlain(code, w)
-	if !colorOn() {
-		return c
+	if w < 1 {
+		w = 1
 	}
-	return highlightCode(path, c)
+	code = ExpandTabs(code)
+	if !colorOn() {
+		return Truncate(code, w, "")
+	}
+	return Truncate(highlightCode(path, code), w, "")
 }
 
 func clampPlain(s string, w int) string {

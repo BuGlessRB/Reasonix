@@ -35,6 +35,7 @@ func (t *Transcript) Restore(msgs []HistoryMessage) {
 			}
 			call := *t.Items[at].Tool
 			call.Output = m.Content
+			call.OutputDiff = m.OutputDiff
 			if m.ToolFailed {
 				call.Err = m.Content
 			}

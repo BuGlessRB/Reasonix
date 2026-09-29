@@ -106,6 +106,29 @@ func TestActiveDiffChromaStyleFollowsCLITheme(t *testing.T) {
 	}
 }
 
+func TestHighlightClampedCarriesNoBackground(t *testing.T) {
+	previousTheme := activeTheme
+	previousProfile := activeColorProfile
+	defer func() {
+		activeTheme = previousTheme
+		activeColorProfile = previousProfile
+	}()
+	SetColorProfile(colorprofile.ANSI256)
+	activeTheme = cliLightTheme
+
+	// A clamped added line that ends inside an open string literal. Highlighting
+	// after clamping lexes the lone quote as an Error token, whose light-theme
+	// background would paint over the diff bar's own colour.
+	code := "\tfmt.Fprintln(os.Stderr, \"hello, this is a deliberately long added line\")"
+	got := highlightClamped(code, "main.go", 40)
+	if strings.Contains(got, "\x1b[48;") {
+		t.Fatalf("clamped line must carry no background: %q", got)
+	}
+	if w := VisibleWidth(got); w > 40 {
+		t.Fatalf("clamped line width = %d, want <= 40: %q", w, got)
+	}
+}
+
 func TestHighlightCodeUpdatesOnThemeSwitch(t *testing.T) {
 	previousTheme := activeTheme
 	previousProfile := activeColorProfile

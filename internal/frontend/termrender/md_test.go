@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -139,5 +140,109 @@ func TestRenderMarkdownHideRail(t *testing.T) {
 	}
 	if !strings.Contains(got, "code") {
 		t.Fatalf("hideRail render should keep the code:\n%q", got)
+	}
+}
+
+// TestRenderDiffFence proves a ```diff fence renders through the colourised
+// diff path (add/remove backgrounds) instead of the generic code rail once
+// [cli].diff_fences opts in.
+func TestRenderDiffFence(t *testing.T) {
+	defer func(prev colorprofile.Profile) { activeColorProfile = prev }(activeColorProfile)
+	activeColorProfile = colorprofile.ANSI256
+	defer enableDiffFences(t)()
+
+	r := NewMarkdownRenderer(80)
+	out := r.Render("```diff\n--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-old\n+new\n```\n")
+	if strings.Contains(out, "│ ") {
+		t.Fatalf("diff fence should not use the code rail:\n%s", out)
+	}
+	for _, want := range []string{bgDiffAdd, bgDiffDel} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("diff fence missing background %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "new") || !strings.Contains(out, "old") {
+		t.Fatalf("diff fence dropped content:\n%s", out)
+	}
+	if !strings.Contains(out, "x.go") {
+		t.Fatalf("diff fence header should name the file:\n%s", out)
+	}
+	if strings.Contains(out, "--- a/x.go") || strings.Contains(out, "+++ b/x.go") {
+		t.Fatalf("diff fence should drop the raw file-header pair:\n%s", out)
+	}
+}
+
+// enableDiffFences turns [cli].diff_fences on for a test and returns the
+// restore func.
+func enableDiffFences(t *testing.T) func() {
+	t.Helper()
+	prev := activeDiffFences
+	activeDiffFences = true
+	return func() { activeDiffFences = prev }
+}
+
+// TestRenderDiffFenceOffByDefault proves a ```diff fence stays on the plain
+// code rail when the opt-in is unset — the lossless default.
+func TestRenderDiffFenceOffByDefault(t *testing.T) {
+	defer func(prev bool) { activeDiffFences = prev }(activeDiffFences)
+	activeDiffFences = false
+
+	out := NewMarkdownRenderer(80).Render("```diff\n--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-old\n+new\n```\n")
+	if !strings.Contains(out, "│ ") {
+		t.Fatalf("default render should keep the code rail:\n%q", out)
+	}
+	if strings.Contains(out, bgDiffAdd) || strings.Contains(out, bgDiffDel) {
+		t.Fatalf("default render should not colourise the diff:\n%q", out)
+	}
+	for _, want := range []string{"-old", "+new"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("default render dropped %q:\n%q", want, out)
+		}
+	}
+}
+
+// TestRenderDiffFenceHeaderlessKeepsContent proves a fence with no "--- "/"+++ "
+// pair — a bare "@@ …" hunk, or just a pair of changed lines — falls back to the
+// plain rail instead of rendering as an empty block.
+func TestRenderDiffFenceHeaderlessKeepsContent(t *testing.T) {
+	defer enableDiffFences(t)()
+	for _, body := range []string{
+		"@@ -1,2 +1,2 @@\n ctx\n-old\n+new\n",
+		"-old\n+new\n",
+	} {
+		out := NewMarkdownRenderer(80).Render("```diff\n" + body + "```\n")
+		for _, want := range []string{"old", "new"} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("headerless diff fence %q dropped %q:\n%q", body, want, out)
+			}
+		}
+		if !strings.Contains(out, "│ ") {
+			t.Fatalf("headerless diff fence %q should fall back to the rail:\n%q", body, out)
+		}
+	}
+}
+
+// TestRenderDiffFenceMultiFile proves a git-style fence with several files gets
+// one path header per file, with the git preamble stripped from the rows.
+func TestRenderDiffFenceMultiFile(t *testing.T) {
+	defer func(prev colorprofile.Profile) { activeColorProfile = prev }(activeColorProfile)
+	activeColorProfile = colorprofile.ANSI256
+	defer enableDiffFences(t)()
+
+	r := NewMarkdownRenderer(80)
+	out := r.Render("```diff\n" +
+		"diff --git a/one.go b/one.go\nindex 111..222 100644\n--- a/one.go\n+++ b/one.go\n@@ -1 +1 @@\n-old\n+new\n" +
+		"diff --git a/two.go b/two.go\nindex 333..444 100644\n--- a/two.go\n+++ b/two.go\n@@ -1 +1 @@\n-gone\n+kept\n" +
+		"```\n")
+	if n := strings.Count(out, "one.go"); n != 1 {
+		t.Fatalf("want one header naming one.go, got %d occurrences:\n%s", n, out)
+	}
+	if n := strings.Count(out, "two.go"); n != 1 {
+		t.Fatalf("want one header naming two.go, got %d occurrences:\n%s", n, out)
+	}
+	for _, leak := range []string{"diff --git", "index 111", "index 333"} {
+		if strings.Contains(out, leak) {
+			t.Fatalf("git preamble %q leaked into the rows:\n%s", leak, out)
+		}
 	}
 }

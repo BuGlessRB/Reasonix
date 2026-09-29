@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { t } from "../../i18n";
 import { reason } from "../../i18n/kernel";
 import type { RewindPlan, RewindResult } from "../../port/port";
@@ -27,7 +27,15 @@ export function parseDiff(diff: string): Row[] {
   let newNo = 0;
   let lastNew = 0;
   let sawHunk = false;
-  for (const raw of diff.split("\n")) {
+  // A trailing newline is the diff's terminator, not an empty row: splitting on
+  // it left a blank numbered row under every card.
+  const lines = diff.replace(/\n+$/, "").split("\n");
+  // A `git show` / `git log -p` result leads with a commit header and its
+  // indented message; the rows are the diff's, so start at the first file.
+  const from = /^commit \S/.test(lines[0] ?? "")
+    ? Math.max(0, lines.findIndex((l) => l.startsWith("diff --git ") || l.startsWith("--- ")))
+    : 0;
+  for (const raw of lines.slice(from)) {
     const at = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
     if (at) {
       const start = Number(at[2]);
@@ -65,8 +73,108 @@ export function parseDiff(diff: string): Row[] {
   return out;
 }
 
+// pathFromDiff reads the file a diff names, for a card that has no tool args to
+// take it from: the first file's "+++ b/…" (falling back to "--- a/…" for a
+// deletion, whose new side is /dev/null).
+export function pathFromDiff(diff: string): string | undefined {
+  let oldPath: string | undefined;
+  for (const line of diff.split("\n")) {
+    const plus = /^\+\+\+ (?:b\/)?(\S+)/.exec(line);
+    if (plus && plus[1] !== "/dev/null") return plus[1];
+    const minus = /^--- (?:a\/)?(\S+)/.exec(line);
+    if (minus && minus[1] !== "/dev/null") oldPath ??= minus[1];
+  }
+  return oldPath;
+}
+
+// One file's worth of a diff: the name it carries (when it has a file header),
+// its +/- tally, and its rows. Mirrors the CLI's per-file sections
+// (termrender/md.go), so a multi-file diff names every file, not just the first.
+export type Section = { path?: string; added: number; removed: number; rows: Row[] };
+
+// splitDiffSections cuts a diff into per-file sections by the same rule the CLI
+// uses: a git-style diff splits on "diff --git ", anything else on the
+// "--- "/"+++ " pair — with the lookahead so a removed "-- x" line (rendered
+// "--- x") cannot start a section on its own.
+export function splitDiffSections(diff: string): string[] {
+  const lines = diff.replace(/\n+$/, "").split("\n");
+  const gitStyle = lines.some((l) => l.startsWith("diff --git "));
+  const sections: string[] = [];
+  let cur: string[] = [];
+  lines.forEach((ln, i) => {
+    if (cur.length > 0 && diffSectionStart(lines, i, gitStyle)) {
+      sections.push(cur.join("\n"));
+      cur = [];
+    }
+    cur.push(ln);
+  });
+  if (cur.length > 0) sections.push(cur.join("\n"));
+  return sections;
+}
+
+function diffSectionStart(lines: string[], i: number, gitStyle: boolean): boolean {
+  if (gitStyle) return lines[i].startsWith("diff --git ");
+  return lines[i].startsWith("--- ") && i + 1 < lines.length && lines[i + 1].startsWith("+++ ");
+}
+
+// sectionPath names a section's file from its "+++ b/…" (falling back to
+// "--- a/…" for a deletion, whose new side is /dev/null). Undefined for a
+// section with no file header — a bare "@@ …" hunk, or a `git show` preamble.
+function sectionPath(section: string): string | undefined {
+  let oldPath: string | undefined;
+  for (const line of section.split("\n")) {
+    const plus = /^\+\+\+ (?:b\/)?(\S+)/.exec(line);
+    if (plus && plus[1] !== "/dev/null") return plus[1];
+    const minus = /^--- (?:a\/)?(\S+)/.exec(line);
+    if (minus && minus[1] !== "/dev/null") oldPath ??= minus[1];
+  }
+  return oldPath;
+}
+
+// hasDiffBody reports whether a section carries diff content (a "@@ …" hunk or
+// an added/removed line). A `git show` / `git log -p` commit header does not, so
+// its section is dropped rather than parsed as context rows.
+function hasDiffBody(section: string): boolean {
+  return section.split("\n").some((l) => l.startsWith("@@ ") || l.startsWith("+") || l.startsWith("-"));
+}
+
+// countSection tallies a section's added/removed rows for its header stat, using
+// the same positional header-pair drop as parseDiff.
+function countSection(section: string): { added: number; removed: number } {
+  const lines = section.split("\n");
+  if (lines.length >= 2 && lines[0].startsWith("--- ") && lines[1].startsWith("+++ ")) lines.splice(0, 2);
+  let added = 0;
+  let removed = 0;
+  for (const ln of lines) {
+    if (ln.startsWith("+++ ") || ln.startsWith("--- ")) continue;
+    if (ln.startsWith("+")) added++;
+    else if (ln.startsWith("-")) removed++;
+  }
+  return { added, removed };
+}
+
+// parseDiffSections splits a diff into files, each with its own rows and header
+// facts. A section that is only a commit preamble (no file header, no diff
+// content) is dropped.
+export function parseDiffSections(diff: string): Section[] {
+  const out: Section[] = [];
+  for (const sec of splitDiffSections(diff)) {
+    const path = sectionPath(sec);
+    if (path === undefined && !hasDiffBody(sec)) continue;
+    out.push({ path, ...countSection(sec), rows: parseDiff(sec) });
+  }
+  return out;
+}
+
 export function DiffView({ diff, path, named, onPrepare, onCommit }: Props) {
-  const lines = parseDiff(diff);
+  const sections = parseDiffSections(diff);
+  // A multi-file diff names each file in its own body header, so the headline
+  // would only repeat the first; a single-file diff has no body header, so the
+  // headline stays its only name.
+  const multi = sections.length > 1;
+  // A host-tagged shell diff carries no tool args to name its file, so read the
+  // first name off the diff itself when the caller passes no path.
+  const shown = path ?? pathFromDiff(diff);
   const [plan, setPlan] = useState<RewindPlan | null>(null);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<"" | "reverted" | "kept" | "refused">("");
@@ -120,7 +228,7 @@ export function DiffView({ diff, path, named, onPrepare, onCommit }: Props) {
         {/* The card's own headline already names the file; saying it again
             here truncates one fact twice. Where there is no headline — the
             change preview — this row is the only thing that names it. */}
-        <span title={path ?? undefined}>{named ? "" : (path ?? t("改动"))}</span>
+        <span title={shown ?? undefined}>{named ? "" : (shown ?? t("改动"))}</span>
         {outcome === "reverted" ? (
           <span className="ro">{t("已还原")}</span>
         ) : outcome === "kept" ? (
@@ -170,20 +278,33 @@ export function DiffView({ diff, path, named, onPrepare, onCommit }: Props) {
       {/* 长行横滚在这一层，不在整块上：行号列跟着滚出去，读者就找不到自己在哪
           一行了。被改的那一段常常正好在行尾。 */}
       <div className="dlwrap">
-        {lines.map((l, i) =>
-          "skipped" in l ? (
-            <div className="dhunk" key={i}>
-              <span>⋯</span>
-              <span>{t("跳过 {n} 行", { n: l.skipped })}</span>
-            </div>
-          ) : (
-            <div className="dl" key={i} data-d={l.sign === " " ? undefined : l.sign}>
-              <span className="no">{l.no ?? ""}</span>
-              <span className="sg">{l.sign}</span>
-              <span className="cd">{l.text}</span>
-            </div>
-          ),
-        )}
+        {sections.map((sec, si) => (
+          <Fragment key={si}>
+            {multi && sec.path !== undefined && (
+              <div className="dfile">
+                <span className="p" title={sec.path}>{sec.path}</span>
+                <span className="st">
+                  {sec.added > 0 && <span className="add">+{sec.added}</span>}
+                  {sec.removed > 0 && <span className="del">-{sec.removed}</span>}
+                </span>
+              </div>
+            )}
+            {sec.rows.map((l, i) =>
+              "skipped" in l ? (
+                <div className="dhunk" key={i}>
+                  <span>⋯</span>
+                  <span>{t("跳过 {n} 行", { n: l.skipped })}</span>
+                </div>
+              ) : (
+                <div className="dl" key={i} data-d={l.sign === " " ? undefined : l.sign}>
+                  <span className="no">{l.no ?? ""}</span>
+                  <span className="sg">{l.sign}</span>
+                  <span className="cd">{l.text}</span>
+                </div>
+              ),
+            )}
+          </Fragment>
+        ))}
       </div>
     </div>
   );

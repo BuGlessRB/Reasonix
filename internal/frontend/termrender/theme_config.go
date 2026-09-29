@@ -14,9 +14,13 @@ func ConfigureThemeFromConfig() {
 	if cfg, err := config.Load(); err == nil {
 		configureThemeWithStyle(cfg.UITheme(), cfg.UIThemeStyle())
 		cursorShape = cfg.UICursorShape()
+		configureDiffFormatter(cfg)
+		configureDiffFences(cfg)
 	} else {
 		ConfigureTheme("auto")
 		cursorShape = "bar"
+		configureDiffFormatter(nil)
+		configureDiffFences(nil)
 	}
 }
 

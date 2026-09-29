@@ -367,13 +367,13 @@ type Options struct {
 	// means no transient injection because the stable language policy follows the
 	// current user turn.
 	ResponseLanguage string
-	// ReasoningLanguage controls visible reasoning language preference. Empty/auto
-	// means no transient injection because the stable language policy already
-	// follows the conversation language.
+	// ReasoningLanguage controls the visible reasoning language; empty/auto follows the conversation.
 	ReasoningLanguage string
 	// DisableColdResumePrune suppresses the cold-resume cache-state notice.
 	// Resume never rewrites history regardless of this flag.
 	DisableColdResumePrune bool
+	// EmbeddedDiffDetection marks a shell result whose whole output is a unified diff.
+	EmbeddedDiffDetection bool
 	// Shell is the interpreter user-invoked "!" commands run under, so /shell
 	// matches the agent's configured [tools.shell] choice. Zero value = auto.
 	Shell sandbox.Shell

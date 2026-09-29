@@ -224,6 +224,19 @@ func TestRestoreRebuildsFromTheRecord(t *testing.T) {
 	}
 }
 
+// A result the server re-derived as a whole diff keeps the tag on the rebuilt
+// call, so a reopened session renders the same diff the live one did.
+func TestRestoreKeepsTheWholeDiffTag(t *testing.T) {
+	tr := &Transcript{}
+	tr.Restore([]HistoryMessage{
+		{Role: "assistant", ToolCalls: []HistoryToolCall{{ID: "c1", Name: "bash", Arguments: `{"command":"git diff"}`}}},
+		{Role: "tool", ToolCallID: "c1", Content: "diff --git a/x b/x\n", OutputDiff: true},
+	})
+	if call := tr.Items[0].Tool; !call.OutputDiff {
+		t.Fatalf("restore dropped the whole-diff tag: %+v", call)
+	}
+}
+
 // A follow-up that waited takes its seat where its own turn began; guidance
 // steered into a turn is not what a turn starts on; a turn another client
 // started is drawn from the kernel's text, once.

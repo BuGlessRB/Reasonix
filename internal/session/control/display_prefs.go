@@ -11,11 +11,24 @@ type displayPrefs struct {
 	// policy of the current user turn.
 	responseLanguage  string
 	reasoningLanguage string
+	// embeddedDiffDetection is resolved once at build from the config the
+	// session was built with; a frontend rebuilding a transcript reads it
+	// rather than reloading config. See Options.EmbeddedDiffDetection.
+	embeddedDiffDetection bool
 }
 
 func displayPrefsFrom(opts Options) displayPrefs {
 	return displayPrefs{
-		responseLanguage:  config.NormalizeLanguage(opts.ResponseLanguage),
-		reasoningLanguage: config.NormalizeReasoningLanguage(opts.ReasoningLanguage),
+		responseLanguage:      config.NormalizeLanguage(opts.ResponseLanguage),
+		reasoningLanguage:     config.NormalizeReasoningLanguage(opts.ReasoningLanguage),
+		embeddedDiffDetection: opts.EmbeddedDiffDetection,
 	}
+}
+
+// EmbeddedDiffDetectionEnabled reports whether this session marks a shell
+// result whose whole output is a unified diff. It is the value the session was
+// built with, so a /history rebuild renders what the live sink did without
+// reloading (and possibly rewriting) config.
+func (c *Controller) EmbeddedDiffDetectionEnabled() bool {
+	return c.display.embeddedDiffDetection
 }

@@ -91,14 +91,11 @@ func (m *model) frame() tea.View {
 
 func (m *model) liveLines() []string { return m.liveLinesRail(m.scrollbarHidden()) }
 
-// liveLinesRail draws what is still changing at the width it will occupy:
-// full screen that is the transcript's, beside the scrollbar column, so a row
-// is not wrapped once more when it joins the transcript.
+// liveLinesRail draws what is still changing at the width it will occupy: the
+// transcript's beside the scrollbar column full screen, and the live frame's
+// otherwise, so a row is not wrapped once more when it joins the transcript.
 func (m *model) liveLinesRail(hideRail bool) []string {
-	width := m.width
-	if m.scr != nil {
-		width = m.contentWidth()
-	}
+	width := m.contentWidth()
 	var out []string
 	for i := range m.tr.Items {
 		it := &m.tr.Items[i]
