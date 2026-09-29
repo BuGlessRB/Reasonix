@@ -135,6 +135,32 @@ func TestSubscribeInitialNoticesDoesNotCrossSessionReset(t *testing.T) {
 	}
 }
 
+func TestSubscribeInitialNoticesOnlyReplaysOncePerSession(t *testing.T) {
+	b := NewBroadcaster()
+	b.Emit(event.Event{Kind: event.Notice, Text: "startup"})
+	first, stopFirst := b.SubscribeInitialNotices()
+	if got := <-first; kindOf(t, got.Data) != "notice" {
+		t.Fatalf("first window = %s, want startup notice", got.Data)
+	}
+	stopFirst()
+
+	b.Emit(event.Event{Kind: event.Notice, Text: "later"})
+	second, stopSecond := b.SubscribeInitialNotices()
+	b.Emit(event.Event{Kind: event.TurnDone})
+	if got := <-second; kindOf(t, got.Data) != "turn_done" {
+		t.Fatalf("second window replayed old notice: %s", got.Data)
+	}
+	stopSecond()
+
+	b.ResetSession()
+	b.Emit(event.Event{Kind: event.Notice, Text: "new session"})
+	third, stopThird := b.SubscribeInitialNotices()
+	defer stopThird()
+	if got := <-third; kindOf(t, got.Data) != "notice" || !strings.Contains(string(got.Data), "new session") {
+		t.Fatalf("new session first window = %s, want new notice", got.Data)
+	}
+}
+
 // A gap the log can no longer close is announced rather than papered over: the
 // client is told where the stream it can trust starts, so it knows to rebuild
 // from the transcript instead of rendering a hole.

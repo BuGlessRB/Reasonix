@@ -23,8 +23,9 @@ type Broadcaster struct {
 	// The transport's, not the session's: numbering outlives /new and /resume, so
 	// resuming across one is told to rebuild rather than handed another
 	// conversation's frames under numbers it already has.
-	seq    int64
-	replay replayLog
+	seq                    int64
+	replay                 replayLog
+	initialNoticesReplayed bool
 }
 
 // NewBroadcaster returns an empty Broadcaster ready to accept subscribers.
@@ -80,6 +81,7 @@ func (b *Broadcaster) ResetSession() {
 	b.mu.Lock()
 	b.ledger = pricing.NewLedger()
 	b.replay.reset()
+	b.initialNoticesReplayed = false
 	b.mu.Unlock()
 }
 
@@ -168,9 +170,10 @@ func (b *Broadcaster) SubscribeFrom(after int64) (<-chan Frame, func()) {
 	return b.subscribeFrom(after, false)
 }
 
-// SubscribeInitialNotices attaches a first-time window and delivers notices
-// emitted before it connected. They are unnumbered copies: skipped non-notice
-// history must not look like a gap that prompts the client to replay it.
+// SubscribeInitialNotices attaches a window without a resume cursor. Only the
+// first such window for a session receives notices emitted before it connected.
+// They are unnumbered copies: skipped non-notice history must not look like a
+// gap that prompts the client to replay it.
 func (b *Broadcaster) SubscribeInitialNotices() (<-chan Frame, func()) {
 	return b.subscribeFrom(0, true)
 }
@@ -178,7 +181,8 @@ func (b *Broadcaster) SubscribeInitialNotices() (<-chan Frame, func()) {
 func (b *Broadcaster) subscribeFrom(after int64, initialNotices bool) (<-chan Frame, func()) {
 	s := newSubscriber()
 	b.mu.Lock()
-	if initialNotices {
+	if initialNotices && !b.initialNoticesReplayed {
+		b.initialNoticesReplayed = true
 		for _, f := range b.replay.frames {
 			if f.kind != event.Notice {
 				continue

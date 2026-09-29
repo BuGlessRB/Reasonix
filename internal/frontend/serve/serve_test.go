@@ -1041,6 +1041,57 @@ func TestServeEventsFirstWindowReceivesStartupNotice(t *testing.T) {
 	t.Fatalf("first window missed startup notice: %v", scanner.Err())
 }
 
+func TestServeEventsSecondWindowWithoutCursorDoesNotReplayStartupNotice(t *testing.T) {
+	bc := NewBroadcaster()
+	ctrl := control.New(control.Options{Sink: bc})
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
+	defer srv.Close()
+
+	bc.Emit(event.Event{Kind: event.Notice, Code: "startup-test", Text: "startup warning"})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	firstReq, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := http.DefaultClient.Do(firstReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstScanner := bufio.NewScanner(first.Body)
+	for firstScanner.Scan() {
+		if strings.Contains(firstScanner.Text(), `"code":"startup-test"`) {
+			break
+		}
+	}
+	if err := firstScanner.Err(); err != nil {
+		first.Body.Close()
+		t.Fatal(err)
+	}
+	first.Body.Close()
+
+	secondReq, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := http.DefaultClient.Do(secondReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Body.Close()
+	bc.Emit(event.Event{Kind: event.TurnDone})
+	secondScanner := bufio.NewScanner(second.Body)
+	for secondScanner.Scan() {
+		if line := secondScanner.Text(); strings.HasPrefix(line, "data: ") {
+			if !strings.Contains(line, `"kind":"turn_done"`) {
+				t.Fatalf("second window replayed old notice: %s", line)
+			}
+			return
+		}
+	}
+	t.Fatalf("second window missed live event: %v", secondScanner.Err())
+}
+
 func TestServeEventsExplicitZeroCursorDoesNotReplayNotice(t *testing.T) {
 	bc := NewBroadcaster()
 	ctrl := control.New(control.Options{Sink: bc})
