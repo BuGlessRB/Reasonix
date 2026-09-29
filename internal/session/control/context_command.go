@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"reasonix/internal/contract/event"
 	"reasonix/internal/runtime/agent"
 )
 
@@ -16,6 +17,13 @@ func (c *Controller) ContextReport() (summary, detail string) {
 		return "context: unavailable", ""
 	}
 	return renderContextReport(c.executor.ContextReport())
+}
+
+// reportContext answers /context: the summary line, with the breakdown as its
+// detail under a code a frontend can open it by.
+func (c *Controller) reportContext() {
+	summary, detail := c.ContextReport()
+	c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeContextReport, Text: summary, Detail: detail})
 }
 
 // ContextBreakdown says where the prompt's tokens went. The gauge answers how

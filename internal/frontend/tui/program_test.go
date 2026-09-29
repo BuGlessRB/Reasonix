@@ -31,6 +31,15 @@ func (k *recordingKernel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	k.mu.Unlock()
 	switch r.URL.Path {
 	case "/complete":
+		if r.URL.Query().Get("line") == "/" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"kind": "slash", "from": 0, "to": 1, "items": []map[string]any{
+				{"label": "/compact", "insert": "/compact ", "hint": "fold the conversation", "kind": "builtin"},
+				{"label": "/deploy", "insert": "/deploy ", "hint": "ship it", "kind": "command"},
+				{"label": "/review", "insert": "/review ", "hint": "review the diff", "kind": "subagent"},
+				{"label": "/mcp__docs__search", "insert": "/mcp__docs__search ", "kind": "prompt"},
+			}})
+			return
+		}
 		// "看 @no": the token starts after one CJK rune and a space, two UTF-16 units.
 		_ = json.NewEncoder(w).Encode(map[string]any{"kind": "ref", "from": 2, "to": 5,
 			"items": []map[string]any{{"label": "notes.md", "insert": "@notes.md "}, {"label": "notes/", "insert": "@notes/"}}})

@@ -218,10 +218,10 @@ type Messages struct {
 	CompactionUnit    string // the noun counted, e.g. "messages"
 	CompactionAuto    string // trigger label: reached the window threshold
 	CompactionManual  string // trigger label: user ran /compact
-	// quality line: how many of the fold's changes the digest carried, and
-	// whether it took a second summarizer call to get there.
-	CompactionChangesKept string
-	CompactionBackstopped string
+	// tokens before → after the fold; changes the digest kept; a second summarizer call
+	CompactionEstimatedTokens string
+	CompactionChangesKept     string
+	CompactionBackstopped     string
 
 	// shown when a turn ends owing requirements and the host runs them itself
 	ReadinessContinuing string

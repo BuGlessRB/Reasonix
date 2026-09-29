@@ -223,6 +223,10 @@ func (m *model) send(steer bool) tea.Cmd {
 		return nil
 	}
 	switch {
+	case isHelp(display):
+		m.composer.Reset()
+		m.tr.AddEcho(display)
+		return tea.Batch(m.commit(), m.showHelp())
 	case display == "/mouse" && m.scr != nil:
 		m.composer.Reset()
 		return m.toggleMouse()

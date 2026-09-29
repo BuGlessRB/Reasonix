@@ -273,7 +273,7 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 	case trimmed == "/compact" || strings.HasPrefix(trimmed, "/compact "):
 		go c.compactAndReport(strings.TrimSpace(strings.TrimPrefix(trimmed, "/compact")))
 	case trimmed == "/context":
-		c.noticeDetail(c.ContextReport())
+		c.reportContext()
 	case trimmed == "/new":
 		c.runSessionVerb(c.NewSession, "new session", "new session failed: ")
 	case trimmed == "/clear":

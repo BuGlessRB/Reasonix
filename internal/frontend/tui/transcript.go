@@ -58,9 +58,10 @@ type Item struct {
 	Verdict  string
 
 	// ItemNotice. Count folds a repeated notice into the row already there.
-	Level string
-	Code  string
-	Count int
+	Level  string
+	Code   string
+	Count  int
+	Detail string
 
 	Compaction *eventwire.Compaction
 	Receipt    *eventwire.CompletionReceipt
@@ -125,6 +126,12 @@ func (t *Transcript) AddUser(text string) int {
 	t.Items = append(t.Items, Item{ID: id, Kind: ItemUser, Text: text})
 	t.awaiting = append(t.awaiting, id)
 	return id
+}
+
+// AddEcho records a command this screen answered itself: it is shown as typed
+// and no turn will start on it.
+func (t *Transcript) AddEcho(text string) {
+	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemUser, Text: text})
 }
 
 // AddQueued records input handed to a running turn. It stays pending until the
@@ -465,7 +472,7 @@ func (t *Transcript) foldNotice(ev eventwire.Event) {
 			return
 		}
 	}
-	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemNotice, Level: level, Code: ev.Code, Text: ev.Text})
+	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemNotice, Level: level, Code: ev.Code, Text: ev.Text, Detail: ev.Detail})
 }
 
 func (t *Transcript) sealSays() {

@@ -64,7 +64,7 @@ func renderItem(it *Item, width, shown int, hideRail bool) string {
 	case ItemNotice:
 		return renderNotice(it)
 	case ItemCompaction:
-		return termrender.Dim("  ⟲ " + i18n.M.CompactionTitle)
+		return renderCompaction(it, width)
 	case ItemReceipt:
 		return renderReceipt(it.Receipt, width)
 	case ItemUsage:
@@ -216,6 +216,37 @@ func renderUsage(u *eventwire.Usage, width int) string {
 	return "\n" + rule + "\n" + footerIndent + footerLabel(i18n.M.ChatTurnReceiptLabel) + "  " + strings.Join(groups, footerLabel(" · "))
 }
 
+// renderCompaction is 1.x's card for a finished fold: what it folded, the
+// digest it wrote, and the estimated size before and after. A fold that wrote
+// no digest folded nothing, and the notice beside it says why.
+func renderCompaction(it *Item, width int) string {
+	c := it.Compaction
+	if !it.Done {
+		return termrender.Dim("  ⋯ " + i18n.M.CompactionWorking)
+	}
+	if c == nil || strings.TrimSpace(c.Summary) == "" {
+		return ""
+	}
+	trigger := c.Trigger
+	switch c.Trigger {
+	case "auto":
+		trigger = i18n.M.CompactionAuto
+	case "manual":
+		trigger = i18n.M.CompactionManual
+	}
+	lines := []string{termrender.Accent(fmt.Sprintf("◆ %s · %d %s · %s", i18n.M.CompactionTitle, c.Messages, i18n.M.CompactionUnit, trigger))}
+	for ln := range strings.SplitSeq(strings.TrimRight(c.Summary, "\n"), "\n") {
+		for row := range strings.SplitSeq(ansi.Wrap(ln, max(width-6, 10), ""), "\n") {
+			lines = append(lines, termrender.Dim("  │ "+row))
+		}
+	}
+	if c.SourceTokens > 0 || c.ProjectionTokens > 0 {
+		lines = append(lines, termrender.Dim(fmt.Sprintf("  │ %s: ~%s → ~%s", i18n.M.CompactionEstimatedTokens,
+			shortTokens(c.SourceTokens), shortTokens(c.ProjectionTokens))))
+	}
+	return "\n" + strings.Join(lines, "\n")
+}
+
 func renderNotice(it *Item) string {
 	mark := termrender.Dim("  · ")
 	switch it.Level {
@@ -227,6 +258,9 @@ func renderNotice(it *Item) string {
 	text := it.Text
 	if it.Count > 1 {
 		text += termrender.Dim(fmt.Sprintf(" (×%d)", it.Count))
+	}
+	if it.Code == event.NoticeCodeContextReport && it.Detail != "" {
+		text += "\n" + indent(strings.TrimRight(it.Detail, "\n"), "    ")
 	}
 	return mark + text
 }
