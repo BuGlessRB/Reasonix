@@ -124,24 +124,9 @@ visible without covering double-width CJK characters; use `block` or
 TUI transcript after each model request. Accounting and live status updates
 remain active. The default is `true`.
 
-`[cli].diff_formatter` names an optional external command that formats a diff
-for the CLI/TUI to render — a fenced ` ```diff ` / ` ```patch ` block, a writer
-tool's diff card, and a shell result whose whole output is a diff (see
-`[agent].embedded_diff_detection` below).
-
-It is an argv line run without a shell, e.g. `delta --color-only --paging=never`.
-
-The whole diff is written to the command's stdin; its stdout is re-emitted with
-non-SGR control sequences stripped, so the formatter's colours survive but a
-cursor or clipboard escape cannot.
-
-In the full-screen TUI it runs off the render path: the built-in rows are drawn
-first and replaced once its output is ready, so a slow formatter cannot freeze
-the UI.
-
-On any failure, timeout, or empty output the built-in renderer is kept. Like
-`[cli].update_channel` it is user/global only — a project-local `reasonix.toml`
-cannot set it.
+The diff-rendering options (`[cli].diff_fences`, `[cli].diff_formatter`,
+`[agent].embedded_diff_detection`) are documented in the
+[CLI reference](./CLI.md#diff-rendering).
 
 ### Custom provider `api_key_env` names
 

@@ -256,9 +256,13 @@ type Tool struct {
 	Images      []string
 	Err         string // ToolResult: non-empty when the call failed or was blocked
 	RefusalCode string // ToolResult: dotted identity of a host refusal; Err is only its wording
-	ReadOnly    bool
-	Bound       OutputBound // ToolResult: how Output was fitted into context
-	DurationMs  int64       // ToolResult: wall-clock execution time in milliseconds
+	// OutputDiff marks a ToolResult whose whole output is a unified diff (e.g. a
+	// shell running `git diff`), set only when [agent].embedded_diff_detection is
+	// on. A frontend renders it as a diff instead of flat text.
+	OutputDiff bool
+	ReadOnly   bool
+	Bound      OutputBound // ToolResult: how Output was fitted into context
+	DurationMs int64       // ToolResult: wall-clock execution time in milliseconds
 	// StartedAt/EndedAt are unix-millisecond execution bounds (ToolResult).
 	// Zero when the call never ran (dependency-skipped, cancelled, synthetic).
 	StartedAt int64

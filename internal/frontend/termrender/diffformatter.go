@@ -1,8 +1,9 @@
 // This file implements the optional external diff formatter: a user-global
-// command (e.g. delta) that formats a diff before the CLI emits it — both a
-// fenced ```diff / ```patch block in the conversation answer stream and a writer
-// tool's diff card in the transcript. Configured via [cli].diff_formatter as an
-// argv line and exec'd directly — no shell.
+// command (e.g. delta) that formats a diff before the CLI emits it — a fenced
+// ```diff / ```patch block in the conversation answer stream, a writer tool's
+// diff card in the transcript, and a shell result whose whole output is a diff
+// (DiffText). Configured via [cli].diff_formatter as an argv line and exec'd
+// directly — no shell.
 package termrender
 
 import (

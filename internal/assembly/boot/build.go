@@ -159,6 +159,9 @@ func (b *builder) load() error {
 	// emit from their own goroutines. The goal tee and the coalescer wrap it
 	// here, before the extension hub captures it, so agents emit through both.
 	b.sink = control.NewGoalUsageTee(event.Coalesce(quotedSink(cfg, opts), event.DefaultStreamDeltaWindow))
+	// Tag a shell result whose whole output is a diff, once, before the
+	// extension hub captures the sink — every emitter shares this one.
+	b.sink = event.MarkEmbeddedDiffs(b.sink, cfg.EmbeddedDiffDetectionEnabled())
 
 	b.proxy = cfg.NetworkProxySpec()
 	if b.ext, err = startExtensions(b.ctx, opts, b.roots, b.root, b.owner, b.sink); err != nil {
@@ -459,6 +462,7 @@ func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, 
 		ResponseLanguage:       cfg.ResponseLanguage(),
 		ReasoningLanguage:      cfg.ReasoningLanguage(),
 		DisableColdResumePrune: !cfg.ColdResumePruneEnabled(),
+		EmbeddedDiffDetection:  cfg.EmbeddedDiffDetectionEnabled(),
 		Shell:                  b.shell,
 		ApprovalTimeout:        opts.ApprovalTimeout,
 		RuntimeProfile:         b.model.profile,

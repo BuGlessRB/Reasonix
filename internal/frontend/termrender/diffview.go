@@ -253,7 +253,7 @@ func diffBar(sign byte, code, path string, width int, bg, signFg string, lineNo,
 // under the +/- rows' code column.
 func diffContext(code, path string, width, lineNo, gw int) string {
 	gutter := Dim(lpad(strconv.Itoa(lineNo), gw))
-	return "  " + gutter + "   " + highlightClamped(code, path, width-4-gw)
+	return "  " + gutter + "   " + highlightClamped(code, path, width-5-gw)
 }
 
 func gutterWidth(lines []string) int {

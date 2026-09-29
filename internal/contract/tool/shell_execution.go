@@ -92,6 +92,12 @@ const (
 	ShellNamePwsh       = "pwsh"
 )
 
+// IsShellTool reports whether name is the host's shell tool — the tool whose
+// results carry a ShellExecution. The tool is registered as ShellNameBash on
+// every platform; the other ShellName* values name the shell it runs, not the
+// tool.
+func IsShellTool(name string) bool { return name == ShellNameBash }
+
 // PowerShell version labels.
 const (
 	ShellVersionPS51 = "5.1"

@@ -270,13 +270,12 @@ type CLIConfig struct {
 	// and the canonical renderer intentionally drops this field.
 	UpdateChannel string `toml:"update_channel"`
 	// DiffFormatter is an optional external command (argv, no shell) that formats
-	// a fenced ```diff/```patch block and a writer diff card, e.g. "delta". Empty
-	// uses the built-in renderer. User-global only; ./reasonix.toml cannot set it.
+	// a diff fence, card, or diff-only shell result, e.g. "delta"; empty uses the
+	// built-in renderer. User-global only; ./reasonix.toml cannot set it.
 	DiffFormatter string `toml:"diff_formatter"`
-	// DiffFences opts into rendering a fenced ```diff/```patch block through the
-	// colourised diff renderer instead of the plain code rail. Default false:
-	// a model writes headerless diff fences often, and the plain rail is the
-	// lossless default. User-global only; ./reasonix.toml cannot set it.
+	// DiffFences opts into rendering a fenced diff/patch block through the
+	// colourised diff renderer instead of the plain code rail. Default false;
+	// user-global only, so ./reasonix.toml cannot set it.
 	DiffFences bool `toml:"diff_fences"`
 }
 
@@ -1152,6 +1151,10 @@ type AgentConfig struct {
 	// ColdResumePrune elides stale tool results when a session reopens past the
 	// provider cache window. nil = default enabled.
 	ColdResumePrune *bool `toml:"cold_resume_prune"`
+	// EmbeddedDiffDetection opts into marking a shell result whose whole output
+	// is a unified diff, so a frontend renders it as a diff instead of flat text.
+	// nil = default off.
+	EmbeddedDiffDetection *bool `toml:"embedded_diff_detection"`
 	// PlanModeReadOnlyCommands is retained for old config/session round trips. Main
 	// Plan bash calls now use the ordinary Permissions classifier and Sandbox.
 	PlanModeReadOnlyCommands []string `toml:"plan_mode_read_only_commands"`

@@ -201,6 +201,27 @@ func TestRenderDiffFenceOffByDefault(t *testing.T) {
 	}
 }
 
+// TestRenderDiffFenceHeaderlessKeepsContent proves a fence with no "--- "/"+++ "
+// pair — a bare "@@ …" hunk, or just a pair of changed lines — falls back to the
+// plain rail instead of rendering as an empty block.
+func TestRenderDiffFenceHeaderlessKeepsContent(t *testing.T) {
+	defer enableDiffFences(t)()
+	for _, body := range []string{
+		"@@ -1,2 +1,2 @@\n ctx\n-old\n+new\n",
+		"-old\n+new\n",
+	} {
+		out := NewMarkdownRenderer(80).Render("```diff\n" + body + "```\n")
+		for _, want := range []string{"old", "new"} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("headerless diff fence %q dropped %q:\n%q", body, want, out)
+			}
+		}
+		if !strings.Contains(out, "│ ") {
+			t.Fatalf("headerless diff fence %q should fall back to the rail:\n%q", body, out)
+		}
+	}
+}
+
 // TestRenderDiffFenceMultiFile proves a git-style fence with several files gets
 // one path header per file, with the git preamble stripped from the rows.
 func TestRenderDiffFenceMultiFile(t *testing.T) {

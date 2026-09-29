@@ -295,6 +295,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statusTickMsg:
 		return m, tea.Batch(m.fetchStatus(), tickStatus())
 	case diffFormattedMsg:
+		m.invalidateDiffBlocks()
 		return m, m.commit()
 	case actionMsg:
 		if msg.err != nil {
@@ -451,7 +452,7 @@ func (m *model) settledChunk(it *Item) (settledPrint, bool) {
 	row := *it
 	p := settledPrint{render: func(w int, hideRail bool) string {
 		return withThought(&row, shown, w, renderSayPart(row.Text[shown:end], shown == 0, w, hideRail))
-	}}
+	}, diff: drawsThroughDiffFormatter(it)}
 	if m.scr != nil && shown == 0 && row.Reasoning != "" {
 		row.Fold = foldShut
 		p.row = &row

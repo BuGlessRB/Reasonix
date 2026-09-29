@@ -211,6 +211,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# plan_mode_read_only_commands = [\"gh issue view\"]   # legacy compatibility only; Plan bash uses Permissions\n")
 	}
+	renderEmbeddedDiffDetection(&b, c)
 	renderAgentDelegation(&b, c)
 	if c.Agent.SubagentEffort != "" {
 		fmt.Fprintf(&b, "subagent_effort = %q   # default effort for subagent entry points\n", c.Agent.SubagentEffort)
@@ -348,10 +349,8 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 
 	renderStorage(&b, c, scope)
 
-	// [secrets] is user/global only: LoadForRoot discards project values, so
-	// the project scope never renders it. Rendering it here is what lets a
-	// user's saved toggles survive config rewrites (WriteFile re-renders the
-	// whole file from the struct).
+	// [secrets] is user/global only: LoadForRoot discards project values, so the
+	// project scope never renders it. Rendering it here keeps saved toggles across rewrites.
 	if scope != RenderScopeProject {
 		b.WriteString("[secrets]   # credential protection; user/global only, ./reasonix.toml cannot override\n")
 		if c.Secrets.FilterSubprocessEnv {

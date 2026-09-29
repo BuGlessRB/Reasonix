@@ -319,6 +319,13 @@ type BackgroundJobs interface {
 	CancelJob(id string) bool
 }
 
+// DiffRendering reports the session's diff-rendering choices, resolved once at
+// build. A frontend rebuilding a transcript (e.g. the HTTP server answering
+// /history) reads them here instead of reloading config per request.
+type DiffRendering interface {
+	EmbeddedDiffDetectionEnabled() bool
+}
+
 // SessionPersistence covers snapshotting a session and tearing down its on-disk
 // state.
 type SessionPersistence interface {
@@ -395,6 +402,7 @@ type SessionAPI interface {
 	Provenance
 	BackgroundJobs
 	LocalShell
+	DiffRendering
 }
 
 // EditorAPI is what an editor integration drives over ACP: turns, approvals and
@@ -440,5 +448,6 @@ var (
 	_ Inbox              = (*Controller)(nil)
 	_ Provenance         = (*Controller)(nil)
 	_ LocalShell         = (*Controller)(nil)
+	_ DiffRendering      = (*Controller)(nil)
 	_ SessionAPI         = (*Controller)(nil)
 )

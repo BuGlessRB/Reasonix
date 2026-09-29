@@ -18,12 +18,11 @@ import (
 	"reasonix/internal/contract/event"
 )
 
-// MarkdownRenderer turns the model's markdown answer into ANSI-styled terminal text
-// using the brand palette. It implements only the constructs a chat-style
+// MarkdownRenderer turns the model's markdown answer into ANSI-styled terminal
+// text using the brand palette. It implements only the constructs a chat-style
 // model reliably emits — headings, paragraphs, lists, fenced code, blockquotes,
-// strong/em/code-spans, links, thematic breaks — and degrades to plain text
-// for anything else. Word-wrapping respects CJK widths and skips over ANSI
-// SGR codes when counting columns.
+// strong/em/code-spans, links, thematic breaks — and degrades to plain text for
+// anything else. Wrapping respects CJK widths and skips ANSI SGR when counting.
 type MarkdownRenderer struct {
 	md             goldmark.Markdown
 	width          int
@@ -110,14 +109,11 @@ func (r *MarkdownRenderer) RenderCopy(input, prefix string) string {
 	return out + "\n"
 }
 
-// fixCJKEmphasis works around goldmark's CommonMark parser not recognising
-// CJK punctuation as Unicode punctuation: a closing ** is only right-flanking
-// when the char before it is punctuation, so **X，**Y (， = U+FF0C) is not bold.
-// Inserting a space after such a closer fixes the flanking. The space must go
-// only on a *closer* — putting it after an opener (，**X** → ，** X**) would
-// instead break the left-flanking — so emphasis open/close is tracked by a
-// running toggle. Inline code spans and fenced blocks are passed through so
-// literal ** inside code is never touched.
+// fixCJKEmphasis works around goldmark's CommonMark parser not recognising CJK
+// punctuation as Unicode punctuation: a closing ** is only right-flanking when
+// the char before it is punctuation, so **X，**Y is not bold. Inserting a space
+// after such a closer fixes the flanking — but only on a closer, never after an
+// opener — so emphasis open/close is tracked by a toggle. Code passes through.
 func fixCJKEmphasis(s string) string {
 	runes := []rune(s)
 	n := len(runes)
@@ -339,6 +335,16 @@ func (r *MarkdownRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []
 	buf.WriteString("\n")
 }
 
+// codeRailPrefix is the fenced-code gutter: a dim "│ " rail, or spaces when the
+// terminal owns the viewport chrome. A diff fence that cannot be parsed as one
+// falls back to it so no line is dropped.
+func codeRailPrefix(indent int, hideRail bool) string {
+	if hideRail {
+		return strings.Repeat(" ", indent+VisibleWidth("│ "))
+	}
+	return strings.Repeat(" ", indent) + Dim("│ ")
+}
+
 // activeDiffFences opts a fenced ```diff / ```patch block into the colourised
 // diff renderer; false (the default) keeps every fence on the plain code rail,
 // the lossless choice for the headerless fences models write. Set once at CLI
@@ -369,10 +375,9 @@ func (r *MarkdownRenderer) renderDiffFence(buf *strings.Builder, fc *ast.FencedC
 	prefix := strings.Repeat(" ", indent)
 	width := max(r.width-indent, 8)
 	text := diffFenceText(fc, src)
-	// Only run the external formatter once the source actually closed the
-	// fence. While the fence is still streaming in, every delta changes the
-	// body, so each redraw would spawn a fresh subprocess that can never hit
-	// the memo; the built-in rows are drawn until the closing fence arrives.
+	// Run the external formatter only once the fence closed: while it streams,
+	// every delta changes the body, so each redraw would spawn a subprocess that
+	// can never hit the memo. Built-in rows are drawn until the closing fence.
 	if fenceClosed(fc, src) {
 		if out, ok := formatDiffCached(text, width); ok {
 			buf.WriteString(out)
@@ -394,20 +399,48 @@ func (r *MarkdownRenderer) renderDiffFence(buf *strings.Builder, fc *ast.FencedC
 		buf.WriteString("\n")
 		return
 	}
+	rail := codeRailPrefix(indent, r.hideRail)
 	for _, sec := range splitDiffSections(text) {
-		path := diffFencePath(sec)
-		if header := diffFenceHeader(path, countDiff(sec)); header != "" {
+		body := trimDiffPreamble(sec)
+		if body == "" {
+			// A section with no "--- "/"+++ " header is not one diffBody can lay
+			// out: a bare "@@ …" hunk is real content (plain rail), a pure
+			// preamble such as a `git show` commit header is dropped.
+			if !hasDiffBody(sec) {
+				continue
+			}
+			for line := range strings.SplitSeq(strings.TrimRight(sec, "\n"), "\n") {
+				buf.WriteString(rail)
+				buf.WriteString(Accent(line))
+				buf.WriteString("\n")
+			}
+			continue
+		}
+		path := diffFencePath(body)
+		if header := diffFenceHeader(path, countDiff(body)); header != "" {
 			buf.WriteString(prefix)
 			buf.WriteString(header)
 			buf.WriteString("\n")
 		}
-		for _, row := range diffBody(event.FileDiff{Diff: sec}, path, width, 0) {
+		for _, row := range diffBody(event.FileDiff{Diff: body}, path, width, 0) {
 			buf.WriteString(prefix)
 			buf.WriteString(row)
 			buf.WriteString("\n")
 		}
 	}
 	buf.WriteString("\n")
+}
+
+// hasDiffBody reports whether a section carries diff content (a "@@ …" hunk or
+// an added/removed line) even without a "--- "/"+++ " header. A section that
+// only holds a `git show` commit header does not.
+func hasDiffBody(section string) bool {
+	for line := range strings.SplitSeq(section, "\n") {
+		if strings.HasPrefix(line, "@@ ") || strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-") {
+			return true
+		}
+	}
+	return false
 }
 
 // fenceClosed reports whether src actually carried the closing fence line for
@@ -433,8 +466,9 @@ func diffFenceText(fc *ast.FencedCodeBlock, src []byte) string {
 	return b.String()
 }
 
-// diffFenceHeader names the file and its +/- tally, standing in for the tool
-// card's header line (a prose fence carries no tool name or args).
+// diffFenceHeader names the file and its +/- tally: for a fence it stands in for
+// the tool card's header line (a prose fence carries no tool name or args), and
+// DiffText reuses it for a shell diff's card.
 func diffFenceHeader(path string, d event.FileDiff) string {
 	var parts []string
 	if path != "" {
@@ -446,9 +480,11 @@ func diffFenceHeader(path string, d event.FileDiff) string {
 	return strings.Join(parts, "  ")
 }
 
-// splitDiffSections cuts a fence body into per-file sections so each gets its
-// own header, and drops each section's preamble (git's "diff --git"/"index"
-// lines) so the returned text starts at the "--- "/"+++ " pair diffBody drops.
+// splitDiffSections cuts a diff — a fence body or a whole shell diff — into
+// per-file sections so each gets its own header. Each section is returned
+// untrimmed — renderDiffFence drops the preamble (git's "diff --git"/"index"
+// lines) or falls back to the plain rail when a section carries no
+// "--- "/"+++ " pair.
 func splitDiffSections(diff string) []string {
 	lines := strings.Split(strings.TrimRight(diff, "\n"), "\n")
 	gitStyle := slices.ContainsFunc(lines, func(l string) bool { return strings.HasPrefix(l, "diff --git ") })
@@ -464,11 +500,7 @@ func splitDiffSections(diff string) []string {
 	if len(cur) > 0 {
 		sections = append(sections, strings.Join(cur, "\n")+"\n")
 	}
-	out := make([]string, 0, len(sections))
-	for _, sec := range sections {
-		out = append(out, trimDiffPreamble(sec))
-	}
-	return out
+	return sections
 }
 
 // diffSectionStart reports whether lines[i] opens a new file section. With
@@ -482,6 +514,10 @@ func diffSectionStart(lines []string, i int, gitStyle bool) bool {
 	return strings.HasPrefix(lines[i], "--- ") && i+1 < len(lines) && strings.HasPrefix(lines[i+1], "+++ ")
 }
 
+// trimDiffPreamble drops a section's preamble (git's "diff --git"/"index" lines,
+// or a `git show` commit header) so the returned text starts at the "--- "
+// line diffBody drops. A section with no "--- " carries no diff and returns
+// empty.
 func trimDiffPreamble(section string) string {
 	lines := strings.Split(section, "\n")
 	for i, ln := range lines {
@@ -489,7 +525,7 @@ func trimDiffPreamble(section string) string {
 			return strings.Join(lines[i:], "\n")
 		}
 	}
-	return section
+	return ""
 }
 
 // countDiff tallies a section's added/removed rows for the header stat, using
@@ -512,6 +548,8 @@ func countDiff(section string) event.FileDiff {
 	return d
 }
 
+// diffFencePath reads a section's file from its "+++ b/…" line. Named for the
+// fence path that first needed it; DiffText reuses it for a shell diff.
 func diffFencePath(diff string) string {
 	for line := range strings.SplitSeq(diff, "\n") {
 		if rest, ok := strings.CutPrefix(line, "+++ b/"); ok {
@@ -600,13 +638,11 @@ func (r *MarkdownRenderer) appendInline(b *strings.Builder, n ast.Node, src []by
 	}
 }
 
-// renderTable lays out a GFM table as terminal columns separated by dim
-// "│" rails with a "─┼─" rule under the header. Column widths auto-fit the
-// widest cell in each column and are capped to a fair share of the terminal
-// width so a wide table can't push the input off-screen. Long cells are
-// wrapped across multiple visual rows (the whole logical row inflates to
-// the tallest cell), not truncated, so no content is lost. Alignment is
-// left-only — Markdown's ":---:" hints are read but not honoured yet.
+// renderTable lays out a GFM table as terminal columns separated by dim "│"
+// rails with a "─┼─" rule under the header. Column widths auto-fit the widest
+// cell and are capped to a fair share of the terminal width. Long cells wrap
+// across multiple visual rows (not truncated); alignment is left-only —
+// Markdown's ":---:" hints are read but not honoured yet.
 func (r *MarkdownRenderer) renderTable(buf *strings.Builder, n *extast.Table, src []byte, indent int) {
 	var header []string
 	var rows [][]string
@@ -649,10 +685,9 @@ func (r *MarkdownRenderer) renderTable(buf *strings.Builder, n *extast.Table, sr
 		}
 	}
 
-	// Cap each column so the whole table fits the terminal: total = sum of
-	// widths + separators (3 chars each) + indent. Distribute the budget
-	// proportionally to the natural widths so columns with rich content
-	// keep more space than narrow ones.
+	// Cap each column so the whole table fits: total = sum of widths + 3-char
+	// separators + indent. The budget is distributed proportionally to the
+	// natural widths, so columns with rich content keep more space.
 	available := max(r.width-indent-3*(cols-1), cols*3)
 	total := 0
 	for _, w := range widths {

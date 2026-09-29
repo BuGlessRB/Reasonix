@@ -166,6 +166,9 @@ type HistoryMessage struct {
 	ToolCallID   string            `json:"toolCallId,omitempty"`
 	ToolFailed   bool              `json:"toolFailed,omitempty"`
 	ToolName     string            `json:"toolName,omitempty"`
+	// OutputDiff marks a rebuilt shell result whose whole output is a unified
+	// diff, re-derived by the server so a reopened session renders it as one.
+	OutputDiff bool `json:"outputDiff,omitempty"`
 }
 
 type HistoryToolCall struct {

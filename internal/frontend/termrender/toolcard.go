@@ -87,7 +87,7 @@ var toolCategory = map[string]string{
 }
 
 // IsShellTool reports a tool that runs a shell command.
-func IsShellTool(name string) bool { return toolCategory[name] == "exec" }
+func IsShellTool(name string) bool { return tool.IsShellTool(name) }
 
 // ToolDisplayName returns the card verb for a tool: a mapped builtin verb, the
 // short name for an MCP tool (mcp__server__tool), or the raw id as a fallback.

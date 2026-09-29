@@ -200,7 +200,7 @@ func (s *updateSink) Emit(e event.Event) {
 			SessionUpdate: "tool_call_update",
 			ToolCallID:    e.Tool.ID,
 			Status:        status,
-			Content:       []toolContent{{Type: "content", Content: textBlock(clip(text))}},
+			Content:       []toolContent{{Type: "content", Content: textBlock(toolResultText(text, e.Tool.OutputDiff))}},
 		})
 
 	case event.Notice:
@@ -604,6 +604,35 @@ func rawJSON(args string) json.RawMessage {
 		return nil
 	}
 	return json.RawMessage(args)
+}
+
+// toolResultText clips a tool result for display. A result the host marked as a
+// whole unified diff is passed through untruncated instead — the diff is the
+// client's to render — wrapped in a ```diff fence so +/- lines are coloured. The
+// fence outruns any backtick run in the body, or a ``` context line closes it early.
+func toolResultText(text string, isDiff bool) string {
+	if !isDiff {
+		return clip(text)
+	}
+	body := strings.TrimRight(text, "\n")
+	fence := strings.Repeat("`", max(3, longestBacktickRun(body)+1))
+	return fence + "diff\n" + body + "\n" + fence
+}
+
+// longestBacktickRun returns the longest run of backticks in s.
+func longestBacktickRun(s string) int {
+	longest, run := 0, 0
+	for i := range len(s) {
+		if s[i] == '`' {
+			run++
+			if run > longest {
+				longest = run
+			}
+			continue
+		}
+		run = 0
+	}
+	return longest
 }
 
 // clip truncates text to maxResultChars, appending a note, matching dispatch.ts.

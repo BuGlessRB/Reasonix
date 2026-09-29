@@ -1370,6 +1370,18 @@
   }
   .dhunk > span:first-child { text-align: right; padding-right: 9px }
   .dhunk > span:last-child { padding-left: 14px }
+  /* 多文件 diff 的每文件表头：卡片抬头只说得清第一个文件，其余靠这一行点名。 */
+  .dfile {
+    display: flex; align-items: baseline; gap: 9px; padding: 4px 11px;
+    font: var(--w-reg) var(--fs-micro) var(--mono); color: var(--faint);
+    background: color-mix(in srgb, var(--overlay) 70%, transparent);
+    border-top: 1px solid var(--hair);
+  }
+  .dfile:first-child { border-top: none }
+  .dfile .p { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .dfile .st { margin-left: auto; flex: none; display: flex; gap: 7px; font-variant-numeric: tabular-nums }
+  .dfile .add { color: color-mix(in srgb, var(--add) 62%, var(--text)) }
+  .dfile .del { color: color-mix(in srgb, var(--del) 58%, var(--text)) }
   .dl > .no { position: sticky; left: 0; text-align: right; padding-right: 9px; color: var(--faint); background: var(--raised); font-variant-numeric: tabular-nums; user-select: none }
   .dl > .sg { color: var(--ghost); user-select: none }
   .dl > .cd { padding-right: 11px; color: var(--muted) }

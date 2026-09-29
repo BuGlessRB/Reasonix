@@ -17,7 +17,7 @@ show_turn_usage = true   # CLI/TUI: show per-request token and cost receipts in 
 
 [cli]   # user/global only; ./reasonix.toml cannot override
 # diff_fences = true   # render a fenced ```diff/```patch block through the colourised diff renderer instead of the plain code rail; default false
-# diff_formatter = "delta --color-only --paging=never"   # optional external argv (no shell) that formats a fenced ```diff/```patch block and a writer tool's diff card; the diff is piped on stdin and its stdout is re-emitted with non-SGR escapes stripped
+# diff_formatter = "delta --color-only --paging=never"   # optional external argv (no shell) that formats a fenced ```diff/```patch block, a writer tool's diff card, and a whole-diff shell result; the diff is piped on stdin and its stdout is re-emitted with non-SGR escapes stripped
 
 [desktop]
 # language = "auto"   # auto|en|zh; auto follows the browser/OS locale
@@ -65,6 +65,8 @@ compact_ratio       = 0.85  # sole auto trigger; presets 0.70 (active) / 0.80 (s
 # max_parallel_writers = 3       # concurrent writers with non-overlapping write_paths
 # output_style = "explanatory"   # persona/tone folded into the prompt: explanatory | learning | concise,
 #                                  or a custom .reasonix/output-styles/<name>.md ; empty = default
+# embedded_diff_detection = true   # mark a shell result whose whole output is a unified diff (e.g. `git diff`)
+#                                  so the transcript renders it as a diff instead of flat text; default false
 
 # A provider is a vendor endpoint (one base_url + key) that offers one or more
 # models. Use `models = [...]` to expose several under a single entry — switching
