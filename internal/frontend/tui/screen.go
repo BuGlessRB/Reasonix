@@ -159,7 +159,7 @@ func (b *block) foldable() bool {
 	if r == nil || r.Kind != ItemTool || r.Tool == nil || !termrender.IsShellTool(r.Tool.Name) {
 		return false
 	}
-	return strings.Count(strings.TrimRight(r.Tool.Output, "\n"), "\n")+1 > shellPreviewLines
+	return strings.Count(strings.TrimRight(r.shellOutput(), "\n"), "\n")+1 > shellPreviewLines
 }
 
 // thinks reports a block that carries an answer's thinking behind its marker.

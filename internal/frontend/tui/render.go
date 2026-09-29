@@ -136,6 +136,8 @@ func renderTool(it *Item, width int) string {
 		if last := lastLine(t.Output); last != "" {
 			lines = append(lines, termrender.Dim(connector+oneLine(last, avail)))
 		}
+	case termrender.IsShellTool(t.Name):
+		lines = append(lines, outputSummary(t.Name, it.shellOutput(), avail, it.Fold)...)
 	default:
 		lines = append(lines, outputSummary(t.Name, t.Output, avail, it.Fold)...)
 	}

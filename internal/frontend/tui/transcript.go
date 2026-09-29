@@ -46,10 +46,13 @@ type Item struct {
 	Framed bool
 
 	// ItemTool. Children are a sub-agent's calls, folded under its task.
+	// Streamed is what the call printed as it ran; the result the model reads
+	// can carry the host's notes after it.
 	Tool     *eventwire.Tool
 	Children []eventwire.Tool
 	Running  bool
 	Fold     outputFold // an ItemSay's thinking uses it too
+	Streamed string
 
 	// ItemApproval / ItemAsk. Verdict is how this screen settled it; empty
 	// while it is still open.
@@ -386,6 +389,9 @@ func (t *Transcript) foldTool(tool eventwire.Tool, running bool) {
 			if it := &t.Items[i]; it.Kind == ItemTool && it.Tool.ID == tool.ID {
 				merged := mergeTool(*it.Tool, tool)
 				it.Tool, it.Running = &merged, running
+				if running {
+					it.Streamed += tool.Output
+				}
 				return
 			}
 		}
@@ -394,7 +400,30 @@ func (t *Transcript) foldTool(tool eventwire.Tool, running bool) {
 	if at := t.openSay(); at >= 0 {
 		t.Items[at].Done = true
 	}
-	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemTool, Tool: &tool, Running: running})
+	row := Item{ID: t.id(), Kind: ItemTool, Tool: &tool, Running: running}
+	if running {
+		row.Streamed = tool.Output
+	}
+	t.Items = append(t.Items, row)
+}
+
+// shellOutput is what a shell call's row shows: what the command printed, not
+// the result the model was handed, which carries the host's own notes.
+func (it *Item) shellOutput() string {
+	if it.Streamed != "" {
+		return it.Streamed
+	}
+	return it.Tool.Output
+}
+
+// bookkeeping reports a call whose effect is the task list itself: 1.x keeps
+// it off the transcript, since the list above the composer already shows it.
+// A failed one still shows, because nothing else would.
+func (it *Item) bookkeeping() bool {
+	if it.Kind != ItemTool || it.Tool.Err != "" {
+		return false
+	}
+	return it.Tool.Name == "todo_write" || it.Tool.Name == "complete_step"
 }
 
 // nameTurnStart seats the message a turn began on. The oldest row this screen
