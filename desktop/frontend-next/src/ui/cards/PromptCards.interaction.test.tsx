@@ -6,9 +6,17 @@ import type { Item } from "../../state/session";
 import { ApprovalCard } from "./ApprovalCard";
 import { AskCard } from "./AskCard";
 
-afterEach(cleanup);
+const pendingCalls: Promise<void>[] = [];
+afterEach(async () => {
+  await Promise.all(pendingCalls.splice(0));
+  cleanup();
+});
 
-const pending = () => new Promise<void>((resolve) => setTimeout(resolve, 20));
+const pending = () => {
+  const call = new Promise<void>((resolve) => setTimeout(resolve, 20));
+  pendingCalls.push(call);
+  return call;
+};
 
 describe("decision cards", () => {
   it("keeps every approval action locked while the decision is in flight", async () => {
