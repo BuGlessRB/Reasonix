@@ -108,6 +108,7 @@ kind = "`+kind+`"
 model = "x"
 `+providerExtra+`
 `)
+	approveWorkspace(t, dir)
 	sink := &watchSink{}
 	ctrl, err := Build(context.Background(), Options{Sink: sink})
 	if err != nil {
