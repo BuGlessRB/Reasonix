@@ -74,6 +74,15 @@ func catalogCompletionSpec(help cliCompletionFlag) cliCompletionSpec {
 	return completionSpec("catalogs", []cliCompletionFlag{help}, completionSpec("reindex", []cliCompletionFlag{help}, reindex...))
 }
 
+func sessionsCompletionSpec(help cliCompletionFlag) cliCompletionSpec {
+	dir := completionFlag("--dir", cliCompletionPathValue)
+	return completionSpec("sessions", []cliCompletionFlag{help},
+		completionSpec("reindex", []cliCompletionFlag{completionFlag("--json", cliCompletionNoValue), dir, help}),
+		completionSpec("diagnose", []cliCompletionFlag{completionFlag("--json", cliCompletionNoValue), dir, help}),
+		completionSpec("cleanup", []cliCompletionFlag{completionFlag("--json --apply", cliCompletionNoValue), dir, help}),
+	)
+}
+
 func cliCompletionRootSpec() cliCompletionSpec {
 	profile := completionFlag("--profile", cliCompletionStaticValue, "economy", "balanced", "delivery")
 	preset := completionFlag("--preset", cliCompletionStaticValue, "light", "balanced", "delivery")
@@ -95,6 +104,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 		completionFlag("--continue -c", cliCompletionNoValue),
 		runResume,
 		completionFlag("--copy", cliCompletionNoValue),
+		completionFlag("--takeover", cliCompletionNoValue),
 		effort, permissionMode,
 		completionFlag("--auto -y", cliCompletionNoValue), completionFlag("--dangerously-skip-permissions --yolo", cliCompletionNoValue),
 		completionFlag("--print -p", cliCompletionNoValue),
@@ -114,7 +124,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 		completionFlag("--copy", cliCompletionNoValue),
 		completionFlag("--dangerously-skip-permissions --yolo", cliCompletionNoValue),
 		permissionMode,
-		effort,
+		effort, preset,
 		completionFlag("--dir", cliCompletionPathValue),
 		completionFlag("--add-dir", cliCompletionPathValue),
 		completionFlag("--allowed-tools --allowedTools", cliCompletionStaticValue),
@@ -126,7 +136,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 
 	root.subcommands = []cliCompletionSpec{
 		completionSpec("run", runFlags),
-		completionSpec("serve", serveFlags), completionSpec("tui", cliTUICompletionFlags(model, preset, permissionMode, effort, help)),
+		completionSpec("serve", serveFlags), completionSpecWithAliases("tui", []string{"chat", "code"}, cliTUICompletionFlags(model, preset, permissionMode, effort, help)),
 		completionSpec("web", serveFlags),
 		completionSpec("setup", []cliCompletionFlag{completionFlag("--local -l", cliCompletionNoValue), help}),
 		completionSpec("config", []cliCompletionFlag{help},
@@ -203,11 +213,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 			completionSpec("run", []cliCompletionFlag{model, completionFlag("--max-steps --dir", cliCompletionStaticValue), help}),
 		),
 		doctorCompletionSpec(help),
-		completionSpec("sessions", []cliCompletionFlag{help},
-			completionSpec("reindex", []cliCompletionFlag{
-				completionFlag("--json", cliCompletionNoValue), completionFlag("--dir", cliCompletionPathValue), help,
-			}),
-		),
+		sessionsCompletionSpec(help),
 		catalogCompletionSpec(help),
 		completionSpec("report", []cliCompletionFlag{help},
 			completionSpec("list", []cliCompletionFlag{help}),
