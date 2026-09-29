@@ -92,6 +92,7 @@ model       = "deepseek-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 web_search  = true
 # 还有预设：deepseek-pro
+# idle_timeout_seconds = 300   # 按 provider 的流空闲看门狗；调用多久无数据即判定为断开（默认 300s；首字节前的静默等待会重试一次，最长约 2 倍）
 
 [tools]
 enabled = []   # 省略/为空 = 全部内置工具

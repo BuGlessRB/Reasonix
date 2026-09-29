@@ -84,6 +84,7 @@ model       = "deepseek-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 web_search  = true
 # also preset: deepseek-pro
+# idle_timeout_seconds = 300   # per-provider stream idle watchdog; how long a call may send nothing before it is read as dropped (default 300s; a silent pre-header wait is retried once, so up to ~2×)
 
 [tools]
 enabled = []   # omit/empty = all built-ins

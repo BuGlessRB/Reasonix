@@ -121,7 +121,7 @@ type client struct {
 	vision                             bool // model accepts image input; embed Images as input_image parts
 	reasoningModes                     map[string]string
 	http                               *http.Client
-	idleTimeout                        time.Duration
+	idleTimeout                        time.Duration // SSE stall watchdog window; per-provider idle_timeout_seconds, else defaultStreamIdleTimeout
 	authed                             atomic.Bool
 
 	mu                   sync.Mutex
@@ -165,7 +165,7 @@ func New(cfg Config) provider.Provider {
 	httpClient := &http.Client{Timeout: 300 * time.Second}
 	if built, err := netclient.NewHTTPClient(cfg.Proxy, netclient.TransportOptions{
 		DialTimeout: 30 * time.Second, KeepAlive: 30 * time.Second,
-		TLSHandshakeTimeout: 15 * time.Second, ResponseHeaderTimeout: provider.StreamIdleTimeout,
+		TLSHandshakeTimeout: 15 * time.Second, ResponseHeaderTimeout: provider.IdleTimeoutFromExtra(cfg.Extra),
 	}); err == nil {
 		httpClient = built
 	}
@@ -179,7 +179,7 @@ func New(cfg Config) provider.Provider {
 		baseURL: baseURL, requestURL: requestURL, model: cfg.Model, effort: cfg.Effort,
 		vendor: vendor, caps: cap, mode: cfg.mode(), session: sessionHeaders{dashScopeCache: sessionCache, openCode: provider.NewOpenCodeSessionID()}, webSearch: cfg.WebSearch, maxOutputTokens: maxOutputTokens,
 		vision: vision, reasoningModes: cfg.ReasoningModes,
-		http: httpClient, idleTimeout: defaultStreamIdleTimeout,
+		http: httpClient, idleTimeout: provider.IdleTimeoutFromExtra(cfg.Extra),
 	}
 }
 
