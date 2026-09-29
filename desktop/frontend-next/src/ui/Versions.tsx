@@ -4,7 +4,7 @@ import { t } from "../i18n";
 import type { UpdateProgress, VersionHub } from "../port/port";
 import { reason } from "../i18n/kernel";
 import { HttpError } from "../port/http_error";
-import { failureCopy, releasePage } from "./versionFailure";
+import { deltaSkippedCopy, failureCopy, releasePage } from "./versionFailure";
 
 // A shell that declared no install: a build run from source, not a failure.
 const NO_INSTALL = "studio.no_install";
@@ -42,6 +42,9 @@ function when(iso: string): string {
 function say(p: UpdateProgress): string {
   switch (p.phase) {
     case "downloading":
+      if (p.delta_skipped) {
+        return p.total > 0 ? t("下载完整安装包 {got} / {all}", { got: bytes(p.received), all: bytes(p.total) }) : t("下载完整安装包 {got}", { got: bytes(p.received) });
+      }
       return p.total > 0 ? t("下载中 {got} / {all}", { got: bytes(p.received), all: bytes(p.total) }) : t("下载中 {got}", { got: bytes(p.received) });
     case "verifying":
       return t("校验签名…");
@@ -280,7 +283,21 @@ export function Versions({ port }: { port: Port }) {
                 empty column: it is why this version has no download page. */}
             <span className="sc">{v.publishedAt ? when(v.publishedAt) : v.current ? t("未发布") : ""}</span>
             {moving === v.version && progress ? (
-              <span className="sa" data-keep="">{say(progress)}</span>
+              <>
+                <span
+                  className="sa"
+                  data-keep=""
+                  title={progress.delta_skipped ? deltaSkippedCopy(progress.delta_skipped) : undefined}
+                  aria-describedby={progress.delta_skipped ? `delta-skipped-${v.version}` : undefined}
+                >
+                  {say(progress)}
+                </span>
+                {progress.delta_skipped && (
+                  <span id={`delta-skipped-${v.version}`} className="sr-only">
+                    {deltaSkippedCopy(progress.delta_skipped)}
+                  </span>
+                )}
+              </>
             ) : starting === v.version ? (
               <span className="sa" data-keep="">{t("准备中…")}</span>
             ) : ready === v.version ? (

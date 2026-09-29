@@ -31,6 +31,24 @@ export function failureCopy(p: UpdateProgress, current: string): FailureCopy {
   return { title: t("切换到 {v} 失败", { v }), why: t("当前版本未被改动，可以重试。"), manual: false };
 }
 
+// Why this move downloads the whole package instead of only what changed,
+// keyed by the code the kernel attached when it gave the delta up.
+export function deltaSkippedCopy(code: string): string {
+  switch (code) {
+    case "update.delta.not_swappable":
+      return t("安装目录无法就地替换文件，本次改为下载完整安装包。");
+    case "update.delta.fetch_failed":
+      return t("增量数据下载失败，本次改为下载完整安装包。");
+    case "update.delta.timed_out":
+      return t("增量数据下载太慢，本次改为下载完整安装包。");
+    case "update.delta.mismatch":
+      return t("增量数据未通过校验，本次改为下载完整安装包。");
+    case "update.delta.disk":
+      return t("无法写入增量更新文件，本次改为下载完整安装包。");
+  }
+  return t("增量更新不可用，本次改为下载完整安装包。");
+}
+
 // The release page carries every platform's full installer.
 export function releasePage(v: string): string {
   return `https://github.com/esengine/DeepSeek-Reasonix/releases/tag/studio-v${v.replace(/^v/, "")}`;

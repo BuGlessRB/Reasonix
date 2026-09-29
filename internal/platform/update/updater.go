@@ -39,6 +39,9 @@ type Options struct {
 	// primary route cannot hold the budget the IPv4 fallback needs. Downloads
 	// are deliberately unbounded; artifacts are large.
 	AttemptTimeout time.Duration
+	// StallTimeout drops an artifact download that has received nothing for
+	// this long and resumes it on a new connection. Zero never drops it.
+	StallTimeout time.Duration
 }
 
 // Updater answers what is published and what that means for this machine.

@@ -33,4 +33,5 @@ export interface UpdateProgress {
   total: number;
   err?: string;
   code?: string;
+  delta_skipped?: string;
 }

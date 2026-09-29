@@ -48,6 +48,22 @@ type StagedFile struct {
 	SHA256 string `json:"sha256"`
 }
 
+// SwapBackupDirName is where, inside an install, a swap sets aside the files
+// it replaces. Inside the install is the one place certain to share its volume,
+// which a rename needs; the update cache may sit on another drive.
+const SwapBackupDirName = ".reasonix-update"
+
+// SwapBackupDir is the directory a swap of installDir backs up into.
+func SwapBackupDir(installDir string) string { return filepath.Join(installDir, SwapBackupDirName) }
+
+// renameFile is os.Rename, indirected so a test can put two directories on
+// different volumes without a second drive.
+var renameFile = os.Rename
+
+// mkdirAll is os.MkdirAll, indirected so a test can refuse a directory the way
+// an all-users install refuses a standard user.
+var mkdirAll = os.MkdirAll
+
 // fsRetries covers the seconds after exit in which Windows and its scanners
 // still hold a file the application just closed.
 var fsRetries = 60
@@ -70,7 +86,7 @@ func ApplyTree(h TreeHandoff) error {
 		for _, m := range slices.Backward(done) {
 			_ = retry(func() error { return removeIfPresent(m.dst) })
 			if m.bak != "" {
-				_ = retry(func() error { return os.Rename(m.bak, m.dst) })
+				_ = retry(func() error { return renameFile(m.bak, m.dst) })
 			}
 		}
 	}
@@ -84,7 +100,7 @@ func ApplyTree(h TreeHandoff) error {
 				rollback()
 				return err
 			}
-			if err := retry(func() error { return os.Rename(dst, m.bak) }); err != nil {
+			if err := retry(func() error { return renameFile(dst, m.bak) }); err != nil {
 				rollback()
 				return fmt.Errorf("update: set aside %s: %w", f.Path, err)
 			}
@@ -109,8 +125,8 @@ func ApplyTree(h TreeHandoff) error {
 // never crosses a volume, and an all-users install grants its users no writes,
 // so either would only reach ApplyTree to be rolled back.
 func CheckTreeSwap(installDir, backupParent string) error {
-	if err := os.MkdirAll(backupParent, 0o755); err != nil {
-		return err
+	if err := mkdirAll(backupParent, 0o755); err != nil {
+		return fmt.Errorf("%w: %w", ErrTreeNotSwappable, err)
 	}
 	probe, err := os.CreateTemp(installDir, ".reasonix-swap-probe-*")
 	if err != nil {
@@ -119,7 +135,7 @@ func CheckTreeSwap(installDir, backupParent string) error {
 	name := probe.Name()
 	_ = probe.Close()
 	aside := filepath.Join(backupParent, filepath.Base(name))
-	if err := os.Rename(name, aside); err != nil {
+	if err := renameFile(name, aside); err != nil {
 		_ = os.Remove(name)
 		return fmt.Errorf("%w: %w", ErrTreeNotSwappable, err)
 	}
@@ -142,10 +158,11 @@ func checkStaged(path, want string) error {
 	return nil
 }
 
-// moveFile renames, and copies where the staging and install directories are
-// on different volumes.
+// moveFile renames, and where the staging and install directories are on
+// different volumes copies to a temporary name beside dst and renames that, so
+// dst is never seen half-written.
 func moveFile(src, dst string) error {
-	if err := os.Rename(src, dst); err == nil {
+	if err := renameFile(src, dst); err == nil {
 		return nil
 	}
 	in, err := os.Open(src)
@@ -157,16 +174,28 @@ func moveFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, st.Mode().Perm())
+	out, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".reasonix-part-*")
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		os.Remove(dst)
-		return err
+	tmp := out.Name()
+	_, err = io.Copy(out, in)
+	if err == nil {
+		err = out.Sync()
 	}
-	return out.Close()
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmp, st.Mode().Perm())
+	}
+	if err == nil {
+		err = renameFile(tmp, dst)
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
+	}
+	return err
 }
 
 func removeIfPresent(path string) error {
@@ -243,6 +272,9 @@ func MaybeRunTreeHandoff(args []string) (handled bool, exitCode int) {
 	if code == 0 {
 		_ = retry(func() error { return os.RemoveAll(h.BackupDir) })
 		_ = retry(func() error { return os.RemoveAll(h.StagingDir) })
+		if parent := filepath.Dir(h.BackupDir); filepath.Base(parent) == SwapBackupDirName {
+			_ = os.Remove(parent) // only once empty; another release's backup keeps it
+		}
 	}
 	return true, code
 }
