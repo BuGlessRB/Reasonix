@@ -39,7 +39,7 @@ func TestAvailableListsInstalledInterpreters(t *testing.T) {
 	}{
 		{
 			"windows with git bash lists bash first",
-			shellHost{"windows", fakePath("pwsh", "powershell"), yes, gitBash, winPS, yes, no},
+			shellHost{"windows", fakePath("pwsh", "powershell"), yes, gitBash, winPS, yes, no, yes},
 			[]string{`C:\fake\Git\bin\bash.exe`, `C:\fake\PowerShell\7\pwsh.exe`, `C:\fake\System32\powershell.exe`},
 		},
 		{
@@ -47,7 +47,7 @@ func TestAvailableListsInstalledInterpreters(t *testing.T) {
 			// candidate — is one interpreter, and two rows offering it would ask
 			// the user to choose between a thing and itself.
 			"a bash found twice is listed once",
-			shellHost{"windows", fakePath("bash"), func(p string) bool { return p == `C:\fake\bash.exe` }, []string{`C:\fake\bash.exe`}, nil, yes, no},
+			shellHost{"windows", fakePath("bash"), func(p string) bool { return p == `C:\fake\bash.exe` }, []string{`C:\fake\bash.exe`}, nil, yes, no, yes},
 			[]string{`C:\fake\bash.exe`},
 		},
 		{
@@ -55,17 +55,17 @@ func TestAvailableListsInstalledInterpreters(t *testing.T) {
 			// workspace is a /mnt path; offering it would hand the agent a shell
 			// that cannot see the files it was pointed at.
 			"the wsl launcher is not on offer",
-			shellHost{"windows", fakePath("bash", "powershell"), no, nil, winPS, yes, func(p string) bool { return p == `C:\fake\bash.exe` }},
+			shellHost{"windows", fakePath("bash", "powershell"), no, nil, winPS, yes, func(p string) bool { return p == `C:\fake\bash.exe` }, yes},
 			[]string{`C:\fake\powershell.exe`},
 		},
 		{
 			"a unix host offers the one bash it has",
-			shellHost{"darwin", fakePath("bash"), no, nil, nil, yes, no},
+			shellHost{"darwin", fakePath("bash"), no, nil, nil, yes, no, yes},
 			[]string{`C:\fake\bash.exe`},
 		},
 		{
 			"a host with nothing offers nothing",
-			shellHost{"linux", fakePath(), no, nil, nil, yes, no},
+			shellHost{"linux", fakePath(), no, nil, nil, yes, no, yes},
 			nil,
 		},
 	}
@@ -90,9 +90,9 @@ func TestAvailableHeadIsWhatAutoPicks(t *testing.T) {
 	yes := func(string) bool { return true }
 	no := func(string) bool { return false }
 	hosts := []shellHost{
-		{"windows", fakePath("pwsh"), yes, []string{`C:\fake\Git\bin\bash.exe`}, []string{`C:\fake\PowerShell\7\pwsh.exe`}, yes, no},
-		{"windows", fakePath("pwsh", "powershell"), no, nil, nil, yes, no},
-		{"darwin", fakePath("bash"), no, nil, nil, yes, no},
+		{"windows", fakePath("pwsh"), yes, []string{`C:\fake\Git\bin\bash.exe`}, []string{`C:\fake\PowerShell\7\pwsh.exe`}, yes, no, yes},
+		{"windows", fakePath("pwsh", "powershell"), no, nil, nil, yes, no, yes},
+		{"darwin", fakePath("bash"), no, nil, nil, yes, no, yes},
 	}
 	for _, h := range hosts {
 		list := h.available()
