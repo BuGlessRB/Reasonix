@@ -66,7 +66,11 @@ type Config struct {
 	// settings UI intentionally owns even when their value equals the built-in
 	// default. It is transient edit metadata and is never serialized directly.
 	explicitProjectSkillKeys map[string]bool
-	editLoadErr              error
+	// Project provider declarations and the normalized edit baseline distinguish
+	// file-authored overrides from providers synthesized by provider_access.
+	explicitProjectProviderNames map[string]bool
+	projectProviderEditBaseline  []ProviderEntry
+	editLoadErr                  error
 	// loadWarnings are non-fatal issues observed while loading config (corrupt
 	// user/project files recovered via last-known-good or defaults). They never
 	// rewrite the original file; the UI may surface them for doctor repair.
