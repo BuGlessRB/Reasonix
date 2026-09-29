@@ -240,13 +240,6 @@ type SecretsConfig struct {
 	ProtectCredentialFiles bool `toml:"protect_credential_files"`
 }
 
-type providerSourceScope string
-
-const (
-	providerSourceUser    providerSourceScope = "user"
-	providerSourceProject providerSourceScope = "project"
-)
-
 // UIConfig controls CLI presentation-only settings. Desktop appearance is kept in
 // DesktopConfig so desktop preferences cannot alter terminal output or prompts.
 type UIConfig struct {
