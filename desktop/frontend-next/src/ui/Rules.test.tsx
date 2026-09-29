@@ -57,24 +57,32 @@ describe("what a prompt allowed for this session", () => {
   });
 });
 
-it("shows remembered project rules and their user-level storage path", async () => {
+it("revokes a remembered project rule without asking the user to edit a fingerprinted file", async () => {
   const rememberedPath = "/home/u/.reasonix/project-grants.json";
+  const revokeRememberedProjectRule = vi.fn(async () => ({ ...rules([]), rememberedPath }));
+  const changed = vi.fn();
   const port = {
     ...(new MockPort() as unknown as AgentPort),
     permissions: async () => ({ ...rules([]), remembered: ["Bash(go test:*)"], rememberedPath }),
+    revokeRememberedProjectRule,
   } as unknown as AgentPort;
-  render(<Rules port={port} onChanged={vi.fn()} />);
+  render(<Rules port={port} onChanged={changed} />);
   expect(await screen.findByText("Bash(go test:*)")).toBeTruthy();
   expect(screen.getByText(rememberedPath)).toBeTruthy();
-  expect(screen.getByText("要收回这项授权，请从上述 JSON 文件中删除本项目对应的 allow 规则，然后重新载入会话。")).toBeTruthy();
+  await userEvent.click(screen.getByLabelText("收回 Bash(go test:*)"));
+  await waitFor(() => expect(revokeRememberedProjectRule).toHaveBeenCalledWith("Bash(go test:*)"));
+  expect(changed).toHaveBeenCalledOnce();
+  expect(screen.queryByText("Bash(go test:*)")).toBeNull();
 });
 
 it("shows a malformed remembered-rules file instead of silently hiding the failure", async () => {
   const port = {
     ...(new MockPort() as unknown as AgentPort),
-    permissions: async () => ({ ...rules([]), rememberedPath: "/home/u/.reasonix/project-grants.json", rememberedError: "invalid JSON" }),
+    permissions: async () => ({ ...rules([]), rememberedPath: "/home/u/.reasonix/project-grants.json", rememberedErrorCode: "project_grants.unavailable" }),
   } as unknown as AgentPort;
   render(<Rules port={port} onChanged={vi.fn()} />);
   expect(await screen.findByText("已记住的权限规则无法读取")).toBeTruthy();
-  expect(screen.getByText(/project-grants\.json: invalid JSON/)).toBeTruthy();
+  expect(screen.getByText("请检查或修复用户目录中的授权记录文件。")).toBeTruthy();
+  expect(screen.getByText("/home/u/.reasonix/project-grants.json")).toBeTruthy();
+  expect(screen.queryByText(/invalid JSON/)).toBeNull();
 });

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"runtime"
+	"slices"
 	"testing"
 
 	"reasonix/internal/contract/config"
@@ -27,6 +29,62 @@ func readJSON[T any](t *testing.T, base, path string) T {
 		t.Fatal(err)
 	}
 	return out
+}
+
+func TestRevokeRememberedProjectRuleRebuildsWithoutChangingOtherGrants(t *testing.T) {
+	workspace := t.TempDir()
+	s := newProviderEditServer(t, workspace)
+	store := config.NewProjectGrantStore(config.Roots{}.Home())
+	if err := store.Update(workspace, func(g config.ProjectGrant) (config.ProjectGrant, error) {
+		g.Allow = []string{"Bash(go test:*)", "Bash(git status:*)"}
+		g.AllowWrite = []string{t.TempDir()}
+		return g, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before := s.Controller()
+	srv := httptest.NewServer(operatorHandler(s))
+	defer srv.Close()
+	resp := postProvider(t, srv.URL, "/permissions/remembered/revoke", `{"rule":"Bash(go test:*)"}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := readAllString(resp)
+		t.Fatalf("revoke = %d: %s", resp.StatusCode, body)
+	}
+	if s.Controller() == before {
+		t.Fatal("grant removed on disk without rebuilding the active runtime")
+	}
+	grant, err := store.Grant(workspace)
+	if err != nil || !slices.Equal(grant.Allow, []string{"Bash(git status:*)"}) || len(grant.AllowWrite) != 1 {
+		t.Fatalf("remaining grant = %+v, %v", grant, err)
+	}
+	got := readJSON[control.PermissionRules](t, srv.URL, "/permissions")
+	if !slices.Equal(got.Remembered, grant.Allow) {
+		t.Fatalf("reloaded rules = %+v, want %+v", got, grant)
+	}
+}
+
+func TestRevokeRememberedProjectRuleReportsUnavailableStoreByCode(t *testing.T) {
+	workspace := t.TempDir()
+	s := newProviderEditServer(t, workspace)
+	store := config.NewProjectGrantStore(config.Roots{}.Home())
+	if err := os.WriteFile(store.Path(), []byte("broken JSON"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(operatorHandler(s))
+	defer srv.Close()
+	resp := postProvider(t, srv.URL, "/permissions/remembered/revoke", `{"rule":"Bash(go test:*)"}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("malformed grant store status = %d, want 409", resp.StatusCode)
+	}
+	var refusal struct{ Code string }
+	if err := json.NewDecoder(resp.Body).Decode(&refusal); err != nil {
+		t.Fatal(err)
+	}
+	if refusal.Code != "project_grants.unavailable" {
+		t.Fatalf("malformed grant store refusal = %+v", refusal)
+	}
 }
 
 // Widening what the agent may do to this machine is a write to this machine, so

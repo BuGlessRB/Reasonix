@@ -130,7 +130,11 @@ export const EN_SETTINGS: Record<string, string> = {
   "当前项目自带权限配置": "This project ships its own permissions",
   "当前项目记住的放行规则": "Remembered allow rules for this project",
   "已记住的权限规则无法读取": "Could not read remembered permission rules",
-  "要收回这项授权，请从上述 JSON 文件中删除本项目对应的 allow 规则，然后重新载入会话。": "To revoke an approval, remove this project's allow rule from the JSON file above and reload the session.",
+  "请检查或修复用户目录中的授权记录文件。": "Check or repair the grant record in your user directory.",
+  "请选择要收回的授权规则": "Select an approval rule to revoke",
+  "任务正在运行，请先停止再收回已记住的授权": "Stop the running task before revoking a remembered approval",
+  "当前会话无法重建，授权未更改": "This session cannot rebuild; the approval was not changed",
+  "无法更新当前项目的授权记录，请检查用户目录中的授权文件": "Could not update this project's approvals; check the grant record in your user directory",
   "{path} 中同样声明了 permissions，实际生效的是该文件。此处的修改会被保存，但需待其不再声明后才会生效。":
     "{path} declares permissions too, and that is what is in force. Edits here are saved, but only take effect once it stops declaring them.",
   "禁止访问 .env": "Keep .env off limits",

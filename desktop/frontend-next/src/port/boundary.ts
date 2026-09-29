@@ -21,7 +21,7 @@ export interface PermissionRules extends PermissionLists {
   granted?: string[];
   remembered?: string[];
   rememberedPath?: string;
-  rememberedError?: string;
+  rememberedErrorCode?: string;
   shadowedBy?: string;
   effective?: PermissionLists;
 }

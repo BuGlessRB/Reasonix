@@ -17,6 +17,9 @@ export class SseBoundary extends SseShell {
   revokeSessionGrant(rule: string) {
     return this.post0<PermissionRules>("/permissions/revoke", { rule });
   }
+  revokeRememberedProjectRule(rule: string) {
+    return this.post0<PermissionRules>("/permissions/remembered/revoke", { rule });
+  }
   sandbox() {
     return this.get<SandboxSettings>("/sandbox");
   }

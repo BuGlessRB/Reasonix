@@ -3,6 +3,7 @@ package control
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -25,7 +26,7 @@ func TestPermissionRulesReportsRememberedProjectGrants(t *testing.T) {
 	ctrl := New(Options{WorkspaceRoot: workspace})
 	defer ctrl.Close()
 	rules := ctrl.PermissionRules()
-	if rules.RememberedPath != store.Path() || rules.RememberedError != "" || len(rules.Remembered) != 1 || rules.Remembered[0] != "Bash(go test:*)" {
+	if rules.RememberedPath != store.Path() || rules.RememberedErrorCode != "" || len(rules.Remembered) != 1 || rules.Remembered[0] != "Bash(go test:*)" {
 		t.Fatalf("project rules = %+v", rules)
 	}
 
@@ -38,7 +39,37 @@ func TestPermissionRulesReportsRememberedProjectGrants(t *testing.T) {
 	if err := os.WriteFile(store.Path(), []byte("broken JSON"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := ctrl.PermissionRules(); got.RememberedError == "" || len(got.Remembered) != 0 || got.RememberedPath != filepath.Join(home, "project-grants.json") {
+	if got := ctrl.PermissionRules(); got.RememberedErrorCode != "project_grants.unavailable" || len(got.Remembered) != 0 || got.RememberedPath != filepath.Join(home, "project-grants.json") {
 		t.Fatalf("unreadable grant store was hidden or applied: %+v", got)
+	}
+}
+
+func TestRevokeRememberedProjectRulePreservesOtherWorkspaceAndWriteGrant(t *testing.T) {
+	home := testenv.TempDir(t)
+	t.Setenv("REASONIX_HOME", home)
+	workspace := testenv.TempDir(t)
+	other := testenv.TempDir(t)
+	store := config.NewProjectGrantStore(config.Roots{}.Home())
+	for _, root := range []string{workspace, other} {
+		if err := store.Update(root, func(g config.ProjectGrant) (config.ProjectGrant, error) {
+			g.Allow = []string{"Bash(go test:*)", "Bash(git status:*)"}
+			g.AllowWrite = []string{"/tmp/external"}
+			return g, nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctrl := New(Options{WorkspaceRoot: workspace})
+	defer ctrl.Close()
+	if err := ctrl.RevokeRememberedProjectRule("Bash(go test:*)"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Grant(workspace)
+	if err != nil || !slices.Equal(got.Allow, []string{"Bash(git status:*)"}) || !slices.Equal(got.AllowWrite, []string{"/tmp/external"}) {
+		t.Fatalf("selected project grant = %+v, %v", got, err)
+	}
+	otherGrant, err := store.Grant(other)
+	if err != nil || len(otherGrant.Allow) != 2 {
+		t.Fatalf("other project grant changed: %+v, %v", otherGrant, err)
 	}
 }
