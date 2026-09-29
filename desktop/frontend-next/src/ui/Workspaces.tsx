@@ -391,7 +391,7 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
                       <div ref={sessionMenuPortal} className="session-pop" role="menu" aria-label={t("项目操作")} style={sessionMenuAt} onClick={(ev) => ev.stopPropagation()}>
                         <div className="session-pop-head">
                           <b>{ws.name}</b>
-                          <small title={ws.root}>{ws.root}</small>
+                          <small className="session-pop-path" title={ws.root}>{ws.root}</small>
                         </div>
                         <div className="session-pop-group">
                           <button className="danger" role="menuitem" data-action="workspace.remove" onClick={() => { setConfirm(ws.root); setSessionMenu(""); }}>
