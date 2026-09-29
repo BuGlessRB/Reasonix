@@ -55,15 +55,6 @@ func gitTagIsListing(args []string) bool {
 	return len(operands) == 0
 }
 
-func hasArgWithPrefix(args []string, prefix string) bool {
-	for _, arg := range args {
-		if strings.HasPrefix(arg, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
 func hasAnyArg(args []string, unsafe ...string) bool {
 	for _, arg := range args {
 		if slices.Contains(unsafe, arg) {
@@ -79,6 +70,9 @@ func hasAnyArg(args []string, unsafe ...string) bool {
 // and env can no more vouch for it than a shell can. Option arguments that take
 // a separate value (-u VAR) read as that bare word and fail closed.
 func envRunsAProgram(args []string) bool {
+	if hasShortFlag(args, 'S') || hasLongOpt(args, "--split-string", 3) {
+		return true
+	}
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") || strings.Contains(arg, "=") {
 			continue

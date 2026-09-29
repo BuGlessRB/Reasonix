@@ -351,8 +351,11 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 
 否则以 `ask` 打开；Windows 没有 OS 沙盒，始终如此。
 
-此时 `auto` 不经询问放行的范围由沙盒决定，不只是这个文件夹：shell 命令还能写临时目录和工具链缓存
-（`~/go`、`~/.cargo`、`~/.cache` 等），并且能访问网络，除非设置 `[sandbox] network = false`。
+此时 `auto` 不经询问放行的范围由沙盒决定，不只是这个文件夹：
+
+- shell 命令还能写你配置的 `allow_write` 与 `--add-dir` 目录、临时目录和工具链缓存（`~/go`、`~/.cargo`、
+  `~/.cache` 等），写进 `~/.cargo/bin`、`~/go/bin` 的东西以后会在沙盒外运行；
+- 能访问网络，除非设置 `[sandbox] network = false`。
 
 - 终端界面对每个文件夹问一次是否信任（家目录和文件系统根目录从不问），答案记在你的 Reasonix 主目录。
 - `reasonix trust` 信任当前文件夹，`reasonix trust --revoke` 撤销；项目自己的文件不能写入信任记录。

@@ -20,7 +20,11 @@ func TestReadOnlyCommandsRefuseTheirEscapes(t *testing.T) {
 		"hostname evil", "hostname -F f",
 		"npm audit fix",
 		"kubectl get pods --kubeconfig=./k", "kubectl get pods --kubeconfig ./k",
-		"gofmt -cpuprofile out -l .",
+		"gofmt -cpuprofile out -l .", "gofmt -w=true a.go", "gofmt --w=true a.go",
+		"go env -w=true GOFLAGS=-toolexec=./x", "go env --w GOFLAGS=x", "go env -u=true GOFLAGS",
+		"rg --hostname-bin=./e --hyperlink-format=default x", "rg --hostname-bin ./e x",
+		"info -o out ls", "git reflog write x", "git reflog main",
+		"go list -mod=mod ./...", "go doc -http", "env -S'sh -c x'", "env --split-string=sh",
 	}
 	for _, c := range escapes {
 		if base, sub, fields, ok := ClassifyReadOnlyCommand(c); ok && !ArgsMakeReadOnlyCommandWrite(base, sub, fields) {
@@ -34,7 +38,8 @@ func TestReadOnlyCommandsRefuseTheirEscapes(t *testing.T) {
 		"file -b x", "file -m magic x", "date", "date -d '-2 days'", "date -u +%s",
 		"hostname", "hostname -f", "npm audit", "npm audit --json",
 		"kubectl get pods -n x", "go vet ./...", "go list -json ./...", "gofmt -l .",
-		"more README.md", "cargo search serde",
+		"more README.md", "cargo search serde", "date -Iseconds", "git reflog show", "git reflog --all",
+		"go env GOFLAGS", "env", "env -i",
 	}
 	for _, c := range reads {
 		base, sub, fields, ok := ClassifyReadOnlyCommand(c)

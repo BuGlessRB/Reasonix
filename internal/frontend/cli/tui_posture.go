@@ -5,9 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"reasonix/internal/contract/config"
@@ -41,7 +38,7 @@ func settleTUIPosture(ctrl postureHost, mode cliPermissionMode, named bool, home
 		ctrl.SetToolApprovalMode(mode.approval)
 		return nil
 	}
-	if ctrl.WritesConfined() && ctrl.WorkspaceTrust() == config.WorkspaceTrustUndecided && trustPromptable(ctrl.WorkspaceRoot()) {
+	if ctrl.WritesConfined() && ctrl.WorkspaceTrust() == config.WorkspaceTrustUndecided && control.TrustableFolder(ctrl.WorkspaceRoot()) {
 		askWorkspaceTrust(ctrl, in, out)
 	}
 	ctrl.SetToolApprovalMode(ctrl.DefaultApprovalMode())
@@ -61,7 +58,10 @@ func confirmYolo(home string, in *bufio.Scanner, out io.Writer) error {
 }
 
 // trustScope is what the sandbox confines a trusted folder's commands to.
-const trustScope = "The OS sandbox limits their writes to this folder, temp and toolchain caches (~/go, ~/.cargo, ~/.cache and\nthe like); network access follows [sandbox] network, and deny rules still apply."
+const trustScope = `The OS sandbox limits their writes to this folder, your allow_write and --add-dir directories,
+temp, and toolchain caches (~/go, ~/.cargo, ~/.cache and the like) — and what lands in a
+cache such as ~/.cargo/bin or ~/go/bin runs later outside the sandbox. Network access
+follows [sandbox] network; deny rules still apply.`
 
 // askWorkspaceTrust records the answer either way: a folder declined once is
 // not asked about again, and `reasonix trust` changes it later.
@@ -75,31 +75,4 @@ func askWorkspaceTrust(ctrl postureHost, in *bufio.Scanner, out io.Writer) {
 	if err := ctrl.SetWorkspaceTrust(trust); err != nil {
 		fmt.Fprintln(out, "warning: could not record the answer:", err)
 	}
-}
-
-// trustPromptable leaves out the folders nobody should grant wholesale: a
-// home directory or a filesystem root holds far more than one project.
-func trustPromptable(root string) bool {
-	root = filepath.Clean(strings.TrimSpace(root))
-	if root == "." || root == "" || filepath.Dir(root) == root {
-		return false
-	}
-	if home, err := os.UserHomeDir(); err == nil && sameDir(home, root) {
-		return false
-	}
-	return true
-}
-
-func sameDir(a, b string) bool {
-	if r, err := filepath.EvalSymlinks(a); err == nil {
-		a = r
-	}
-	if r, err := filepath.EvalSymlinks(b); err == nil {
-		b = r
-	}
-	a, b = filepath.Clean(a), filepath.Clean(b)
-	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
 }

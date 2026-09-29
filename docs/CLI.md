@@ -396,9 +396,13 @@ With no mode named, a session opens in `auto` only when both hold:
 Otherwise it opens in `ask`; on Windows, which has no OS sandbox, always.
 
 What `auto` then allows without asking is bounded by that sandbox, not by the
-folder alone: shell commands may also write temp and toolchain caches (`~/go`,
-`~/.cargo`, `~/.cache` and the like), and reach the network unless
-`[sandbox] network = false`.
+folder alone:
+
+- shell commands may also write your `allow_write` and `--add-dir`
+  directories, temp, and toolchain caches (`~/go`, `~/.cargo`, `~/.cache` and
+  the like), and what lands in `~/.cargo/bin` or `~/go/bin` runs later outside
+  the sandbox;
+- they reach the network unless `[sandbox] network = false`.
 
 - The terminal UI asks once per folder whether to trust it, never for a home
   directory or a filesystem root, and keeps the answer in your Reasonix home.

@@ -3,6 +3,8 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"reasonix/internal/contract/config"
@@ -155,5 +157,24 @@ func TestReadOnlyKeepsFreshHumanDecisionsHuman(t *testing.T) {
 	v, _ := gate.Verdict(context.Background(), SandboxEscapeApprovalTool, json.RawMessage(`{}`), true)
 	if v.Allow || v.Code != permission.RefusalUnattended {
 		t.Fatalf("a fresh human decision passed a read-only gate: %+v", v)
+	}
+}
+
+// A trust record for a home directory, however it was written, opens nothing.
+func TestHomeDirectoryTrustOpensNothing(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no user home:", err)
+	}
+	store := t.TempDir()
+	c := New(Options{WorkspaceRoot: home, Posture: PostureEvidence{WritesConfined: true, Home: store}})
+	if err := c.SetWorkspaceTrust(config.WorkspaceTrusted); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.DefaultApprovalMode(); got != ToolApprovalAsk {
+		t.Fatalf("a trusted home directory opens in %q", got)
+	}
+	if TrustableFolder(string(filepath.Separator)) || TrustableFolder("") || !TrustableFolder(t.TempDir()) {
+		t.Fatal("TrustableFolder misjudges a root, an empty path or a project folder")
 	}
 }

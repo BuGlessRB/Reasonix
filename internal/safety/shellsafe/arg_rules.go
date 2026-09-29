@@ -16,16 +16,17 @@ var argRules = map[string]func(sub string, args []string) bool{
 	"git": gitArgsWrite,
 	"go":  goArgsWrite,
 	"gofmt": func(_ string, args []string) bool {
-		return hasAnyArg(args, "-w", "--w") || hasGoFlag(args, "cpuprofile")
+		return hasGoFlag(args, "w") || hasGoFlag(args, "cpuprofile")
 	},
 	"env": func(_ string, args []string) bool { return envRunsAProgram(args) },
 	"rg": func(_ string, args []string) bool {
-		return hasAnyArg(args, "--pre") || hasArgWithPrefix(args, "--pre=")
+		return hasLongOpt(args, "--pre", 5) || hasLongOpt(args, "--hostname-bin", 14)
 	},
 	"uniq": func(_ string, args []string) bool { return len(operands(args, "-f", "-s", "-w")) > 1 },
 	"file": func(_ string, args []string) bool { return hasShortFlag(args, 'C') || hasLongOpt(args, "--compile", 5) },
 	"date": func(_ string, args []string) bool {
-		return hasShortFlag(withoutValues(args, "-d", "--date", "-f", "--file", "-r", "--reference"), 's') || hasLongOpt(args, "--set", 3)
+		rest := withoutValues(args, "-d", "--date", "-f", "--file", "-r", "--reference")
+		return hasShortFlag(withoutPrefixed(rest, "-I"), 's') || hasLongOpt(args, "--set", 3)
 	},
 	"hostname": func(_ string, args []string) bool {
 		return len(operands(args)) > 0 || hasShortFlag(args, 'F') || hasLongOpt(args, "--file", 4)
@@ -43,17 +44,23 @@ func gitArgsWrite(sub string, args []string) bool {
 	case "grep":
 		return hasShortFlag(args, 'O') || hasLongOpt(args, "--open-files-in-pager", 4)
 	case "reflog":
-		return len(args) > 0 && (args[0] == "expire" || args[0] == "delete" || args[0] == "drop")
+		return len(args) > 0 && args[0] != "show" && args[0] != "exists" && !strings.HasPrefix(args[0], "-")
 	}
 	return false
 }
 
-// goArgsWrite: -toolexec, -exec and -vettool hand the build a program to run.
+// goArgsWrite: -toolexec, -exec and -vettool hand the build a program to run,
+// -mod may rewrite go.mod, and doc -http starts a server.
 func goArgsWrite(sub string, args []string) bool {
-	if sub == "env" && hasAnyArg(args, "-w", "-u") {
+	if sub == "env" && (hasGoFlag(args, "w") || hasGoFlag(args, "u")) {
 		return true
 	}
-	return hasGoFlag(args, "toolexec") || hasGoFlag(args, "exec") || hasGoFlag(args, "vettool")
+	for _, flag := range []string{"toolexec", "exec", "vettool", "mod", "http"} {
+		if hasGoFlag(args, flag) {
+			return true
+		}
+	}
+	return false
 }
 
 // hasShortFlag reports a short option letter anywhere in a cluster such as
@@ -122,6 +129,16 @@ func withoutValues(args []string, valued ...string) []string {
 			continue
 		}
 		out = append(out, args[i])
+	}
+	return out
+}
+
+func withoutPrefixed(args []string, prefix string) []string {
+	var out []string
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, prefix) {
+			out = append(out, arg)
+		}
 	}
 	return out
 }

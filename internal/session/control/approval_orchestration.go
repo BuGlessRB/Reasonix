@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"reasonix/internal/contract/config"
@@ -640,7 +643,38 @@ func DefaultApprovalMode(writesConfined bool, trust config.WorkspaceTrust) strin
 // DefaultApprovalMode reads the trust record now, so a folder trusted after
 // this controller was built counts.
 func (c *Controller) DefaultApprovalMode() string {
+	if !TrustableFolder(c.WorkspaceRoot()) {
+		return ToolApprovalAsk
+	}
 	return DefaultApprovalMode(c.posture.WritesConfined, c.WorkspaceTrust())
+}
+
+// TrustableFolder leaves out the folders nobody should grant wholesale: a home
+// directory or a filesystem root holds far more than one project, so a trust
+// record for one, however it got there, opens nothing.
+func TrustableFolder(root string) bool {
+	root = filepath.Clean(strings.TrimSpace(root))
+	if root == "." || root == "" || filepath.Dir(root) == root {
+		return false
+	}
+	if home, err := os.UserHomeDir(); err == nil && sameDir(home, root) {
+		return false
+	}
+	return true
+}
+
+func sameDir(a, b string) bool {
+	if r, err := filepath.EvalSymlinks(a); err == nil {
+		a = r
+	}
+	if r, err := filepath.EvalSymlinks(b); err == nil {
+		b = r
+	}
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 // WorkspaceTrust is the person's recorded decision about this workspace; an

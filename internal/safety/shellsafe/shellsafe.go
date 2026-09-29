@@ -12,11 +12,11 @@ import (
 	"reasonix/internal/base/shellparse"
 )
 
-// ReadOnlyCommands holds single-word commands whose base name alone implies a
-// read-only operation. Ones read-only only for certain subcommands are in
-// ReadOnlyPrefixes; ones a flag can turn into writers stay here and are
-// rejected by ArgsMakeReadOnlyCommandWrite. Absent on purpose: `sed`/`awk`
-// write through a script language nothing here parses; `less`/`man` run commands.
+// ReadOnlyCommands holds commands whose base name alone implies a read; ones
+// read-only only for some subcommands are in ReadOnlyPrefixes, and arguments
+// that turn one into a writer are ArgsMakeReadOnlyCommandWrite's. Absent on
+// purpose: sed/awk write through a script language nothing here parses,
+// less/man run commands, info writes where it is told.
 var ReadOnlyCommands = map[string]bool{
 	"cat": true, "head": true, "tail": true, "more": true,
 	"ls": true, "find": true, "locate": true, "which": true, "whereis": true, "type": true,
@@ -29,7 +29,7 @@ var ReadOnlyCommands = map[string]bool{
 	"stat": true, "file": true, "du": true, "df": true,
 	"ps": true, "top": true, "htop": true,
 	"diff": true, "cmp": true, "comm": true,
-	"info": true, "help": true,
+	"help": true,
 	"true": true, "false": true, "test": true, "[": true,
 	"basename": true, "dirname": true, "realpath": true, "readlink": true,
 	// PowerShell inspection cmdlets. Keep this list intentionally narrow: only

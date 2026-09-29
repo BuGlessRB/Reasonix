@@ -10,6 +10,7 @@ import (
 	"reasonix/internal/assembly/boot"
 	"reasonix/internal/contract/config"
 	"reasonix/internal/ext/hook"
+	"reasonix/internal/session/control"
 )
 
 type trustOptions struct {
@@ -53,7 +54,7 @@ func runTrust(args []string, in *bufio.Scanner, out io.Writer, interactive bool)
 		return 1
 	}
 	trust, _ := grants.Trust(root)
-	canTrust := trustPromptable(root)
+	canTrust := control.TrustableFolder(root)
 	if !canTrust {
 		fmt.Fprintf(out, "%s is a home directory or filesystem root; it is not trusted as a whole.\n", root)
 	}
