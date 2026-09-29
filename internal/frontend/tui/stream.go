@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"reasonix/internal/contract/eventwire"
@@ -22,23 +23,30 @@ type Update struct {
 
 const reconnectDelay = 500 * time.Millisecond
 
-// Subscribe follows /events until ctx ends. Numbered frames arrive exactly
-// once and in order: a jump is filled from /events/replay before the frame
-// that revealed it, and what the replay no longer holds is reported as a Gap.
-// Unnumbered frames (streaming deltas) are delivered as they come.
+// Subscribe follows /events until ctx ends. Numbered frames arrive once and in
+// order: a jump is filled from /events/replay, and what it no longer holds is a
+// Gap. Unnumbered frames (deltas) arrive as they come. It returns once the first
+// connection is attached or has failed, since the server carries a subscriber
+// only frames emitted after it attached.
 func (c *Client) Subscribe(ctx context.Context) <-chan Update {
 	out := make(chan Update, 256)
-	s := &subscription{c: c, out: out}
+	attached := make(chan struct{})
+	s := &subscription{c: c, out: out, attached: sync.OnceFunc(func() { close(attached) })}
 	go func() {
 		defer close(out)
 		for ctx.Err() == nil {
 			s.follow(ctx)
+			s.attached()
 			select {
 			case <-ctx.Done():
 			case <-time.After(reconnectDelay):
 			}
 		}
 	}()
+	select {
+	case <-attached:
+	case <-ctx.Done():
+	}
 	return out
 }
 
@@ -48,7 +56,8 @@ type subscription struct {
 	seen int64
 	// known is false until the stream states a position: 0 cannot tell a
 	// subscriber that just attached from one that has seen the stream start.
-	known bool
+	known    bool
+	attached func() // releases Subscribe; idempotent
 }
 
 func (s *subscription) follow(ctx context.Context) {
@@ -67,6 +76,9 @@ func (s *subscription) follow(ctx context.Context) {
 	if resp.StatusCode != http.StatusOK {
 		return
 	}
+	// /events registers the subscriber before it writes a byte, so a response
+	// in hand means every frame emitted from here on reaches this stream.
+	s.attached()
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 64<<10), 16<<20)
 	for sc.Scan() {
