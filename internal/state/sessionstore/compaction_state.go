@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -41,8 +42,13 @@ type CompactionState struct {
 	UpdatedAt                    time.Time `json:"updated_at"`
 }
 
+// ErrContextSchemaUnsupported marks a context sidecar whose schema this build
+// cannot interpret. The file belongs to whichever release wrote it.
+var ErrContextSchemaUnsupported = errors.New("unsupported context schema")
+
 // LoadCompactionState reads the context sidecar. Missing files return ok=false.
-// Corrupt or unsupported schema returns an error so callers can drop and rebuild.
+// Corrupt or unsupported state returns an error; the caller rebuilds from the
+// canonical transcript and leaves the file alone.
 func LoadCompactionState(sessionPath string) (CompactionState, bool, error) {
 	path := ContextStatePath(sessionPath)
 	if path == "" {
@@ -59,13 +65,42 @@ func LoadCompactionState(sessionPath string) (CompactionState, bool, error) {
 	if err := json.Unmarshal(b, &st); err != nil {
 		return CompactionState{}, false, fmt.Errorf("decode context state %s: %w", path, err)
 	}
-	if st.SchemaVersion != 0 && st.SchemaVersion != CompactionStateSchemaV1 && st.SchemaVersion != compactionStateSchemaV2 && st.SchemaVersion != compactionStateSchemaV3 {
-		return CompactionState{}, false, fmt.Errorf("unsupported context schema version %d", st.SchemaVersion)
-	}
-	if st.SchemaVersion == 0 {
+	switch st.SchemaVersion {
+	case 0:
 		st.SchemaVersion = CompactionStateSchemaV1
+	case CompactionStateSchemaV1, compactionStateSchemaV2, compactionStateSchemaV3:
+	case compactionStateSchema1xV4:
+		if err := check1xV4Projection(b); err != nil {
+			return CompactionState{}, false, fmt.Errorf("context state %s: %w", path, err)
+		}
+	default:
+		return CompactionState{}, false, fmt.Errorf("context state %s: %w version %d", path, ErrContextSchemaUnsupported, st.SchemaVersion)
 	}
 	return st, true, nil
+}
+
+// check1xV4Projection admits a 1.x schema 4 sidecar whose projection carries no
+// pinned-context checkpoint. A checkpoint is authenticated against 1.x's pinned
+// revision provenance, which this build does not model, so it cannot be trusted.
+func check1xV4Projection(b []byte) error {
+	var v4 struct {
+		Projection struct {
+			PinnedContextHash string `json:"pinned_context_hash"`
+		} `json:"projection"`
+	}
+	if err := json.Unmarshal(b, &v4); err != nil {
+		return err
+	}
+	if v4.Projection.PinnedContextHash != "" {
+		return fmt.Errorf("%w: 1.x schema 4 with a pinned-context checkpoint", ErrContextSchemaUnsupported)
+	}
+	return nil
+}
+
+// Foreign reports whether another release line wrote st. Its file is read,
+// never rewritten in place by a load.
+func (st CompactionState) Foreign() bool {
+	return st.SchemaVersion > CompactionStateSchemaCurrent
 }
 
 // SaveCompactionState writes the sidecar via strict atomic publish (temp +
@@ -122,6 +157,9 @@ const (
 	compactionStateSchemaV2      = 2
 	compactionStateSchemaV3      = 3
 	CompactionStateSchemaCurrent = compactionStateSchemaV3
+	// compactionStateSchema1xV4 is what 1.x writes from 1.36.0: schema 3 plus
+	// projection.pinned_context_hash. A 2.x schema bump must not reuse 4.
+	compactionStateSchema1xV4 = 4
 )
 
 // ContextProjection is the model-visible view of a session. The canonical
@@ -194,7 +232,7 @@ func ContextStatePath(sessionPath string) string {
 	return store.SessionContext(sessionPath)
 }
 
-// RemoveCompactionState deletes a corrupt or invalidated projection sidecar.
+// RemoveCompactionState deletes an invalidated projection sidecar.
 func RemoveCompactionState(sessionPath string) error {
 	path := ContextStatePath(sessionPath)
 	if path == "" {

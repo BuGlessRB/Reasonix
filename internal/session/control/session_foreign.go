@@ -35,6 +35,9 @@ func (c *Controller) continueForeignSession(path string) (string, error) {
 	if err := s.SaveIfAbsent(newPath); err != nil {
 		return "", fmt.Errorf("continue 1.x session: %w", err)
 	}
+	if sessionstore.InheritCompactionState(path, newPath, s.Snapshot()) {
+		c.bindExecutorProjection(newPath, true)
+	}
 	if err := sessionstore.SaveBranchMeta(newPath, meta); err != nil {
 		slog.Warn("controller: meta for continued 1.x session", "path", newPath, "err", err)
 	}
