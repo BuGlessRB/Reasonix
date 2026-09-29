@@ -235,11 +235,13 @@ type cliPermissionMode struct {
 
 // parsePermissionMode also reads 1.x's three names, so a 1.x command line
 // keeps working: workspace-write is Auto, danger-full-access is Yolo, and
-// read-only, which 2.x has no mode for, falls back to the most careful one.
+// read-only refuses every write.
 func parsePermissionMode(value string) (cliPermissionMode, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "default", "ask", "read-only":
+	case "", "default", "ask":
 		return cliPermissionMode{approval: control.ToolApprovalAsk}, nil
+	case "read-only", "readonly":
+		return cliPermissionMode{approval: control.ToolApprovalReadOnly}, nil
 	case "auto", "workspace-write":
 		return cliPermissionMode{approval: control.ToolApprovalAuto}, nil
 	case "acceptedits", "accept-edits":
@@ -255,7 +257,7 @@ func parsePermissionMode(value string) (cliPermissionMode, error) {
 	case "bypasspermissions", "bypass-permissions", "yolo", "danger-full-access":
 		return cliPermissionMode{approval: control.ToolApprovalYolo}, nil
 	default:
-		return cliPermissionMode{}, fmt.Errorf("unknown permission mode %q (want manual, ask, auto, acceptEdits, dontAsk, plan, or bypassPermissions; 1.x's read-only, workspace-write and danger-full-access also work)", value)
+		return cliPermissionMode{}, fmt.Errorf("unknown permission mode %q (want read-only, manual, ask, auto, acceptEdits, dontAsk, plan, or bypassPermissions; 1.x's workspace-write and danger-full-access also work)", value)
 	}
 }
 
@@ -513,9 +515,9 @@ func runAgent(args []string, version string) int {
 	// non-blocking headless gate instead — passed into boot.Build so every
 	// headless-only gate it constructs (task/read_only_task, writer-capable
 	// skill sub-agents, the planner runner) gets the same contract as the parent
-	// executor, not just the top-level one. Default/ask fails closed because no
-	// UI can answer; unattended writes require explicit --auto/-y,
-	// --permission-mode auto, or yolo.
+	// executor, not just the top-level one. Ask fails closed because no UI can
+	// answer; with no mode named, the build's sandbox claim and the folder's
+	// trust decide between that and auto once the controller exists.
 	overrides := runBuildOverrides(effortOverride, allowedTools, f.additionalDirs, workspaceRoot,
 		permissions.approval, cliSessionRecoveredHandler(leases), ablated)
 	overrides.Version = version
@@ -532,6 +534,9 @@ func runAgent(args []string, version string) int {
 	}
 	defer ctrl.Close()
 	SetTaskJobKiller(ctrlKillerAdapter{ctrl})
+	if strings.TrimSpace(*f.permissionMode) == "" {
+		permissions.approval = ctrl.DefaultApprovalMode()
+	}
 	ctrl.ApplyHeadlessApprovalMode(permissions.approval)
 
 	if err := bindRunSession(ctrl, leases, resumeSession, resumePath); err != nil {

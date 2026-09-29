@@ -186,6 +186,8 @@ func (c *Controller) newInteractiveGate() *permission.Gate {
 		policy.Mode = permission.Allow
 	case ToolApprovalDontAsk:
 		policy.Mode = permission.Deny
+	case ToolApprovalReadOnly:
+		policy.Mode, policy.ReadOnly = permission.Deny, true
 	default:
 		policy.Mode = permission.Ask
 	}

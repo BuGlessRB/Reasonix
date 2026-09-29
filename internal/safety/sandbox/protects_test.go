@@ -67,3 +67,12 @@ func TestConfinedWriteDirsCoverCallerRootsAndTemp(t *testing.T) {
 		t.Errorf("minimal writes still grant host temp: %v", minimal)
 	}
 }
+
+func TestIntegrityEnforcedNeedsBothTheSpecAndABackend(t *testing.T) {
+	if IntegrityEnforced(Spec{Mode: "off"}) || IntegrityEnforced(Spec{}) {
+		t.Fatal("a spec that does not enforce claims no integrity")
+	}
+	if got := IntegrityEnforced(Spec{Mode: "enforce"}); got != Available() {
+		t.Fatalf("IntegrityEnforced(enforce) = %v with a backend available = %v", got, Available())
+	}
+}

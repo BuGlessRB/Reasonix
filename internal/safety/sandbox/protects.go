@@ -12,7 +12,14 @@ import (
 // writable — caller roots, temp, toolchain caches — overlaps path in either
 // direction. path need not exist yet.
 func WriteProtects(spec Spec, path string) bool {
-	return spec.Enforce() && Available() && outsideAll(path, confinedWriteDirs(spec))
+	return IntegrityEnforced(spec) && outsideAll(path, confinedWriteDirs(spec))
+}
+
+// IntegrityEnforced reports whether a command confined by spec runs under a
+// backend that demonstrably confines its writes on this host. It is the
+// Integrity claim alone: it says nothing about reads or host authorities.
+func IntegrityEnforced(spec Spec) bool {
+	return spec.Enforce() && Available()
 }
 
 // outsideAll reports whether path neither lies under nor contains any of dirs.

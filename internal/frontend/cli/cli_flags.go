@@ -242,7 +242,7 @@ func looksLikeMachineSessionID(query string) bool {
 // takes, so a flag keeps its meaning on either side of the verb.
 func registerRunApprovalFlags(fs *pflag.FlagSet) (auto, yolo *bool) {
 	auto = fs.BoolP("auto", "y", false, "explicitly auto-approve ordinary writer fallbacks (alias for --permission-mode auto)")
-	yolo = fs.Bool("yolo", false, "skip tool approvals (alias for --permission-mode bypassPermissions)")
+	yolo = fs.Bool("yolo", false, "skip approval prompts; the sandbox, network policy and deny rules still apply (alias for --permission-mode bypassPermissions)")
 	fs.BoolVar(yolo, "dangerously-skip-permissions", false, "alias for --yolo")
 	return auto, yolo
 }

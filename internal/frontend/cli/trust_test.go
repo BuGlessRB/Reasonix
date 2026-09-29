@@ -54,3 +54,39 @@ func TestTrustApprovesWhatTheWorkspaceNamesOnlyWhenAsked(t *testing.T) {
 		t.Fatalf("pending after revoke = %d, want 2", len(pending))
 	}
 }
+
+func TestTrustRecordsTheFolderAndRevokeForgetsIt(t *testing.T) {
+	home := testenv.TempDir(t)
+	root := testenv.TempDir(t)
+	t.Setenv("REASONIX_HOME", home)
+	grants := config.NewProjectGrantStore(config.Roots{}.Home())
+	run := func(input string, interactive bool, args ...string) int {
+		var out bytes.Buffer
+		return runTrust(append([]string{"--dir", root}, args...), bufio.NewScanner(strings.NewReader(input)), &out, interactive)
+	}
+	trust := func() config.WorkspaceTrust {
+		got, err := grants.Trust(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	if code := run("", false); code != 1 || trust() != config.WorkspaceTrustUndecided {
+		t.Fatalf("an unattended trust without --yes = %d, trust %q; it must record nothing", code, trust())
+	}
+	if code := run("n\n", true); code != 1 || trust() != config.WorkspaceTrustUndecided {
+		t.Fatalf("declining = %d, trust %q", code, trust())
+	}
+	if code := run("y\n", true); code != 0 || trust() != config.WorkspaceTrusted {
+		t.Fatalf("accepting = %d, trust %q", code, trust())
+	}
+	if code := run("", false); code != 0 {
+		t.Fatalf("a trusted folder with nothing pending = %d, want 0", code)
+	}
+	if code := run("", false, "--revoke"); code != 0 || trust() != config.WorkspaceTrustUndecided {
+		t.Fatalf("revoke = %d, trust %q", code, trust())
+	}
+	if code := run("", false, "--yes"); code != 0 || trust() != config.WorkspaceTrusted {
+		t.Fatalf("--yes = %d, trust %q", code, trust())
+	}
+}

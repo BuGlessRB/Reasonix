@@ -401,7 +401,7 @@ func TestParsePermissionModeClaudeAliases(t *testing.T) {
 		// 1.x's names, so a 1.x command line keeps working.
 		"workspace-write":    {approval: control.ToolApprovalAuto},
 		"danger-full-access": {approval: control.ToolApprovalYolo},
-		"read-only":          {approval: control.ToolApprovalAsk},
+		"read-only":          {approval: control.ToolApprovalReadOnly},
 	}
 	for input, want := range tests {
 		got, err := parsePermissionMode(input)

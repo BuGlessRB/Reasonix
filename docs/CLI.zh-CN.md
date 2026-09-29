@@ -34,8 +34,8 @@ reasonix --dir /path/to/project
 | `-r`、`--resume [QUERY]` | 打开会话选择器，或恢复匹配的会话。 |
 | `--copy` | 复制要恢复的会话，并在可写副本中继续。 |
 | `--allowed-tools RULES` | 增加仅当前会话生效的权限 allow 规则；可重复传入，`--allowedTools` 是别名。 |
-| `--permission-mode MODE` | 以指定的权限姿态启动：`ask`、`auto`、`acceptEdits`、`dontAsk`、`plan` 或 `bypassPermissions`。1.x 的 `workspace-write`、`danger-full-access`、`read-only` 也能用，分别对应 Auto、Yolo、Ask。 |
-| `--yolo` | 以 YOLO 模式启动；是 `--dangerously-skip-permissions` 的别名。 |
+| `--permission-mode MODE` | 以指定的权限姿态启动：`read-only`、`ask`、`auto`、`acceptEdits`、`dontAsk`、`plan` 或 `bypassPermissions`。1.x 的 `workspace-write`、`danger-full-access` 也能用，分别对应 Auto、Yolo。不指定时见[默认姿态](#默认姿态)。 |
+| `--yolo` | 以 YOLO 模式启动；是 `--dangerously-skip-permissions` 的别名。只跳过审批：沙盒、网络策略和 deny 规则照旧生效。交互模式首次使用时确认一次。 |
 
 适用时，参数可以放在 prompt 前面或后面。
 
@@ -201,9 +201,23 @@ reasonix run "运行测试" --output-format stream-json
     "output_tokens": 0,
     "cache_read_input_tokens": 0,
     "cache_creation_input_tokens": 0
-  }
+  },
+  "permission_denials": [
+    {"tool_name": "write_file", "tool_use_id": "call_1", "code": "permission.unattended"}
+  ]
 }
 ```
+
+`permission_denials` 列出被权限门拒绝的每个调用，没有被拒时为空数组；被拒不改变退出码。
+同一个 `code` 也随被拒的工具结果出现：`stream-json` 里是 `refusalCode`，`--events-jsonl`
+里是 `refusal_code`。
+
+| `code` | 原因 |
+| --- | --- |
+| `permission.unattended` | 需要批准，但无人可以批准。 |
+| `permission.read_only` | 会话处于 `read-only`。 |
+| `permission.deny_rule` | 命中 deny 规则。 |
+| `permission.declined` | 有人拒绝了。 |
 
 `total_cost` 仅在形成单一 `selected` 展示金额时存在（ISO 代码见 `currency`）。有
 `cost_quote` 时优先读它：含原币费用、`original_totals`、发生时的官方双区域
@@ -313,12 +327,33 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 
 | 模式 | 行为 |
 | --- | --- |
+| `read-only` | 拒绝一切非读取调用——写文件、不能确认是读取的 shell 命令、未声明只读的工具——allow 规则也放不过；不弹审批。 |
 | `manual`、`ask` | 普通权限决策会弹出审批。 |
 | `auto` | 自动批准普通 fallback 操作，同时保留显式 ask 和 deny 规则。 |
 | `acceptEdits` | 允许文件编辑工具；不等同于完整 Auto 模式。 |
 | `dontAsk` | 未预先允许的请求直接拒绝，不弹出审批。 |
 | `plan` | 以只读 Plan 模式启动交互式会话。 |
-| `bypassPermissions` | 跳过审批；等同于 YOLO。 |
+| `bypassPermissions` | 跳过审批；等同于 YOLO。沙盒、网络策略和 deny 规则照旧生效，项目配置不能选它。 |
+
+只读的 shell 命令——`git status`、`ls`、`grep`、`git -C dir log` 之类，按解析后的命令结构判定，
+不看措辞——在任何模式下都不弹审批。
+
+### 默认姿态
+
+不指定模式时，只有下面两条同时成立才以 `auto` 打开：
+
+- 本机的 OS 沙盒确实约束 shell 写入（macOS 为 Seatbelt，Linux 为 bubblewrap），且
+  `[sandbox] bash` 不是 `off`；
+- 你信任了这个工作区文件夹。
+
+否则以 `ask` 打开；Windows 没有 OS 沙盒，始终如此。
+
+- 终端界面对每个文件夹问一次是否信任（家目录和文件系统根目录从不问），答案记在你的 Reasonix 主目录。
+- `reasonix trust` 信任当前文件夹，`reasonix trust --revoke` 撤销；项目自己的文件不能写入信任记录。
+- 无头运行从不询问；`ask` 下写入被拒，并列在 `permission_denials` 中。
+
+终端界面里 Shift+Tab 按 只读 → 询问 → 自动 → YOLO → 计划 循环（YOLO 确认过后才进入循环）；
+Ctrl+Y 切换 YOLO，再按回到进入前的档位。
 
 无人值守执行需要放行普通 writer fallback 时，使用 `reasonix run --auto ...`
 （或 `-y`）。它和 `--yolo` 都不能和显式 `--permission-mode` 同时使用，两者也不能同时使用。
@@ -327,7 +362,7 @@ reasonix --allowed-tools "Bash(go test ./...)" --allowed-tools read_file
 或空格分隔，也可重复传入参数。配置中的 deny 规则始终优先于命令行 allow 规则。
 
 在非交互运行（`reasonix run` / `-p`）下没有可应答的审批，各模式都以非阻塞方式解析。
-默认 `ask` / `manual` 对显式 Ask 决策和普通 writer fallback 失败关闭，只读调用仍会执行；
+`ask` / `manual` 对显式 Ask 决策和普通 writer fallback 失败关闭，只读调用仍会执行；
 `acceptEdits` 放行其列出的文件编辑工具，其他 Ask 决策失败关闭；`auto` 放行普通 writer
 fallback，但仍拒绝显式 ask 规则；`dontAsk` 拒绝未批准的 writer；`bypassPermissions`
 可越过普通 ask 与 writer fallback，但配置的 deny、Sandbox，以及始终需要人工新鲜批准的

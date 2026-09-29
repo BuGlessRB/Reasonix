@@ -26,6 +26,10 @@ func (denyPermissionApprover) Approve(context.Context, string, string, json.RawM
 	return false, false, nil
 }
 
+// Unattended marks this refusal as nobody's: permission reports it apart from
+// a person declining.
+func (denyPermissionApprover) Unattended() bool { return true }
+
 // ApproveWithReason says which refusal this is: without a reason the gate reports
 // "the user declined this tool call", untrue when there was no user, and the
 // model goes to ask someone who was never there. A call only a person may

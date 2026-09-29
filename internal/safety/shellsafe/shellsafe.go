@@ -129,6 +129,7 @@ func ClassifyReadOnlyFields(fields []string) (base, sub string, out []string, ok
 		return "", "", nil, false
 	}
 	base = strings.ToLower(fields[0])
+	fields = withoutGitLocationOptions(base, fields)
 	if ReadOnlyCommands[base] {
 		if hasResolvedSubstitution(fields) && !substitutionSafeCommands[base] {
 			return "", "", nil, false
@@ -263,6 +264,7 @@ func readOnlyFields(fields []string) (base, sub string, ok bool) {
 		return "", "", false
 	}
 	base = strings.ToLower(fields[0])
+	fields = withoutGitLocationOptions(base, fields)
 	if ReadOnlyCommands[base] {
 		return base, "", true
 	}
