@@ -249,6 +249,8 @@ type Completion struct {
 	To    int              `json:"to"`
 	Query string           `json:"query,omitempty"`
 	Items []CompletionItem `json:"items"`
+	// Typed is the command the line already spells in full, kept out of Items.
+	Typed *CompletionItem `json:"typed,omitempty"`
 }
 
 type CompletionItem struct {

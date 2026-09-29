@@ -95,6 +95,9 @@ func (m *model) onCompletion(msg completionMsg) {
 	}
 	c := msg.c
 	c.Items = append(m.localCommands(msg.line), c.Items...)
+	if c.Typed != nil {
+		c.Items = append([]CompletionItem{*c.Typed}, c.Items...)
+	}
 	if len(c.Items) == 0 {
 		m.menu = nil
 		return
@@ -139,11 +142,27 @@ func (m *model) menuKey(k string) (tea.Cmd, bool) {
 	case "esc":
 		m.menu = nil
 	case "enter":
+		if m.menuChoiceTyped() {
+			m.menu = nil
+			return nil, false
+		}
 		return m.acceptCompletion(), true
 	default:
 		return nil, false
 	}
 	return nil, true
+}
+
+// menuChoiceTyped reports a line that already says what the highlighted row
+// would make it — the command's name, or the argument in place — so Enter sends
+// it instead of completing it again.
+func (m *model) menuChoiceTyped() bool {
+	item, line := m.menu.c.Items[m.menu.sel], m.menu.line
+	if strings.TrimSpace(line) == item.Label {
+		return true
+	}
+	from, to := byteAt(line, m.menu.c.From), byteAt(line, m.menu.c.To)
+	return from < to && line[from:to] == item.Insert
 }
 
 // acceptCompletion replaces the token the menu answered with the chosen item.

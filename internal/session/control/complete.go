@@ -41,6 +41,10 @@ type Completion struct {
 	// here rather than leaving a fuzzy hit unexplained.
 	Query string      `json:"query,omitempty"`
 	Items []SlashItem `json:"items"`
+	// Typed is the command the line already spells in full. It stays out of
+	// Items, where accepting it would change nothing, yet a terminal whose
+	// Enter runs a finished command needs to know that command exists.
+	Typed *SlashItem `json:"typed,omitempty"`
 }
 
 // CompletionData is everything Complete cannot read for itself. Names is the
@@ -76,8 +80,10 @@ func Complete(line string, cursor int, d CompletionData) Completion {
 	// Still naming the command itself. Filtering uses the whole line so a
 	// mid-token cursor never rewrites what was already typed.
 	if !strings.ContainsAny(line, " \t\n") {
-		if items := dropTyped(FuzzySlashNames(d.Names, line), line); len(items) > 0 {
-			return Completion{Kind: CompleteSlash, To: len(line), Query: line, Items: items}
+		matches := FuzzySlashNames(d.Names, line)
+		typed := typedItem(matches, line)
+		if items := dropTyped(matches, line); len(items) > 0 || typed != nil {
+			return Completion{Kind: CompleteSlash, To: len(line), Query: line, Items: items, Typed: typed}
 		}
 		return noCompletion()
 	}
@@ -99,6 +105,16 @@ func dropTyped(items []SlashItem, typed string) []SlashItem {
 		}
 	}
 	return out
+}
+
+// typedItem is the row dropTyped would remove: the token spelled in full.
+func typedItem(items []SlashItem, typed string) *SlashItem {
+	for _, it := range items {
+		if it.Insert == typed {
+			return &it
+		}
+	}
+	return nil
 }
 
 // An empty item list rather than a nil one: this crosses a JSON boundary, and
