@@ -773,11 +773,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
               <span>{t(stopping ? "正在停止…" : "停下")}</span>
             </button>
           )}
-          {/* While a turn runs, the emphasised action is stopping it: steering is
-              one Enter away and the footer says so, while stopping has no other
-              way in. The rightmost button keeps its place either way — it is
-              always "send what I typed". */}
-          <button
+          {(!running || hasDraft) && <button
             className="btn send"
             data-primary={running ? undefined : ""}
             data-action="session.send"
@@ -792,7 +788,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
               </svg>
             </span>
             <span>{t(submitting ? "正在发送…" : running ? "插话" : "发送")}</span>
-          </button>
+          </button>}
         </span>
       </div>
     </div>

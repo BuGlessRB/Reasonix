@@ -119,11 +119,11 @@ describe("the emphasised action while a turn runs", () => {
     expect(primary?.textContent).toBe("停下");
   });
 
-  it("leaves steering where sending was, so the rightmost button never moves", () => {
+  it("shows only stop during a live turn with an empty draft", () => {
     const idle = draw().container.querySelector(".go .btn:last-child span:last-child")?.textContent;
     cleanup();
     const live = draw(status(), true).container.querySelector(".go .btn:last-child span:last-child")?.textContent;
-    expect([idle, live]).toEqual(["发送", "插话"]);
+    expect([idle, live]).toEqual(["发送", "停下"]);
   });
 
   it("puts it back on sending once the turn is over", () => {

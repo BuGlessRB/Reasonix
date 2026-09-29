@@ -168,18 +168,41 @@ describe("composer drafts", () => {
 });
 
 describe("composer run controls", () => {
-  it("offers steering and stopping as separate actions during a live turn", async () => {
+  it.each([false, true])("shows steering only with content during a live turn (pending ask: %s)", async (asking) => {
     const port = new MockPort();
     const cancel = vi.spyOn(port, "cancel").mockResolvedValue();
     const onSubmit = vi.fn(async () => true);
-    const { box } = draw({ port, running: true, onSubmit });
-    expect((screen.getByRole("button", { name: "插话" }) as HTMLButtonElement).disabled).toBe(true);
+    const { box } = draw({ port, running: true, onSubmit,
+      st: status({ running: true, decisions: asking ? [{ id: "ask-1", kind: "ask" }] : [] }),
+    });
+    expect(screen.queryByRole("button", { name: "插话" })).toBeNull();
     expect((screen.getByRole("button", { name: "停下" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.change(box, { target: { value: "   " } });
+    expect(screen.queryByRole("button", { name: "插话" })).toBeNull();
+    fireEvent.change(box, { target: { value: "Check" } });
+    expect((screen.getByRole("button", { name: "插话" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByRole("button", { name: "停下" })).toBeTruthy();
+    fireEvent.change(box, { target: { value: "" } });
+    expect(screen.queryByRole("button", { name: "插话" })).toBeNull();
     fireEvent.change(box, { target: { value: "先检查日志", selectionStart: 5 } });
     fireEvent.click(screen.getByRole("button", { name: "插话" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith("先检查日志"));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "插话" })).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "停下" }));
     await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
+  });
+
+  it("allows attachment-only steering during a live turn", async () => {
+    const port = new MockPort();
+    vi.spyOn(port, "attach").mockResolvedValue({ path: ".reasonix/attachments/note.txt", ref: "@note.txt", image: false });
+    const { container, onSubmit } = draw({ port, running: true });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["note"], "note.txt", { type: "text/plain" })] } });
+    const send = await screen.findByRole("button", { name: "插话" });
+    expect((send as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByRole("button", { name: "停下" })).toBeTruthy();
+    fireEvent.click(send);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith("@note.txt"));
   });
 
   it("does not take Shift+Tab away from reverse focus navigation", () => {
@@ -207,7 +230,7 @@ describe("composer run controls", () => {
     expect((pending as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(pending);
     expect(cancel).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole("button", { name: "插话" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "插话" })).toBeNull();
     view.rerender(<Composer {...props} running={false} />);
     await waitFor(() => expect(screen.queryByRole("button", { name: "正在停止…" })).toBeNull());
   });
