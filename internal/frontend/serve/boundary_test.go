@@ -42,7 +42,8 @@ func TestRevokeRememberedProjectRuleRebuildsWithoutChangingOtherGrants(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
-	before := s.Controller()
+	before := s.Controller().(*control.Controller)
+	before.RestoreSessionAuthorizations(control.SessionAuthorizations{Grants: []string{"Bash(go test:*)", "Bash(git status:*)"}})
 	srv := httptest.NewServer(operatorHandler(s))
 	defer srv.Close()
 	resp := postProvider(t, srv.URL, "/permissions/remembered/revoke", `{"rule":"Bash(go test:*)"}`)
@@ -53,6 +54,10 @@ func TestRevokeRememberedProjectRuleRebuildsWithoutChangingOtherGrants(t *testin
 	}
 	if s.Controller() == before {
 		t.Fatal("grant removed on disk without rebuilding the active runtime")
+	}
+	rebuilt := s.Controller().(*control.Controller)
+	if !slices.Equal(rebuilt.SessionAuthorizations().Grants, []string{"Bash(git status:*)"}) {
+		t.Fatalf("rebuilt controller retained revoked session grant: %+v", rebuilt.SessionAuthorizations())
 	}
 	grant, err := store.Grant(workspace)
 	if err != nil || !slices.Equal(grant.Allow, []string{"Bash(git status:*)"}) || len(grant.AllowWrite) != 1 {
@@ -67,6 +72,7 @@ func TestRevokeRememberedProjectRuleRebuildsWithoutChangingOtherGrants(t *testin
 func TestRevokeRememberedProjectRuleReportsUnavailableStoreByCode(t *testing.T) {
 	workspace := t.TempDir()
 	s := newProviderEditServer(t, workspace)
+	s.Controller().(*control.Controller).RestoreSessionAuthorizations(control.SessionAuthorizations{Grants: []string{"Bash(go test:*)"}})
 	store := config.NewProjectGrantStore(config.Roots{}.Home())
 	if err := os.WriteFile(store.Path(), []byte("broken JSON"), 0o600); err != nil {
 		t.Fatal(err)
@@ -84,6 +90,9 @@ func TestRevokeRememberedProjectRuleReportsUnavailableStoreByCode(t *testing.T) 
 	}
 	if refusal.Code != "project_grants.unavailable" {
 		t.Fatalf("malformed grant store refusal = %+v", refusal)
+	}
+	if !slices.Equal(s.Controller().(*control.Controller).SessionAuthorizations().Grants, []string{"Bash(go test:*)"}) {
+		t.Fatal("failed persistent revoke removed the session grant")
 	}
 }
 

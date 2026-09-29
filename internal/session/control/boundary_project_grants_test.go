@@ -1,6 +1,7 @@
 package control
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -61,8 +62,19 @@ func TestRevokeRememberedProjectRulePreservesOtherWorkspaceAndWriteGrant(t *test
 	}
 	ctrl := New(Options{WorkspaceRoot: workspace})
 	defer ctrl.Close()
+	ctrl.RestoreSessionAuthorizations(SessionAuthorizations{Grants: []string{"Bash(go test:*)", "Bash(git status:*)"}})
+	command := json.RawMessage(`{"command":"go test ./..."}`)
+	if !ctrl.approval.preApproved("bash", "go test ./...", command) {
+		t.Fatal("session grant did not authorize the command before revocation")
+	}
 	if err := ctrl.RevokeRememberedProjectRule("Bash(go test:*)"); err != nil {
 		t.Fatal(err)
+	}
+	if ctrl.approval.preApproved("bash", "go test ./...", command) {
+		t.Fatal("revoked project rule still authorized by its session grant")
+	}
+	if !slices.Equal(ctrl.SessionAuthorizations().Grants, []string{"Bash(git status:*)"}) {
+		t.Fatalf("other session grants changed: %+v", ctrl.SessionAuthorizations())
 	}
 	got, err := store.Grant(workspace)
 	if err != nil || !slices.Equal(got.Allow, []string{"Bash(git status:*)"}) || !slices.Equal(got.AllowWrite, []string{"/tmp/external"}) {

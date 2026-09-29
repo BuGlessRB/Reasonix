@@ -115,16 +115,22 @@ func (c *Controller) RevokeSessionGrant(rule string) int {
 // RevokeRememberedProjectRule removes one persistent allow rule for this
 // workspace. The store resolves its fingerprint and preserves other grants.
 // The host rebuilds the runtime after this write so the active gate follows it.
+// A successful revoke also drops a matching same-session grant before the
+// rebuild snapshots authorizations for the replacement controller.
 func (c *Controller) RevokeRememberedProjectRule(rule string) error {
 	root := c.WorkspaceRoot()
 	if root == "" || strings.TrimSpace(rule) == "" {
 		return fmt.Errorf("%w: workspace and rule are required", config.ErrProjectGrantsUnavailable)
 	}
 	store := config.NewProjectGrantStore(config.Roots{}.Home())
-	return store.Update(root, func(grant config.ProjectGrant) (config.ProjectGrant, error) {
+	if err := store.Update(root, func(grant config.ProjectGrant) (config.ProjectGrant, error) {
 		grant.Allow = slices.DeleteFunc(grant.Allow, func(saved string) bool { return saved == rule })
 		return grant, nil
-	})
+	}); err != nil {
+		return err
+	}
+	c.approval.revokeSessionGrant(rule)
+	return nil
 }
 
 // SavePermissionRules replaces the three lists wholesale after validating every
