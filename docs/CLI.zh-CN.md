@@ -182,6 +182,14 @@ reasonix -p "总结 diff" --output-format json
 reasonix run "运行测试" --output-format stream-json
 ```
 
+`stream-json` 在结果对象之前的各行遵循 1.x 的约定：
+
+- 每行都带 `sessionId`、`turnId`、`seq`（从 1 开始）和 `status`。
+- 回合以 `turn_status`（`status: "queued"`）和 `user_message` 开始。
+- 通过全部关卡并真正执行的工具调用，在 `tool_result` 之前先报 `tool_started`。
+- 回合以 `turn_done` 结束：`completed`、`failed` 或 `interrupted`。
+- 只输出 1.x 输出过的事件种类，工作区租约之类的宿主内部状态不进入这条流。
+
 最终结构化对象的格式如下：
 
 ```json
@@ -250,7 +258,8 @@ reasonix run --events-jsonl "运行 focused tests"
 ```
 
 每行都包含 `schema_version`、`sequence` 和 `kind`，最后一行为
-`kind: "run_done"`。`--events-jsonl` 与包含更多内容的
+`kind: "run_done"`。生命周期记录与 `stream-json` 相同（`turn_status`、`user_message`、
+`tool_started`、`turn_done`），但不带内容。`--events-jsonl` 与包含更多内容的
 `--output-format stream-json` 是两个独立契约，不能和 `--output-format`
 组合使用。
 

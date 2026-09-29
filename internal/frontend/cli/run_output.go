@@ -174,6 +174,7 @@ type runOutputSink struct {
 	nextMachineToolID   uint64
 	nextMachineToolName uint64
 	permissions         runPermissionRecord
+	turn                runTurnEnvelope
 	err                 error
 }
 
@@ -256,11 +257,8 @@ func (s *runOutputSink) Emit(e event.Event) {
 	if s.format == runOutputText && e.Kind == event.Notice && (e.Level == event.LevelWarn || closesWarning(e.Code)) {
 		s.writeDiagnostic(e)
 	}
-	if s.format == runOutputStreamJSON && s.err == nil {
-		s.err = s.encoder.Encode(eventwire.ToWire(e))
-	} else if s.format == runOutputEventsJSONL && s.err == nil {
-		s.sequence++
-		s.err = s.encoder.Encode(s.machineEventRecordFor(e, s.sequence))
+	if s.format == runOutputStreamJSON || s.format == runOutputEventsJSONL {
+		s.writeStreamEvent(e)
 	}
 }
 
@@ -302,6 +300,10 @@ func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr err
 		return s.err
 	}
 	completion := classifyRunCompletion(runErr)
+	s.finishTurn(runErr, completion)
+	if s.err != nil {
+		return s.err
+	}
 	if s.format == runOutputEventsJSONL {
 		s.sequence++
 		turns := s.turns

@@ -545,7 +545,7 @@ func runAgent(args []string, version string) int {
 		return 1
 	}
 
-	recordTrajectoryHeader(chain.trajectory, ctrl, version)
+	chain.begin(ctrl, version, prompt)
 	runErr := ctrl.Run(ctx, prompt)
 	reporter.RecordRecovery(ctrl.DrainRecoveryMetrics())
 	completion := classifyRunCompletion(runErr)
