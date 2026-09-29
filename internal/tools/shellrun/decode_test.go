@@ -1,6 +1,8 @@
 package shellrun
 
 import (
+	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -10,6 +12,78 @@ import (
 )
 
 const codePageLine = "FIND: 参数格式不正确\r\n"
+
+func TestCodePageOutputChild(t *testing.T) {
+	if os.Getenv("REASONIX_TEST_CODEPAGE_CHILD") != "1" {
+		return
+	}
+	data := gbkBytes(t, codePageLine)
+	_, _ = os.Stdout.Write(data[:8])
+	_, _ = os.Stdout.Write(data[8:])
+	os.Exit(0)
+}
+
+func TestForegroundCodePageProgressMatchesFinalOutput(t *testing.T) {
+	var progress strings.Builder
+	res := RunForeground(context.Background(), Request{
+		Argv:     []string{os.Args[0], "-test.run=^TestCodePageOutputChild$"},
+		Env:      append(os.Environ(), "REASONIX_TEST_CODEPAGE_CHILD=1"),
+		Progress: func(chunk string) { progress.WriteString(chunk) },
+	})
+	if res.Err != nil {
+		t.Fatalf("run: %v", res.Err)
+	}
+	if res.Combined != codePageLine {
+		t.Fatalf("final output = %q, want %q", res.Combined, codePageLine)
+	}
+	if got := progress.String(); got != codePageLine {
+		t.Fatalf("progress = %q, want %q", got, codePageLine)
+	}
+}
+
+func TestProgressDecodesSplitCodePageAndUTF8Characters(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data []byte
+		want string
+	}{
+		{"GBK", gbkBytes(t, "参数\n"), "参数\n"},
+		{"GBK without newline", gbkBytes(t, "参数"), "参数"},
+		{"UTF-8", []byte("参数\n"), "参数\n"},
+		{"UTF-8 without newline", []byte("参数"), "参数"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got strings.Builder
+			w := newProgressWriter(func(s string) { got.WriteString(s) }, 1<<20, "")
+			for _, b := range tc.data {
+				_, _ = w.Write([]byte{b})
+			}
+			w.Flush()
+			if got.String() != tc.want {
+				t.Fatalf("progress = %q, want %q", got.String(), tc.want)
+			}
+		})
+	}
+}
+
+func TestProgressKeepsASCIIPartialsLive(t *testing.T) {
+	var got strings.Builder
+	w := newProgressWriter(func(s string) { got.WriteString(s) }, 1<<20, "")
+	_, _ = w.Write([]byte("building..."))
+	if got.String() != "building..." {
+		t.Fatalf("partial ASCII progress = %q", got.String())
+	}
+}
+
+func TestProgressCapDoesNotSplitCodePageCharacter(t *testing.T) {
+	var got strings.Builder
+	w := newProgressWriter(func(s string) { got.WriteString(s) }, 3, "<truncated>")
+	_, _ = w.Write(gbkBytes(t, "参数"))
+	w.Flush()
+	if got.String() != "参<truncated>" {
+		t.Fatalf("bounded progress = %q", got.String())
+	}
+}
 
 func gbkBytes(t *testing.T, s string) []byte {
 	t.Helper()
