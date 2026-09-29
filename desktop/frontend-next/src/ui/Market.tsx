@@ -114,7 +114,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
         </div>
         <label className="mkt-pin">
           <input type="checkbox" data-action="market.pinned" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
-          {t("只看可安装")}
+          {t("只看已固定")}
         </label>
       </div>
       {error && (
@@ -125,7 +125,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
         </div>
       )}
       {rows === null && !error && <div className="empty">{t("正在读取…")}</div>}
-      {rows?.length === 0 && !error && <div className="empty">{t(pinned ? "没有找到可安装的包。可关闭筛选查看全部包。" : "没有找到匹配的包。")}</div>}
+      {rows?.length === 0 && !error && <div className="empty">{t(pinned ? "没有找到已固定内容的包。可关闭筛选查看全部包。" : "没有找到匹配的包。")}</div>}
       <ul className="mkt-list">
         {rows?.map((p) => (
           <li key={p.slug}>
@@ -146,8 +146,8 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
                 <span className="mkt-sum">{p.summary}</span>
                 <span className="mkt-meta mkt-id">{`@${p.handle} · v${p.latestVersion}`}</span>
                 {/* Outside the truncating meta so a narrow row loses the handle, never this. */}
-                <span className="mkt-pinned" data-on={p.pinned ? "" : undefined} title={p.pinned === false ? t("审核版本没有固定内容，不能从市场安装") : undefined}>
-                  {t(p.pinned === undefined ? "固定状态未知" : p.pinned ? "可安装" : "未固定")}
+                <span className="mkt-pinned" data-on={p.pinned ? "" : undefined} title={p.pinned === false ? t("审核时没有记录内容摘要，需要信任发布者后安装") : undefined}>
+                  {t(p.pinned === undefined ? "固定状态未知" : p.pinned ? "已固定" : "未固定")}
                 </span>
               </span>
             </button>
@@ -175,11 +175,13 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
   }, [port, slug]);
 
   const update = !!d?.installed && d.installed.version !== d.package.latestVersion;
-  const look = async () => {
+  // trust is the person accepting a version no reviewer pinned; the kernel
+  // then pins the install to this preview's digest instead.
+  const look = async (trust = false) => {
     setBusy(true);
     setError("");
     try {
-      setPlan(await port.planMarket({ slug, replace: update }));
+      setPlan(await port.planMarket({ slug, replace: update, ...(trust ? { trust } : {}) }));
     } catch (e) {
       setError(reason(e));
     } finally {
@@ -191,7 +193,8 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
     setBusy(true);
     setError("");
     try {
-      const out = await port.installMarket({ slug, version: plan.version, planId: plan.planId, replace: update });
+      const pin = plan.unreviewed ? { trust: true, digest: plan.contentDigest } : {};
+      const out = await port.installMarket({ slug, version: plan.version, planId: plan.planId, replace: update, ...pin });
       setDone(out);
       if (out.applied) onInstalled();
     } catch (e) {
@@ -260,6 +263,12 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
       </div>
       {p.summary && <p className="mkt-sum">{p.summary}</p>}
       {p.description && <p className="mkt-desc">{p.description}</p>}
+      {!d.pinned && !current && (
+        <div className="find" data-lvl="warn" data-unpinned="">
+          <span className="t">{t("内容未经审核固定")}</span>
+          <span className="why">{t("审核时没有记录内容摘要，无法确认来源现在提供的仍是审核过的内容。只在你信任发布者 @{handle} 时安装。", { handle: p.handle })}</span>
+        </div>
+      )}
       <dl className="mkt-facts">
         <dt>{t("发布者")}</dt>
         <dd>@{p.handle}</dd>
@@ -289,14 +298,17 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
             ? t("已安装 {version}", { version: d.installed!.version })
             : stuck
               ? t("技能不会被原地覆盖：先在「已安装」里移除旧版本，再回来安装")
-              : d.pinned
-              ? t("先列出将安装的全部内容，确认后才会写入")
-              : t("审核版本没有固定内容，不能从市场安装")}
+              : t("先列出将安装的全部内容，确认后才会写入")}
         </span>
         {back}
         {!current && !stuck && d.pinned && (
           <button className="act" data-action="market.inspect" data-primary disabled={busy} onClick={() => void look()}>
             {t(busy ? "读取中…" : update ? "查看更新内容" : "查看将安装的内容")}
+          </button>
+        )}
+        {!current && !stuck && !d.pinned && (
+          <button className="act" data-action="market.trust" data-primary disabled={busy} onClick={() => void look(true)}>
+            {t(busy ? "读取中…" : "信任并安装")}
           </button>
         )}
       </div>
@@ -317,7 +329,7 @@ export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSig
   const at = handle ? view : "browse";
   return (
     <Group id="market" title={t("社区市场")}
-      hint={t("社区发布、经过审核的技能、插件、MCP 服务与主题。只有固定了审核内容的版本才能安装；安装前会列出将写入的全部内容，与粘贴地址安装走同一套确认。")}>
+      hint={t("社区发布、经过审核的技能、插件、MCP 服务与主题。固定了审核内容的版本按审核时的内容安装，未固定的需要你信任发布者；安装前都会列出将写入的全部内容，与粘贴地址安装走同一套确认。")}>
       {handle ? (
         <div className="seg mkt-views" data-text role="radiogroup" aria-label={t("社区市场")}>
           {VIEWS.map(([id, name]) => (
