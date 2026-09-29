@@ -23,6 +23,9 @@ func IsValidSkillName(name string) bool {
 		return false
 	}
 	for i, r := range name {
+		if unicode.Is(unicode.Variation_Selector, r) || unicode.Is(unicode.Other_Default_Ignorable_Code_Point, r) {
+			return false
+		}
 		if unicode.IsLetter(r) || unicode.IsNumber(r) || i > 0 && (unicode.IsMark(r) || r == '.' || r == '_' || r == '-') {
 			continue
 		}
