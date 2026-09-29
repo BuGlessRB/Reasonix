@@ -168,6 +168,9 @@ JSONL 记录，便于离线回放并归因时间去向（工具执行 vs. 两次
 reasonix run --metrics run.json --trajectory run.trajectory.jsonl "修复失败的测试"
 ```
 
+正常的 `run` 或 `-p` 只在标准错误里写需要用户处理的警告。加 `--debug` 会额外输出诊断日志，
+例如组装耗时和续接会话的缓存状态。
+
 ### 输出格式
 
 | 格式 | 行为 |

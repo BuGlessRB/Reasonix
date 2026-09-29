@@ -89,7 +89,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 	runFlags := []cliCompletionFlag{
 		model, preset, profile,
 		completionFlag("--max-steps", cliCompletionStaticValue),
-		completionFlag("--show-thinking", cliCompletionNoValue),
+		completionFlag("--show-thinking", cliCompletionNoValue), completionFlag("--debug", cliCompletionNoValue),
 		completionFlag("--metrics", cliCompletionPathValue),
 		completionFlag("--dir", cliCompletionPathValue),
 		completionFlag("--continue -c", cliCompletionNoValue),

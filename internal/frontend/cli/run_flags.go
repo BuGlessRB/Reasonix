@@ -27,6 +27,8 @@ func newRunFlags() *runFlags {
 	f.presetFlag = fs.String("preset", "balanced", "agent execution setting: light | balanced | delivery")
 	f.maxSteps = fs.Int("max-steps", 0, "one-off max tool-call rounds (0 = automatic)")
 	f.showThinking = fs.Bool("show-thinking", false, "show thinking text instead of the collapsed thinking marker")
+	fs.Var(new(debugLogFlag), "debug", "write diagnostic logs (assembly timing, cache state) to stderr")
+	fs.Lookup("debug").NoOptDefVal = "true"
 	f.metricsPath = fs.String("metrics", "", "write a JSON token/cache/cost summary of the run to this path")
 	f.trajectoryPath = fs.String("trajectory", "", "append a timestamped JSONL trajectory of the run's full event stream (tool calls, reasoning, decisions) to this path")
 	f.ablateFlag, f.foldIndexFlag = registerArmFlags(fs)
