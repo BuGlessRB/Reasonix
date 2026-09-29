@@ -105,7 +105,7 @@
 
     --read: 16px;
 
-    --doc: min(100%, 706px); --wide: min(100%, 1120px);
+    --column: 760px; --doc: min(100%, var(--column)); --wide: min(100%, 1120px);
 
     --srail-w: 54px;
   }

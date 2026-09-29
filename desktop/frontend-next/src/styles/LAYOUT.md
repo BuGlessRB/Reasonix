@@ -329,6 +329,14 @@ rules are written in.
   sides, so two rail widths are reserved, not one: half of one lands on the rail
   side and the prose reaches under a strip that takes every pointer event, where
   a click is a jump rather than a selection.
+- The reading measure is one column shared by the transcript and the composer.
+  `.flow` is laid at `--doc`; the composer, its aux shelf and its notes at
+  `--column`. A card's edges are the composer's.
+- Rows inside the flow carry no ceiling of their own. A narrower cap on replies
+  or user turns puts the steps card and the bubble short of the composer's edge.
+- The full measure moves `--doc` alone: the transcript widens and the composer
+  keeps the reading width, where the line being typed stays one glance.
+- Below 680px both columns take the phone rule instead (see *Phones*).
 - Docking the agent's browser puts the pane on a grid, and the browser's column
   spans the body's row and the composer's. Inside the conversation column `100%`
   is that column, so the composer's own centring keeps it off the divider, and

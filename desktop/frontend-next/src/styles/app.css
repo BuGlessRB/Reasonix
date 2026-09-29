@@ -909,7 +909,6 @@
   }
 
   .chunk { display: flow-root }
-  .call[data-k="say"], .call[data-k="me"] { max-width: var(--doc) }
 
   .chunk > .enterbox > .call {
     content-visibility: auto;
@@ -3746,7 +3745,7 @@
   }
   .stallbar .why { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 
-  .rc { margin: 4px 0 2px; max-width: var(--doc) }
+  .rc { margin: 4px 0 2px }
   .rc-ok {
     display: flex; flex-direction: row; align-items: baseline; gap: 8px;
     font: var(--w-reg) var(--fs-ui)/1.6 var(--ui); color: var(--ghost);
