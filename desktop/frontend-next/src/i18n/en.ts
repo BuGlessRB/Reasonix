@@ -1204,5 +1204,6 @@ export const EN: Record<string, string> = {
   "模型在重复输出同一段文字": "The model is repeating the same text",
   "同一段内容被逐字重复": "The same block is being repeated verbatim",
   "任务已按设置暂停：模型卡在重复输出同一段文字": "Paused by your setting: the model is stuck repeating the same text",
+  "等待你的输入": "Waiting for you",
   "模型卡在重复输出同一段文字，这一轮已停止；可以重试、补充引导，或换一个供应商/模型": "The model is stuck repeating the same text; this turn was stopped. Try again, add guidance, or switch provider/model.",
 };

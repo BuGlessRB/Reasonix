@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import "../testkit";
 import { NoticeCard } from "./NoticeCard";
 import { t } from "../../i18n";
@@ -54,5 +54,34 @@ describe("a notice card", () => {
   it("shows an unknown code's own English rather than nothing", () => {
     const box = draw({ code: "some_future_code", text: "something the kernel said" });
     expect(box.querySelector(".find .t")?.textContent).toContain("something the kernel said");
+  });
+});
+
+// A hand-back's detail is the model's own writing, so it gets the markup a
+// reply gets rather than a diagnostic's plain line.
+// The renderer is a lazy chunk; its first import under a loaded runner is slow.
+const LOADED = { timeout: 10_000 };
+
+describe("a hand-back notice", () => {
+  const handBack = {
+    level: "info" as const,
+    code: "await_user",
+    text: "waiting for you: pick a way",
+    detail: "**Done so far**\n\n1. **Batch** the rest\n2. Stop here\n\n[docs](https://example.com) <img src=x onerror=alert(1)>",
+  };
+
+  it("renders the model's markdown", async () => {
+    const box = draw(handBack);
+    await waitFor(() => expect(box.querySelector(".nmd strong")).not.toBeNull(), LOADED);
+    expect(box.querySelectorAll(".nmd ol li")).toHaveLength(2);
+    expect(box.querySelector(".find .why")).toBeNull();
+    expect(box.querySelector(".find .t")?.textContent).toContain(t("等待你的输入"));
+  });
+
+  it("keeps it to the sanitized subset a reply gets", async () => {
+    const box = draw(handBack);
+    await waitFor(() => expect(box.querySelector(".nmd a")).not.toBeNull(), LOADED);
+    expect(box.querySelector(".nmd a")?.getAttribute("rel")).toContain("noopener");
+    expect(box.querySelector(".nmd img[onerror]")).toBeNull();
   });
 });
