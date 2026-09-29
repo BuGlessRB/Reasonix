@@ -89,3 +89,16 @@ func dispatchOfflineMode(mode string, a offlineModeArgs) bool {
 	}
 	return true
 }
+
+// absTrajectoryDir anchors -trajectories to the operator's cwd. Each task's
+// child runs with the task workdir as its cwd, so a relative value would name
+// a directory under every workdir instead of the one the operator meant.
+func absTrajectoryDir(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(dir); err == nil {
+		return abs
+	}
+	return dir
+}
