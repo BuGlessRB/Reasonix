@@ -28,6 +28,8 @@ const DefaultRelayURL = "wss://remote.reasonix.io"
 
 const desktopResponseChunk = 24 << 10
 
+var errAccountChanged = errors.New("remote cloud: account changed")
+
 type Status struct {
 	DeviceID string `json:"deviceId,omitempty"`
 	Name     string `json:"name,omitempty"`
@@ -50,6 +52,8 @@ type Host struct {
 	desktop    DesktopService
 	presence   ControllerPresence
 	disconnect chan controllerDisconnect
+
+	link relayLink
 
 	mu    sync.RWMutex
 	state hostState
@@ -93,6 +97,8 @@ type ControllerPresence interface {
 type controllerSession struct {
 	cipher  *sessionCipher
 	ordinal int
+	nonce   string
+	lastSeq int64
 }
 
 func New(client *account.Client, dialer *websocket.Dialer, relayURL, version string, tasks ...TaskService) *Host {
@@ -162,10 +168,13 @@ func (h *Host) publish(status Status) {
 }
 
 func (h *Host) Run(ctx context.Context) {
+	defer h.dropControllers()
 	backoff := time.Second
 	for ctx.Err() == nil {
+		h.expireSuspended(time.Now())
 		token := strings.TrimSpace(h.token())
 		if token == "" {
+			h.dropControllers()
 			h.publish(Status{})
 			if !wait(ctx, time.Second) {
 				return
@@ -179,6 +188,11 @@ func (h *Host) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		if errors.Is(err, errAccountChanged) {
+			h.dropControllers()
+			h.link.replay = replayCache{}
+		}
+		h.suspend(time.Now())
 		status := h.Status()
 		wasOnline := status.Online
 		status.Online = false
@@ -280,6 +294,8 @@ type controllerCommand struct {
 	Method  string `json:"method,omitempty"`
 	Path    string `json:"path,omitempty"`
 	Body    string `json:"body,omitempty"`
+	Session string `json:"session,omitempty"`
+	Seq     int64  `json:"seq,omitempty"`
 }
 
 func (h *Host) connect(ctx context.Context, token string, saved *identity, private *ecdh.PrivateKey) error {
@@ -325,17 +341,10 @@ func (h *Host) connect(ctx context.Context, token string, saved *identity, priva
 		}
 	}()
 
-	sessions := make(map[string]*controllerSession)
-	defer func() {
-		if h.presence == nil {
-			return
-		}
-		for id := range sessions {
-			h.presence.CloudControllerDisconnected(id)
-		}
-	}()
+	sessions := h.adopt(saved.DeviceID)
 	pingTicker := time.NewTicker(20 * time.Second)
 	tokenTicker := time.NewTicker(time.Second)
+	heartbeat := ""
 	defer pingTicker.Stop()
 	defer tokenTicker.Stop()
 	for {
@@ -346,11 +355,16 @@ func (h *Host) connect(ctx context.Context, token string, saved *identity, priva
 			return err
 		case <-tokenTicker.C:
 			if strings.TrimSpace(h.token()) != token {
-				return errors.New("remote cloud: account changed")
+				return errAccountChanged
 			}
 		case <-pingTicker.C:
 			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
 				return err
+			}
+			if heartbeat != "" {
+				if err := conn.WriteMessage(websocket.TextMessage, []byte(heartbeat)); err != nil {
+					return err
+				}
 			}
 		case request := <-h.disconnect:
 			if _, ok := sessions[request.id]; !ok {
@@ -364,13 +378,18 @@ func (h *Host) connect(ctx context.Context, token string, saved *identity, priva
 				err = conn.WriteMessage(websocket.TextMessage, wire)
 			}
 			if err == nil {
-				delete(sessions, request.id)
-				if h.presence != nil {
-					h.presence.CloudControllerDisconnected(request.id)
-				}
+				h.forgetController(request.id)
 			}
 			request.done <- err
 		case payload := <-messages:
+			if hello, ok := parseRelayHello(payload); ok {
+				h.keepControllers(hello.Controllers)
+				if hello.Heartbeat != "" {
+					heartbeat = hello.Heartbeat
+					pingTicker.Reset(hello.interval())
+				}
+				continue
+			}
 			if err := h.handle(ctx, conn, saved, private, sessions, payload); err != nil {
 				continue
 			}
@@ -397,7 +416,7 @@ func (h *Host) handle(
 		}
 		delete(sessions, message.ConnectionID)
 		return nil
-	case "controller_connected":
+	case "controller_connected", "heartbeat_ack":
 		return nil
 	case "controller_message":
 	default:
@@ -413,10 +432,15 @@ func (h *Host) handle(
 		if h.presence != nil {
 			ordinal = h.presence.CloudControllerConnected(message.ConnectionID, "Web Studio")
 		}
-		sessions[message.ConnectionID] = &controllerSession{cipher: created, ordinal: ordinal}
+		nonce, err := randomToken()
+		if err != nil {
+			return err
+		}
+		sessions[message.ConnectionID] = &controllerSession{cipher: created, ordinal: ordinal, nonce: nonce}
 		ready, err := created.seal(map[string]any{
 			"v": protocolVersion, "type": "ready", "deviceId": saved.DeviceID,
 			"name": h.name, "platform": platformName(runtime.GOOS), "version": h.version,
+			"features": []string{"replay"}, "session": nonce, "instance": h.instance(),
 		})
 		if err != nil {
 			return err
@@ -432,6 +456,9 @@ func (h *Host) handle(
 	}
 	if command.Version != protocolVersion || command.ID == "" {
 		return errors.New("remote cloud: unsupported controller command")
+	}
+	if err := session.admit(command); err != nil {
+		return err
 	}
 	var response map[string]any
 	switch command.Type {
@@ -468,16 +495,33 @@ func (h *Host) desktopCommand(
 	if err != nil {
 		return h.writeDesktopError(conn, session, connectionID, command.ID, "desktop request body is invalid")
 	}
+	replay := replayable(command.Method)
+	key := replayKey(command.ID, command.Method, command.Path, body)
+	if replay {
+		if payloads, ok := h.link.replay.get(key, time.Now()); ok {
+			return writeSealed(conn, session, connectionID, payloads)
+		}
+	}
 	response, err := h.desktop.CloudDesktop(ctx, DesktopRequest{
 		Method: command.Method, Path: command.Path, Body: body, Ordinal: ordinal,
 	}, deviceID)
 	if err != nil {
-		return h.writeDesktopError(conn, session, connectionID, command.ID, err.Error())
+		payloads := []map[string]any{{"v": protocolVersion, "type": "error", "id": command.ID, "error": err.Error()}}
+		if replay {
+			h.link.replay.put(key, payloads, len(err.Error()), time.Now())
+		}
+		return writeSealed(conn, session, connectionID, payloads)
 	}
-	chunks := (len(response.Body) + desktopResponseChunk - 1) / desktopResponseChunk
-	if chunks == 0 {
-		chunks = 1
+	payloads := desktopPayloads(command.ID, response)
+	if replay {
+		h.link.replay.put(key, payloads, len(response.Body), time.Now())
 	}
+	return writeSealed(conn, session, connectionID, payloads)
+}
+
+func desktopPayloads(id string, response DesktopResponse) []map[string]any {
+	chunks := max((len(response.Body)+desktopResponseChunk-1)/desktopResponseChunk, 1)
+	payloads := make([]map[string]any, 0, chunks)
 	for index := range chunks {
 		start := index * desktopResponseChunk
 		end := min(start+desktopResponseChunk, len(response.Body))
@@ -485,17 +529,23 @@ func (h *Host) desktopCommand(
 		if start < len(response.Body) {
 			chunk = base64.RawURLEncoding.EncodeToString(response.Body[start:end])
 		}
-		payload := map[string]any{
-			"v": protocolVersion, "type": "desktop.response", "id": command.ID,
+		payloads = append(payloads, map[string]any{
+			"v": protocolVersion, "type": "desktop.response", "id": id,
 			"status": response.Status, "contentType": response.ContentType, "etag": response.ETag,
 			"index": index, "done": index == chunks-1, "body": chunk,
+		})
+	}
+	return payloads
+}
+
+func writeSealed(conn *websocket.Conn, session *sessionCipher, connectionID string, payloads []map[string]any) error {
+	for _, payload := range payloads {
+		reply, err := session.seal(payload)
+		if err != nil {
+			return err
 		}
-		reply, sealErr := session.seal(payload)
-		if sealErr != nil {
-			return sealErr
-		}
-		if writeErr := writeDirected(conn, connectionID, reply); writeErr != nil {
-			return writeErr
+		if err := writeDirected(conn, connectionID, reply); err != nil {
+			return err
 		}
 	}
 	return nil
