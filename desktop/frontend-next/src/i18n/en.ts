@@ -493,6 +493,7 @@ export const EN: Record<string, string> = {
   "留空时按这个顺序尝试：先 ssh-agent 持有的密钥，再 ~/.ssh 下的默认密钥；只有填了下面的环境变量或该机器要求交互时，才会走密码。": "Left blank, it tries in this order: keys held by ssh-agent, then the default keys under ~/.ssh. A password is only used when one of the variables below is set, or the machine asks interactively.",
   "在代码编辑器中打开工作区": "Open the workspace in a code editor",
   "在系统文件管理器中显示工作区": "Show the workspace in the system file manager",
+  "显示隐藏文件": "Show hidden files",
   "在访达中显示": "Reveal in Finder",
   "在文件资源管理器中显示": "Reveal in File Explorer",
   "在系统文件管理器中显示": "Show in file manager",
@@ -1200,4 +1201,9 @@ export const EN: Record<string, string> = {
   "不再提示（本会话）": "Don’t show again (this session)",
   "任务已按设置暂停：自上次有进展以来的输入已达上下文窗口的 {n} 倍": "Paused by your setting: input since the last progress reached {n}× the context window",
   "任务已按设置暂停：连续 {n} 轮没有可观察的进展": "Paused by your setting: {n} rounds in a row without observable progress",
+  "模型在重复输出同一段文字": "The model is repeating the same text",
+  "同一段内容被逐字重复": "The same block is being repeated verbatim",
+  "任务已按设置暂停：模型卡在重复输出同一段文字": "Paused by your setting: the model is stuck repeating the same text",
+  "等待你的输入": "Waiting for you",
+  "模型卡在重复输出同一段文字，这一轮已停止；可以重试、补充引导，或换一个供应商/模型": "The model is stuck repeating the same text; this turn was stopped. Try again, add guidance, or switch provider/model.",
 };

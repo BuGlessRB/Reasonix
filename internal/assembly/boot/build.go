@@ -359,10 +359,11 @@ func (b *builder) executor() *agent.Agent {
 		Pricing:        entry.Price,
 		ModelRef:       b.model.ref,
 		TriageProvider: triageProv, TriageModelRef: triageRef, TriagePricing: triagePrice,
-		ScreenExternalContent: cfg.Agent.ScreenExternalContent,
-		Gate:                  t.gate,
-		Hooks:                 t.hookRunner,
-		Jobs:                  b.session.jobs,
+		ScreenExternalContent:   cfg.Agent.ScreenExternalContent,
+		MaxPerseverationRetries: perseverationRetries(cfg, entry),
+		Gate:                    t.gate,
+		Hooks:                   t.hookRunner,
+		Jobs:                    b.session.jobs,
 		// Reserving writes at the executor entry covers every writer, late MCP
 		// adds included, without wrapping tool schemas.
 		WriteScheduler:     t.sub.scheduler,
@@ -387,6 +388,17 @@ func (b *builder) executor() *agent.Agent {
 		MaxSubagentDepth:             t.sub.maxDepth,
 		MissingReasoningWarnStateDir: config.MissingReasoningWarnStateDir(),
 	}, b.sink)
+}
+
+// perseverationRetries resolves the degenerate-generation-loop budget for the
+// active provider: the provider's own setting when it has one, else the global
+// [progress_watch].perseveration_retries default. Unset reports; negative
+// disables.
+func perseverationRetries(cfg *config.Config, entry *config.ProviderEntry) *int {
+	if entry != nil && entry.PerseverationRetries != nil {
+		return entry.PerseverationRetries
+	}
+	return cfg.ProgressWatch.PerseverationRetries
 }
 
 func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, label string) control.Options {

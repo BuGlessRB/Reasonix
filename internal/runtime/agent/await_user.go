@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"reasonix/internal/safety/evidence"
 )
@@ -15,12 +16,16 @@ import (
 // a Goal pauses on it.
 type AwaitUserTool struct{}
 
+// awaitUserNeedLimit bounds `need`: the host shows it as a one-line status, and
+// a need that carries the options is a choice ask would have put on a card.
+const awaitUserNeedLimit = 200
+
 func NewAwaitUserTool() *AwaitUserTool { return &AwaitUserTool{} }
 
 func (*AwaitUserTool) Name() string { return "await_user" }
 
 func (*AwaitUserTool) Description() string {
-	return "Hand control back to the user with the task list still open, when what the current item needs next is something only they can give: their view on what you just showed them, the material they said they would add, the judgement the list exists to collect. The list is kept as it stands and the turn ends; their next message resumes it, and the host will not continue the list on its own in the meantime. This is not `ask`, which offers options you wrote and answers inside the same turn, and not `conclude_blocked`, which says the work cannot be done at all. Name the waiting item with `step_id`, and put in `need` what you are waiting for, addressed to them. Say the substance — the item you are presenting, the question you want answered — in your own reply; this call records the wait, it does not speak for you."
+	return "Hand control back to the user with the task list still open, when what the current item needs next is something only they can give: their view on what you just showed them, the material they said they would add, the judgement the list exists to collect. The list is kept as it stands and the turn ends; their next message resumes it, and the host will not continue the list on its own in the meantime. This is not `ask`, which offers options you wrote and answers inside the same turn, and not `conclude_blocked`, which says the work cannot be done at all. When what you wait for is a pick among choices you can name — which way to proceed, which option to take — call `ask` instead: the user answers it with one click and you carry on in this turn. Name the waiting item with `step_id`, and put in `need` one short line saying what you are waiting for, addressed to them. Say the substance — the item you are presenting, the question you want answered — in your own reply; this call records the wait, it does not speak for you."
 }
 
 func (*AwaitUserTool) Schema() json.RawMessage {
@@ -28,7 +33,7 @@ func (*AwaitUserTool) Schema() json.RawMessage {
 "type":"object",
 "properties":{
   "step_id":{"type":"string","description":"The task-list item that is waiting. Defaults to the list's current in_progress item."},
-  "need":{"type":"string","description":"What you need from the user before this item can go on, written to them."}
+  "need":{"type":"string","description":"One short line: what you need from the user before this item can go on, written to them. Not the options and not the substance — those go in your reply, or in ask when they are choices."}
 },
 "required":["need"]
 }`)
@@ -52,6 +57,9 @@ func (*AwaitUserTool) Execute(ctx context.Context, args json.RawMessage) (string
 	need := strings.TrimSpace(payload.Need)
 	if need == "" {
 		return "", fmt.Errorf("await_user needs a `need`: say what you are waiting for the user to give you")
+	}
+	if n := utf8.RuneCountInString(need); n > awaitUserNeedLimit {
+		return "", fmt.Errorf("`need` is %d characters and is shown to the user as a one-line status, so it holds at most %d; put the substance in your reply, and if you are offering choices call ask with them as options instead", n, awaitUserNeedLimit)
 	}
 	if _, planning := planSubmissionFromContext(ctx); planning {
 		return "", fmt.Errorf("await_user hands back an execution turn, not a planning one; a plan that needs the user's decision states the unknown, or calls ask")

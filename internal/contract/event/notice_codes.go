@@ -14,6 +14,8 @@ const (
 	NoticeCodeToolBudget                                        = "tool_budget"
 	NoticeCodePromptQueued                                      = "prompt_queued"
 	NoticeCodeLoopGuard                                         = "loop_guard"
+	NoticeCodePerseverationLoop                                 = "perseveration_loop"
+	NoticeCodePerseverationRetry                                = "perseveration_retry"
 	NoticeCodeProgressGuard                                     = "progress_guard"
 	NoticeCodeEvidenceNudge                                     = "evidence_nudge"
 	NoticeCodeReasoningGovernor                                 = "reasoning_governor"
@@ -43,4 +45,6 @@ const (
 	NoticeCodeProjectProgramChanged = "project_program_changed"
 	// A conversation opened from a 1.x log went on in a new session of its own.
 	NoticeCodeSessionContinuedFrom1x = "session_continued_from_1x"
+	// A turn handed its open list back to the user; Detail is the model's `need`, as it wrote it.
+	NoticeCodeAwaitUser = "await_user"
 )

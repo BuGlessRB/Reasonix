@@ -1369,6 +1369,7 @@ body { background: var(--page) !important; }
   transition: color var(--m-line), background var(--m-line);
 }
 .workbench-open-editor:hover { color: var(--text); background: var(--overlay); }
+.workbench-open-editor[aria-pressed="true"] { color: var(--text); background: var(--overlay); }
 .workbench-open-editor svg { width: 13px; height: 13px; }
 .workbench-open-editor + .workbench-open-editor { margin-left: 2px; }
 .workbench-search { height: 34px; margin: 7px 8px; padding: 0 8px; flex: none; display: flex; align-items: center; gap: 6px; border: 1px solid var(--hair); border-radius: 5px; background: var(--surface); }
@@ -1422,7 +1423,11 @@ body { background: var(--page) !important; }
 .workbench-empty { flex: 1; display: flex; place-content: center; align-items: center; gap: 8px; color: var(--faint); font: 500 11px/1 var(--ui); }
 .workbench-empty svg { width: 18px; height: 18px; }
 .workbench-error { padding: 8px 12px; border-bottom: 1px solid var(--danger); color: var(--danger); font: 500 10px/1.4 var(--ui); }
-@media (max-width: 760px) { .workbench-body { grid-template-columns: minmax(0, 1fr); } .workbench-explorer { display: none; } }
+@media (max-width: 760px) {
+  .workbench-body { grid-template-columns: minmax(0, 1fr); }
+  .workbench-body:not([data-files]) .workbench-explorer { display: none; }
+  .workbench-body[data-files] .workbench-canvas { display: none; }
+}
 
 /* Settings is one stable layer in the current window. */
 .prefs {

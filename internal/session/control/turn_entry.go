@@ -27,7 +27,8 @@ func turnOutcome(err error) string {
 	if errors.As(err, &readinessErr) {
 		return event.TurnOutcomeFinalReadiness
 	}
-	if info, ok := agent.InspectRunPause(err); ok && info.Kind == agent.PauseKindNoProgress {
+	if info, ok := agent.InspectRunPause(err); ok &&
+		(info.Kind == agent.PauseKindNoProgress || info.Kind == agent.PauseKindPerseveration) {
 		return event.TurnOutcomeNoProgress
 	}
 	return ""

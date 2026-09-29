@@ -37,6 +37,7 @@ func (s *Server) workspaceFiles(w http.ResponseWriter, r *http.Request) {
 	root := s.ctl().WorkspaceRoot()
 	query := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	requested := strings.TrimSpace(r.URL.Query().Get("path"))
+	dots := r.URL.Query().Get("hidden") == "1"
 	if requested != "" {
 		var err error
 		requested, err = workspacePath(requested)
@@ -49,9 +50,9 @@ func (s *Server) workspaceFiles(w http.ResponseWriter, r *http.Request) {
 	var listing workspaceListing
 	var err error
 	if query != "" {
-		listing, err = searchFiles(root, query)
+		listing, err = searchFiles(root, query, dots)
 	} else {
-		listing, err = listFolder(root, requested)
+		listing, err = listFolder(root, requested, dots)
 	}
 	switch {
 	case errors.Is(err, errListingOutsideTree):

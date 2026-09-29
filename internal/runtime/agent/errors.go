@@ -21,6 +21,10 @@ func PauseClass(err error) string {
 	if errors.As(err, &stalled) {
 		return PauseKindNoProgress
 	}
+	var repeated *perseverationPause
+	if errors.As(err, &repeated) {
+		return PauseKindPerseveration
+	}
 	var readiness *FinalReadinessError
 	if errors.As(err, &readiness) {
 		return "final_readiness"
@@ -52,6 +56,10 @@ func InspectRunPause(err error) (RunPauseInfo, bool) {
 	var stalled *noProgressPause
 	if errors.As(err, &stalled) {
 		return RunPauseInfo{Kind: PauseKindNoProgress, Limit: stalled.limit, Key: stalled.key, Reason: stalled.detail}, true
+	}
+	var repeated *perseverationPause
+	if errors.As(err, &repeated) {
+		return RunPauseInfo{Kind: PauseKindPerseveration, Key: repeated.key, Reason: repeated.detail}, true
 	}
 	return RunPauseInfo{}, false
 }

@@ -223,12 +223,28 @@ class RemoteTransport {
   }
 }
 
+interface ReplayAnswer {
+  frames?: Array<Record<string, unknown>> | null;
+  complete?: boolean;
+  watermark?: number;
+}
+
+// Stands in for EventSource over the relay by polling /events/replay. A cursor
+// the URL carries is where a replacement stream resumes; without one it attaches
+// at the watermark, and asking past it returns no frames, not the whole log.
+// Frames the SSE transport writes on its own (the watermark, a gap) are said
+// here too, or the stream reads as silent to whoever watches it.
 export class RemoteEventSource {
   onmessage: ((event: MessageEvent<string>) => void) | null = null;
   private closed = false;
-  private after: number | null = null;
+  private after: number | null;
+  private readonly replay: string;
 
-  constructor(private readonly path: string) {
+  constructor(url: string) {
+    const target = new URL(url, location.origin);
+    const cursor = Number(target.searchParams.get("lastEventId") ?? "");
+    this.after = target.searchParams.has("lastEventId") && Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : null;
+    this.replay = `${target.pathname}/replay`;
     queueMicrotask(() => void this.poll());
   }
 
@@ -236,28 +252,32 @@ export class RemoteEventSource {
     this.closed = true;
   }
 
+  private say(frame: Record<string, unknown>) {
+    this.onmessage?.(new MessageEvent("message", { data: JSON.stringify(frame) }));
+  }
+
   private async poll() {
     while (!this.closed) {
       let active = false;
       try {
-        const path = this.path.replace(/\/events$/, `/events/replay?lastEventId=${this.after ?? 0}`);
-        const response = await fetch(path, { credentials: "same-origin" });
-        if (response.ok) {
-          const body = await response.json() as { frames?: Array<Record<string, unknown>>; watermark?: number };
-          active = Boolean(body.frames?.length);
-          if (this.after === null) {
-            const frameWatermark = (body.frames ?? []).reduce(
-              (latest, frame) => typeof frame.seq === "number" ? Math.max(latest, frame.seq) : latest,
-              0,
-            );
-            this.after = typeof body.watermark === "number" ? body.watermark : frameWatermark;
-          } else {
-            for (const frame of body.frames ?? []) {
-              const seq = typeof frame.seq === "number" ? frame.seq : 0;
-              if (seq > this.after) this.after = seq;
-              this.onmessage?.(new MessageEvent("message", { data: JSON.stringify(frame) }));
-            }
+        const response = await fetch(`${this.replay}?lastEventId=${this.after ?? Number.MAX_SAFE_INTEGER}`, { credentials: "same-origin" });
+        if (response.ok && !this.closed) {
+          const body = await response.json() as ReplayAnswer;
+          const watermark = typeof body.watermark === "number" ? body.watermark : null;
+          const attaching = this.after === null;
+          const frames = attaching ? [] : body.frames ?? [];
+          active = frames.length > 0;
+          if (this.after === null) this.after = watermark ?? 0;
+          else if (body.complete === false) {
+            const from = typeof frames[0]?.seq === "number" ? frames[0].seq : watermark ?? this.after;
+            this.say({ kind: "stream_gap", seq: from });
           }
+          for (const frame of frames) {
+            const seq = typeof frame.seq === "number" ? frame.seq : 0;
+            if (seq > this.after) this.after = seq;
+            this.say(frame);
+          }
+          if (!active && watermark !== null) this.say({ kind: "stream_watermark", seq: watermark });
         }
       } catch {
         // The next poll retries while the encrypted session remains open.

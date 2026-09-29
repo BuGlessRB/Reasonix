@@ -286,6 +286,25 @@ func TestEffectProgressWatchPausesOnceTheUserTurnsItOn(t *testing.T) {
 	assertNothingSaidToTheModel(t, run.reqs)
 }
 
+// Saving the pause switch through the settings screen preserves the retry
+// budget stored beside it: the screen does not edit that knob, so it must not
+// clear it.
+func TestEffectProgressWatchSavePreservesRetryBudget(t *testing.T) {
+	runWatch(t, func(string) func(int) *provider.ToolCall { return echoLoop(1) },
+		"[progress_watch]\nperseveration_retries = 2\n", "", 0, func(c *control.Controller) {
+			if err := c.SaveProgressWatchSettings(control.ProgressWatchSettings{Pause: true, Rounds: 4, TokenMultiple: 8}); err != nil {
+				t.Fatalf("save: %v", err)
+			}
+		})
+	body, err := os.ReadFile(config.UserConfigPath())
+	if err != nil {
+		t.Fatalf("read user config: %v", err)
+	}
+	if !strings.Contains(string(body), "perseveration_retries = 2") {
+		t.Fatalf("saving progress watch settings dropped the retry budget:\n%s", body)
+	}
+}
+
 const pausingUserConfig = `
 [progress_watch]
 pause = true

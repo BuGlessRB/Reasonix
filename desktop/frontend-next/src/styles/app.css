@@ -1246,6 +1246,7 @@
     margin-top: 5px; font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: var(--faint);
     white-space: pre-wrap; overflow-wrap: anywhere;
   }
+  .find .nmd { margin-top: 5px; font-size: var(--fs-ui); line-height: 1.6; color: var(--text); overflow-wrap: anywhere }
   .find .nrule {
     display: block; margin-top: 5px; font: var(--w-reg) var(--fs-meta)/1.6 var(--mono); color: var(--muted);
     white-space: pre-wrap; overflow-wrap: anywhere;

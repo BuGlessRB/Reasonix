@@ -377,6 +377,7 @@ export const ACTIONS: UIAction[] = [
   { id: "workbench.folder", kind: "view", target: "entity", proof: "interaction" },
   { id: "workbench.diff", kind: "view", target: "entity", proof: "interaction" },
   { id: "workbench.files", kind: "view", target: "none", proof: "interaction" },
+  { id: "workbench.hidden", kind: "view", target: "none", proof: "interaction" },
   { id: "workbench.reveal", kind: "shell-native", target: "optional", proof: "interaction" },
   { id: "workbench.menu", kind: "view", target: "entity", proof: "interaction" },
   { id: "palette.pick", kind: "view", target: "entity", proof: "interaction" },

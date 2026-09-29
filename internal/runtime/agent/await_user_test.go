@@ -62,6 +62,11 @@ func TestAwaitUserRejectsWhatItCannotPark(t *testing.T) {
 			interactive: true,
 			args:        `{"need":"your view"}`, want: "completed",
 		},
+		// A need carrying the options belongs on an ask card.
+		"need too long for a status line": {
+			todos: newsList(), interactive: true,
+			args: `{"need":"` + strings.Repeat("选", awaitUserNeedLimit+1) + `"}`, want: "call ask",
+		},
 		"unknown step": {
 			todos: newsList(), interactive: true,
 			args: `{"step_id":"n9","need":"your view"}`, want: "n1, n2",

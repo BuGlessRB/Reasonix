@@ -9,10 +9,15 @@ type agentConfig struct {
 	maxSteps           int
 	maxStepsKey        string
 	reasoningByteLimit int
-	maxOutputTokens    int
-	temperature        float64
-	usageSource        string
-	modelRef           string
+	// perseverationGuard enables the loop detector (on by default);
+	// perseverationMaxRetries is the cut-and-retry budget (0 = report only,
+	// >0 = cut and nudge).
+	perseverationGuard      bool
+	perseverationMaxRetries int
+	maxOutputTokens         int
+	temperature             float64
+	usageSource             string
+	modelRef                string
 	// workspaceID is a prompt-cache lineage component, so it must not move
 	// while an agent lives — a change would silently rekey the cache.
 	workspaceID string

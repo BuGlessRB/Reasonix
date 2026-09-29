@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"reasonix/internal/base/fileutil"
 )
 
 // errListingOutsideTree is a folder whose real path leaves the workspace: a
@@ -20,10 +22,11 @@ type workspaceListing struct {
 	Directories []string `json:"directories"`
 }
 
-// listedName reports whether an entry belongs in the explorer: dot entries,
-// VCS stores and dependency trees are left out, as the search leaves them.
-func listedName(name string, dir bool) bool {
-	if strings.HasPrefix(name, ".") {
+// listedName reports whether an entry belongs in the explorer. VCS stores and
+// dependency trees are always left out; other dot entries only unless the
+// reader asked for them, since they hold tool state rather than the project.
+func listedName(name string, dir, dots bool) bool {
+	if fileutil.IsVCSStoreDir(name) || (!dots && strings.HasPrefix(name, ".")) {
 		return false
 	}
 	return !dir || (name != "node_modules" && name != "vendor")
@@ -32,7 +35,7 @@ func listedName(name string, dir bool) bool {
 // listFolder reads one folder of the workspace, rel being "" for the root.
 // It reads that folder only: a sibling the process cannot open, or a tree
 // too large to walk, has no bearing on opening this one.
-func listFolder(root, rel string) (workspaceListing, error) {
+func listFolder(root, rel string, dots bool) (workspaceListing, error) {
 	out := workspaceListing{Files: []string{}, Directories: []string{}}
 	dir := filepath.Join(root, filepath.FromSlash(rel))
 	if rel != "" {
@@ -56,7 +59,7 @@ func listFolder(root, rel string) (workspaceListing, error) {
 				continue
 			}
 		}
-		if !listedName(entry.Name(), isDir) {
+		if !listedName(entry.Name(), isDir, dots) {
 			continue
 		}
 		path := entry.Name()
@@ -77,7 +80,7 @@ func listFolder(root, rel string) (workspaceListing, error) {
 // searchFiles walks the whole workspace for files whose path contains query.
 // A folder it cannot read is passed over, so one unreadable corner does not
 // turn every search into a failure.
-func searchFiles(root, query string) (workspaceListing, error) {
+func searchFiles(root, query string, dots bool) (workspaceListing, error) {
 	out := workspaceListing{Files: []string{}, Directories: []string{}}
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -92,7 +95,7 @@ func searchFiles(root, query string) (workspaceListing, error) {
 		if path == root {
 			return nil
 		}
-		if !listedName(entry.Name(), entry.IsDir()) {
+		if !listedName(entry.Name(), entry.IsDir(), dots) {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}
