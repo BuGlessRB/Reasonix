@@ -1,3 +1,5 @@
+import { useLayoutEffect } from "react";
+
 // Placing a fixed element while the interface is zoomed puts two coordinate
 // systems into one calculation. Measured in Chromium with html{zoom:1.5}: a
 // 232px box reports 348 wide, an element at left:400 reports 600, and writing
@@ -40,4 +42,37 @@ export function pinToViewport(el: HTMLElement, x: number, y: number, edge = 6): 
   const at = placeInViewport({ x, y }, box, { width: innerWidth, height: innerHeight }, zoom(), edge);
   el.style.left = `${at.left}px`;
   el.style.top = `${at.top}px`;
+}
+
+/** beside is the top edge, on screen, of a box opening next to an anchor: on
+ *  the preferred side when the whole box fits there, on the other side when
+ *  only that one fits, and on the roomier side when neither does. */
+export function beside(
+  anchor: { top: number; bottom: number },
+  height: number,
+  viewport: number,
+  prefer: "above" | "below",
+  gap: number,
+  edge = 6,
+): number {
+  const room = { above: anchor.top - gap - edge, below: viewport - edge - anchor.bottom - gap };
+  const other = prefer === "above" ? "below" : "above";
+  const side = height <= room[prefer] ? prefer : height <= room[other] ? other : room[prefer] >= room[other] ? prefer : other;
+  return side === "above" ? anchor.top - gap - height : anchor.bottom + gap;
+}
+
+/** useFollow keeps a fixed layer on its anchor while it is open. Capture,
+ *  because the scroller that moves the anchor is not the window; `key` is
+ *  whatever else changes the layer's size. */
+export function useFollow(open: boolean, place: () => void, key?: unknown): void {
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    addEventListener("scroll", place, true);
+    addEventListener("resize", place);
+    return () => {
+      removeEventListener("scroll", place, true);
+      removeEventListener("resize", place);
+    };
+  }, [open, place, key]);
 }
