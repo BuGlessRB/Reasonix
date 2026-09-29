@@ -2,6 +2,7 @@ import type { Item } from "../../state/session";
 import { t } from "../../i18n";
 import { NOTICE_TEXT } from "../../i18n/notices";
 import { Sym } from "../Sym";
+import { LazyMarkdown } from "../LazyMarkdown";
 
 // One of the host's cards, so it is built like the others: a gutter, a headline
 // naming the speaker, and the body under it. The body keeps the kernel's two
@@ -10,6 +11,9 @@ import { Sym } from "../Sym";
 // here as in .guard and .find, and the gutter follows it too.
 // These name a rule as their detail: a command or target, set as code.
 const PERMISSION = new Set(["permission_saved", "permission_covered"]);
+// These carry what the model wrote as their detail, so it reads the way the
+// model's own replies do.
+const AUTHORED = new Set(["await_user"]);
 
 export function NoticeCard({ item }: { item: Extract<Item, { t: "notice" }> }) {
   const lvl = item.level === "error" ? "err" : item.level === "warn" ? "warn" : undefined;
@@ -38,7 +42,9 @@ export function NoticeCard({ item }: { item: Extract<Item, { t: "notice" }> }) {
             </span>
             {item.detail && (PERMISSION.has(item.code ?? "")
               ? <code className="nrule" title={item.text}>{item.detail}</code>
-              : <span className="why nwhy">{item.detail}</span>)}
+              : AUTHORED.has(item.code ?? "")
+                ? <div className="nmd"><LazyMarkdown text={item.detail} /></div>
+                : <span className="why nwhy">{item.detail}</span>)}
           </div>
         </div>
       </div>

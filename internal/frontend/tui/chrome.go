@@ -22,6 +22,8 @@ var (
 	tagPlanColor  = termrender.NewColor("#2563eb", 27)
 	tagYoloColor  = termrender.NewColor("#e5484d", 167)
 	tagShellColor = termrender.NewColor("#16a34a", 71)
+	tagViNormal   = termrender.NewColor("#475569", 240)
+	tagViInsert   = termrender.NewColor("#0d9488", 30)
 	tagLight      = termrender.NewColor("#ffffff", 231)
 	tagDark       = termrender.NewColor("#111827", 234)
 )
@@ -101,11 +103,15 @@ func (m *model) workingLine() string {
 	var line string
 	switch label := phaseLabel(m.tr.Phase); {
 	case m.cancelling:
-		line = fmt.Sprintf("  "+i18n.M.ChatStatusCancellingFmt, mark, secs)
+		stop := i18n.M.ChatStatusCancellingFmt
+		if m.viActive() {
+			stop = i18n.M.ChatStatusCancellingViFmt
+		}
+		line = fmt.Sprintf("  "+stop, mark, secs)
 	case label != "":
 		line = fmt.Sprintf("  %s %s · %ds", mark, label, secs)
 	default:
-		line = fmt.Sprintf("  "+i18n.M.ChatStatusThinkingFmt, mark, secs)
+		line = fmt.Sprintf("  "+i18n.M.ChatStatusThinkingFmt, mark, secs, m.interruptKey())
 	}
 	if m.tr.TurnOut > 0 {
 		line += " · ↓" + shortTokens(m.tr.TurnOut)

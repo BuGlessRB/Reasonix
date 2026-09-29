@@ -307,7 +307,7 @@ export function Rules({ port, onChanged }: { port: AgentPort; onChanged: () => v
             </div>
           ))}
           <p className="path">{rules.rememberedPath}</p>
-          <p className="note">{t("要收回这项授权，请从上述文件删除对应规则，然后重新载入会话。")}</p>
+          <p className="note">{t("要收回这项授权，请从上述 JSON 文件中删除本项目对应的 allow 规则，然后重新载入会话。")}</p>
         </section>
       )}
 

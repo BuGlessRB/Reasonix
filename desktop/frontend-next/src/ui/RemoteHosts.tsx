@@ -8,6 +8,7 @@ import { workspacesOf } from "./Remotes";
 import { Cross } from "./glyphs";
 import { StudioIcon } from "./StudioIcon";
 import { Confirm } from "./Workspaces";
+import { clearDraftForSession } from "./drafts";
 
 // The same ceiling the local column uses. A machine worked on for months holds
 // thousands of conversations, and drawing them all is what put 98k nodes in a
@@ -150,6 +151,7 @@ function RemoteHostsView({ hub, hosts, runtimes, active, onOpen, onFocus, reload
       // to refuse, since a delete never stops work in progress.
       if (held && liveIds([held.id]).length === 0) await onClose([held.id]);
       await hub.removeRemoteSession(host.name, sessionPath);
+      clearDraftForSession(host.name, sessionPath);
       await readTree(host.name);
     } catch (e) {
       onError(e);

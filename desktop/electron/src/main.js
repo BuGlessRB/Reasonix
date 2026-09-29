@@ -201,7 +201,7 @@ function onWindowClose(event) {
 // showWindow brings it back from wherever it went. Show alone is a no-op on a
 // window that is merely buried, so the focus is what actually raises it.
 function showWindow() {
-  if (!win || win.isDestroyed()) return;
+  if (quitting || !win || win.isDestroyed()) return;
   if (win.isMinimized()) win.restore();
   reload?.revive();
   win.show();
@@ -284,6 +284,7 @@ ipcMain.handle("browser:show", (event, targetId, rect) => {
 ipcMain.handle("browser:hide", (event) => {
   if (fromWindow(event)) browserViews?.hide();
 });
+ipcMain.handle("browser:freeze", (event) => (fromWindow(event) ? (browserViews?.freeze() ?? "") : ""));
 ipcMain.handle("browser:control", (event, targetId, action) => {
   if (fromWindow(event)) browserViews?.control(String(targetId), String(action));
 });
@@ -363,6 +364,8 @@ if (!primary) {
   app.quit();
 } else {
   app.on("second-instance", showWindow);
+  // macOS reopens an existing app through activation, without a second process.
+  app.on("activate", showWindow);
   grants = stripPackageGrants(hostBinary, { ...where, execPath: process.execPath });
   if (grants?.stripped.length) {
     const note = `removed app-package grants that stop sandboxed processes loading: ${grants.stripped.join(", ")}`;

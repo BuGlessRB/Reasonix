@@ -69,6 +69,7 @@ type Config struct {
 	// user/project files recovered via last-known-good or defaults). They never
 	// rewrite the original file; the UI may surface them for doctor repair.
 	loadWarnings []string
+	projectScope projectScopeReport
 }
 
 // KeepProjectSkillKey marks a skill field as an intentional project override.
@@ -250,6 +251,7 @@ type UIConfig struct {
 	ShowReasoning  bool   `toml:"show_reasoning"`  // Ctrl+O / /verbose: show thinking text in CLI; false = collapsed
 	ShowTurnUsage  bool   `toml:"show_turn_usage"` // show per-request token/cost receipts in the CLI/TUI transcript
 	CursorShape    string `toml:"cursor_shape"`    // block|underline|bar; empty defaults to bar
+	CommandMode    string `toml:"commandmode"`     // ""|vi; vi gives the composer a vi command mode (empty = insert-always)
 }
 
 // CLIConfig controls user-global native CLI behavior. It is separate from
@@ -327,6 +329,13 @@ func (c *Config) UICursorShape() string {
 	default:
 		return "bar"
 	}
+}
+
+// UICommandMode reports whether the composer should use a vi-style command
+// mode. Only the value "vi" enables it; any other value keeps the default
+// insert-always editing.
+func (c *Config) UICommandMode() bool {
+	return strings.ToLower(strings.TrimSpace(c.UI.CommandMode)) == "vi"
 }
 
 func normalizeThemeStyle(style string) string {
@@ -716,17 +725,19 @@ type NetworkProxyConfig struct {
 	Password string `toml:"password"`
 }
 
-// NetworkProxySpec returns the expanded proxy settings used by netclient.
+// NetworkProxySpec returns the expanded proxy settings used by netclient. The
+// settings are the user's, so ${VAR} expands from the process environment and
+// never from a workspace .env.
 func (c *Config) NetworkProxySpec() netclient.ProxySpec {
 	return netclient.ProxySpec{
 		Mode:        c.Network.ProxyMode,
-		URL:         c.expandVars(c.Network.ProxyURL),
-		NoProxy:     c.expandVars(c.Network.NoProxy),
+		URL:         ExpandVars(c.Network.ProxyURL),
+		NoProxy:     ExpandVars(c.Network.NoProxy),
 		Type:        c.Network.Proxy.Type,
-		Server:      c.expandVars(c.Network.Proxy.Server),
+		Server:      ExpandVars(c.Network.Proxy.Server),
 		Port:        c.Network.Proxy.Port,
-		Username:    c.expandVars(c.Network.Proxy.Username),
-		Password:    c.expandVars(c.Network.Proxy.Password),
+		Username:    ExpandVars(c.Network.Proxy.Username),
+		Password:    ExpandVars(c.Network.Proxy.Password),
 		DirectHosts: c.directProxyHosts(),
 	}
 }
@@ -928,7 +939,7 @@ func (c *Config) WriteRoots() []string {
 // config doesn't explicitly set a workspace_root. Desktop tabs pass their
 // project root here so tool confinement is correct without changing cwd.
 func (c *Config) WriteRootsForRoot(fallbackRoot string) []string {
-	root := c.expandVars(c.Sandbox.WorkspaceRoot)
+	root := c.expandSandboxPath(c.Sandbox.WorkspaceRoot)
 	if root == "" {
 		root = fallbackRoot
 		if root == "" || root == "." {
@@ -941,7 +952,7 @@ func (c *Config) WriteRootsForRoot(fallbackRoot string) []string {
 	}
 	roots := []string{root}
 	for _, d := range c.Sandbox.AllowWrite {
-		if d = c.expandVars(d); d != "" {
+		if d = c.expandSandboxPath(d); d != "" {
 			roots = append(roots, d)
 		}
 	}
@@ -955,7 +966,7 @@ func (c *Config) WriteRootsForRoot(fallbackRoot string) []string {
 func (c *Config) AllowWriteRoots() []string {
 	var roots []string
 	for _, d := range c.Sandbox.AllowWrite {
-		if d = c.expandVars(d); d != "" {
+		if d = c.expandSandboxPath(d); d != "" {
 			roots = append(roots, d)
 		}
 	}
@@ -983,7 +994,7 @@ func (c *Config) ForbidReadRootsForRoot(fallbackRoot string) []string {
 	}
 	roots := make([]string, 0, len(c.Sandbox.ForbidRead))
 	for _, d := range c.Sandbox.ForbidRead {
-		if d = c.expandVars(d); d != "" {
+		if d = c.expandSandboxPath(d); d != "" {
 			if !filepath.IsAbs(d) {
 				d = filepath.Join(root, d)
 			}
@@ -1171,15 +1182,13 @@ type ProviderEntry struct {
 	BalanceURL        string `toml:"balance_url"` // optional; a provider-specific wallet-balance endpoint (DeepSeek: https://api.deepseek.com/user/balance). Empty = no balance readout.
 	ContextWindow     int    `toml:"context_window"`
 	// MaxOutputTokens is a protocol-neutral total output budget for one turn.
-	// Zero means automatic (not unlimited): ordinary 16K, reasoning 32K, high/max
-	// 64K — DeepSeek's default effort is high, so auto is typically ~64K.
-	// User guidance: 0 recommended; 32768 ordinary coding/cost control;
-	// 65536 heavy reasoning/long tools; 131072 only after finish_reason=length.
-	// A negative value omits optional wire limits when the protocol allows;
-	// Anthropic still requires max_tokens. Never feeds compact_ratio.
-	MaxOutputTokens int                          `toml:"max_output_tokens"`
-	Price           *provider.Pricing            `toml:"price"`  // legacy/provider-wide fallback
-	Prices          map[string]*provider.Pricing `toml:"prices"` // optional per-model prices; keys are model ids
+	// Zero means automatic (ordinary 16K, reasoning 32K, high/max 64K); 32768
+	// suits cost control and 65536 heavy reasoning. Negative omits wire limits.
+	MaxOutputTokens int `toml:"max_output_tokens"`
+	// PerseverationRetries overrides [progress_watch].perseveration_retries; nil inherits the global default.
+	PerseverationRetries *int                         `toml:"perseveration_retries"`
+	Price                *provider.Pricing            `toml:"price"`  // legacy/provider-wide fallback
+	Prices               map[string]*provider.Pricing `toml:"prices"` // optional per-model prices; keys are model ids
 	// BillingCurrency is the frozen list-price currency (ISO-4217). Independent
 	// of [billing].display_currency; switching display never rewrites this.
 	BillingCurrency string `toml:"billing_currency"`
@@ -1338,19 +1347,11 @@ func (e *ProviderEntry) applyModelOverride() {
 }
 
 func (e *ProviderEntry) modelOverrideForModel(model string) (ProviderModelOverride, bool) {
-	model = strings.TrimSpace(model)
-	if e == nil || model == "" || len(e.ModelOverrides) == 0 {
+	key, ok := e.modelOverrideKey(model)
+	if !ok {
 		return ProviderModelOverride{}, false
 	}
-	if ov, ok := e.ModelOverrides[model]; ok {
-		return ov, true
-	}
-	for k, ov := range e.ModelOverrides {
-		if strings.EqualFold(strings.TrimSpace(k), model) {
-			return ov, true
-		}
-	}
-	return ProviderModelOverride{}, false
+	return e.ModelOverrides[key], true
 }
 
 func clonePricing(p *provider.Pricing) *provider.Pricing {
@@ -1622,32 +1623,17 @@ func (c *Config) ResolveModel(ref string) (*ProviderEntry, bool) {
 	// "provider/model"
 	if prov, model, ok := strings.Cut(ref, "/"); ok {
 		if e, found := c.Provider(prov); found && e.HasModel(model) {
-			cp := *e
-			cp.Model = model
-			cp.applyModelPrice()
-			cp.applyModelOverride()
-			cp.applyModelCapabilities()
-			return &cp, true
+			return e.forModel(model), true
 		}
 	}
 	// a provider name → its default model
 	if e, found := c.Provider(ref); found {
-		cp := *e
-		cp.Model = e.DefaultModel()
-		cp.applyModelPrice()
-		cp.applyModelOverride()
-		cp.applyModelCapabilities()
-		return &cp, true
+		return e.forModel(e.DefaultModel()), true
 	}
 	// a bare model name → the provider that lists it
 	for i := range c.Providers {
 		if c.Providers[i].HasModel(ref) {
-			cp := c.Providers[i]
-			cp.Model = ref
-			cp.applyModelPrice()
-			cp.applyModelOverride()
-			cp.applyModelCapabilities()
-			return &cp, true
+			return c.Providers[i].forModel(ref), true
 		}
 	}
 	return nil, false

@@ -137,6 +137,8 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 	case "hook", "hooks":
 		termrender.ConfigureThemeFromConfig()
 		return hookCommand(rest)
+	case "trust":
+		return trustCommand(rest)
 	case "task":
 		termrender.ConfigureThemeFromConfig()
 		return taskCommand(rest)
@@ -318,6 +320,35 @@ func registerContinueFlag(fs *pflag.FlagSet) *bool {
 	return fs.BoolP("continue", "c", false, "resume the most recent saved session, or start a fresh one when none exists")
 }
 
+// applyRunCopy applies --copy to a resolved resume path: it duplicates the
+// session and prints where the copy lives, returning the path to continue in
+// and a non-zero exit code to stop the run. A --continue that found no session
+// starts fresh (startedFresh), so there is nothing to duplicate and --copy is
+// skipped; --copy with no session to duplicate is a usage error.
+func applyRunCopy(resumePath string, startedFresh, copySession bool, format runOutputFormat, printOnly bool) (string, int) {
+	if !copySession || resumePath == "" {
+		if copySession && !startedFresh {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--copy requires --resume or --continue")
+			return "", 2
+		}
+		return resumePath, 0
+	}
+	copied, err := copySessionForWriting(resumePath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return "", 1
+	}
+	// Keep structured (json/stream-json) and --print stdout a single
+	// machine-readable payload: the human copy notice goes to stderr there.
+	// Plain text runs keep it on stdout, where callers scrape the copied path.
+	if format == runOutputText && !printOnly {
+		fmt.Printf("continuing in a session copy: %s\n", copied)
+	} else {
+		fmt.Fprintf(os.Stderr, "continuing in a session copy: %s\n", copied)
+	}
+	return copied, 0
+}
+
 func runAgent(args []string, version string) int {
 	defer closeCLIUsageCatalogs()
 	f := newRunFlags()
@@ -406,7 +437,7 @@ func runAgent(args []string, version string) int {
 	// handled before any heavy assembly. --resume takes precedence over
 	// --continue, matching the Resume call below. Accept file paths, branch
 	// IDs, preview text, and opaque machine session IDs (#7429).
-	resumePath := strings.TrimSpace(*f.resume)
+	resumePath, startedFresh := strings.TrimSpace(*f.resume), false
 	if resumePath != "" {
 		resolved, err := resolveSessionQuery(resolveCLISessionDirFor(workspaceRoot), resumePath)
 		if err != nil {
@@ -418,32 +449,16 @@ func runAgent(args []string, version string) int {
 	if resumePath == "" && *f.cont {
 		sessionDir := resolveCLISessionDirFor(workspaceRoot)
 		reclaimCLIRecoveryBranches(sessionDir)
-		session, ok := mostRecentSession(sessionDir)
-		if !ok {
+		if session, ok := mostRecentSession(sessionDir); !ok {
 			fmt.Fprintln(os.Stderr, i18n.M.NoSessionToResumeStartingNew)
+			startedFresh = true
 		} else {
 			resumePath = session.Path
 		}
 	}
-	if *f.copySession && resumePath == "" {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "--copy requires --resume or --continue")
-		return 2
-	}
-	if *f.copySession {
-		copied, err := copySessionForWriting(resumePath)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-			return 1
-		}
-		// Keep structured (json/stream-json) and --print stdout a single
-		// machine-readable payload: the human copy notice goes to stderr there.
-		// Plain text runs keep it on stdout, where callers scrape the copied path.
-		if format == runOutputText && !*f.printOnly {
-			fmt.Printf("continuing in a session copy: %s\n", copied)
-		} else {
-			fmt.Fprintf(os.Stderr, "continuing in a session copy: %s\n", copied)
-		}
-		resumePath = copied
+	resumePath, rc := applyRunCopy(resumePath, startedFresh, *f.copySession, format, *f.printOnly)
+	if rc != 0 {
+		return rc
 	}
 	sessionMode := cliTelemetrySessionMode(resumePath != "", strings.TrimSpace(*f.resume) != "", *f.copySession)
 	reporter := startCLITelemetry(cfg, telemetry.Options{

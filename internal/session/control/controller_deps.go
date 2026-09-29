@@ -5,6 +5,7 @@ import (
 	"reasonix/internal/state/sessionstore"
 
 	"reasonix/internal/contract/ablation"
+	"reasonix/internal/contract/config"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/ext/extension"
 	"reasonix/internal/ext/hook"
@@ -56,6 +57,7 @@ type controllerDeps struct {
 
 	label      string
 	modelRef   string
+	modelModes []config.ModelMode // what SetModelMode accepts; see model_modes.go
 	sessionDir string
 	// skills owns the session's discovered skills (enabled subset, full set, and
 	// the reloadable stores) — the skills slice of the Capabilities concern. See
@@ -75,7 +77,6 @@ type controllerDeps struct {
 
 	shell               sandbox.Shell                    // interpreter for user-invoked "!" commands; zero = auto
 	onRemember          func(rule string) RememberResult // set via Options; invoked when user picks "always allow"
-	rememberedPath      string
 	sessionRecoveryMeta func(SessionRecoveryRequest) sessionstore.BranchMeta
 
 	// balance is the active provider's optional wallet endpoint (nil-answering
@@ -135,6 +136,7 @@ func newControllerDeps(opts Options, sink event.Sink, usageTee *goalUsageTee, ru
 		subagentGate:           opts.SubagentGate,
 		label:                  opts.Label,
 		modelRef:               opts.ModelRef,
+		modelModes:             opts.ModelModes,
 		sessionDir:             opts.SessionDir,
 		skills:                 newSkillSet(opts.Skills, opts.AllSkills, opts.SkillStore, opts.AllSkillStore, opts.DisableImplicitSkillInvocation),
 		skillRunner:            opts.SkillRunner,
@@ -147,7 +149,6 @@ func newControllerDeps(opts Options, sink event.Sink, usageTee *goalUsageTee, ru
 		disableColdResumePrune: opts.DisableColdResumePrune,
 		shell:                  opts.Shell,
 		onRemember:             opts.OnRemember,
-		rememberedPath:         opts.RememberedPermissionPath,
 		sessionRecoveryMeta:    opts.SessionRecoveryMeta,
 		balance:                opts.Balance,
 		jobs:                   opts.Jobs,

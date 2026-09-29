@@ -1369,6 +1369,7 @@ body { background: var(--page) !important; }
   transition: color var(--m-line), background var(--m-line);
 }
 .workbench-open-editor:hover { color: var(--text); background: var(--overlay); }
+.workbench-open-editor[aria-pressed="true"] { color: var(--text); background: var(--overlay); }
 .workbench-open-editor svg { width: 13px; height: 13px; }
 .workbench-open-editor + .workbench-open-editor { margin-left: 2px; }
 .workbench-search { height: 34px; margin: 7px 8px; padding: 0 8px; flex: none; display: flex; align-items: center; gap: 6px; border: 1px solid var(--hair); border-radius: 5px; background: var(--surface); }
@@ -1422,7 +1423,11 @@ body { background: var(--page) !important; }
 .workbench-empty { flex: 1; display: flex; place-content: center; align-items: center; gap: 8px; color: var(--faint); font: 500 11px/1 var(--ui); }
 .workbench-empty svg { width: 18px; height: 18px; }
 .workbench-error { padding: 8px 12px; border-bottom: 1px solid var(--danger); color: var(--danger); font: 500 10px/1.4 var(--ui); }
-@media (max-width: 760px) { .workbench-body { grid-template-columns: minmax(0, 1fr); } .workbench-explorer { display: none; } }
+@media (max-width: 760px) {
+  .workbench-body { grid-template-columns: minmax(0, 1fr); }
+  .workbench-body:not([data-files]) .workbench-explorer { display: none; }
+  .workbench-body[data-files] .workbench-canvas { display: none; }
+}
 
 /* Settings is one stable layer in the current window. */
 .prefs {
@@ -4007,3 +4012,28 @@ body { font-size: 14px; line-height: 1.75; }
 @media (max-width: 560px) {
   .remote-closed { right: 12px; bottom: 12px; width: calc(100vw - 24px); }
 }
+.portmenu .studio-item-switch {
+  position: relative;
+  justify-self: end;
+  width: 28px;
+  height: 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--overlay);
+}
+.portmenu .studio-item-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ghost);
+  transition: transform var(--m-line), background var(--m-line);
+}
+.portmenu .mi[aria-checked="true"] .studio-item-switch { border-color: var(--accent); background: var(--accent-wash); }
+.portmenu .mi[aria-checked="true"] .studio-item-switch::after { background: var(--accent); transform: translateX(12px); }
+.studio-effort-menu .mi[aria-checked] .studio-item-badge { background: var(--overlay); color: var(--warn-ink); }
+.studio-effort-menu .mi[aria-checked] { position: sticky; bottom: 0; z-index: 1; background: var(--raised); box-shadow: 0 -1px 0 var(--border); }
+.studio-effort-menu .mi[aria-checked]:not(:disabled):hover { background: var(--overlay); }

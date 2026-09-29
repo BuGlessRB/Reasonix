@@ -303,7 +303,7 @@ func migrateLegacySessionsWithMarkers(srcDir, globalDest, marker, jsonlMarker st
 
 // importJsonlSessions copies .jsonl files that are already in message format
 // (no .events.jsonl counterpart) from srcDir into their appropriate destination
-// dirs. Returns the count imported and whether a related artifact copy failed.
+// dirs. Returns the count imported and whether a session or artifact copy failed.
 func importJsonlSessions(entries []os.DirEntry, srcDir, globalDest string, hasEvents map[string]bool, projectDir func(string) string) (int, bool) {
 	imported := 0
 	hadArtifactFailure := false
@@ -334,11 +334,8 @@ func importJsonlSessions(entries []os.DirEntry, srcDir, globalDest string, hasEv
 			continue
 		}
 		srcInfo, _ := e.Info()
-		if isNativeSessionEventLog(SessionEventLogPath(jsonlPath)) {
-			if err := saveNativeSessionCopy(jsonlPath, dest); err != nil {
-				continue
-			}
-		} else if err := transformAndCopyJsonl(jsonlPath, dest); err != nil {
+		if !copySessionFile(jsonlPath, dest) {
+			hadArtifactFailure = true
 			continue
 		}
 		if srcInfo != nil {

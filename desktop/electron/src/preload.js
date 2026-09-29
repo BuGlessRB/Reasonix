@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld("reasonixHost", {
   // page, and the few controls a person has over a page they are watching.
   showBrowserView: (targetId, rect) => ipcRenderer.invoke("browser:show", String(targetId), rectOf(rect)),
   hideBrowserView: () => ipcRenderer.invoke("browser:hide"),
+  freezeBrowserView: () => ipcRenderer.invoke("browser:freeze"),
   controlBrowserView: (targetId, action) => ipcRenderer.invoke("browser:control", String(targetId), String(action)),
   navigateBrowserView: (targetId, address) => ipcRenderer.invoke("browser:navigate", String(targetId), String(address)),
   // Why a page did not load, and a login a page or proxy asks for. The password

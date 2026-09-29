@@ -1,4 +1,5 @@
 import type {
+  ModelEffort,
   Protocol,
   ProviderCheck,
   ProviderEdit,
@@ -42,6 +43,12 @@ export class MockProvider extends MockBoundary {
       models: ["gpt-4o", "claude-sonnet-4"], default: "gpt-4o",
       hasKey: true, inUse: false, preset: false, keyEnv: "MYRELAY_API_KEY",
       visionModels: ["gpt-4o"], canSetVision: true,
+      reasoningProtocol: "openai", supportedEfforts: ["low", "medium", "high"],
+      modelEfforts: { "claude-sonnet-4": { supportedEfforts: ["low", "high", "max"], defaultEffort: "high" } },
+      inheritedEfforts: {
+        "gpt-4o": { supportedEfforts: ["low", "medium", "high"] },
+        "claude-sonnet-4": { supportedEfforts: ["low", "medium", "high"] },
+      },
     },
     // The Responses wire is the one that can carry a turn by reference, so it
     // is the only entry here offering the choice.
@@ -133,6 +140,7 @@ export class MockProvider extends MockBoundary {
             headers: edit.headers, extraBody: edit.extraBody,
             reasoningProtocol: edit.reasoningProtocol, supportedEfforts: edit.supportedEfforts,
             defaultEffort: edit.defaultEffort,
+            modelEfforts: edit.modelEfforts ? mockModelEfforts(edit.modelEfforts) : p.modelEfforts,
           }
         : p,
     );
@@ -159,4 +167,10 @@ function relayCatalog(): string[] {
     }
   }
   return out;
+}
+
+// The kernel keeps only models that declare levels; the rest inherit.
+function mockModelEfforts(sent: Record<string, ModelEffort>): Record<string, ModelEffort> | undefined {
+  const kept = Object.entries(sent).filter(([, v]) => v.supportedEfforts.length > 0);
+  return kept.length ? Object.fromEntries(kept) : undefined;
 }

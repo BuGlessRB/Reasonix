@@ -77,6 +77,10 @@ type turnRuntime struct {
 	uncountedCheckNoted bool
 	// watch counts rounds since this run last did something observable.
 	watch progressRun
+	// perseverationStrikes counts the cut-and-retry attempts this Run has spent
+	// on a detected generation loop. It lives here, not on the session, so the
+	// next user message starts fresh.
+	perseverationStrikes int
 }
 
 // pendingTurn is what someone outside the Run arms for the next one: a

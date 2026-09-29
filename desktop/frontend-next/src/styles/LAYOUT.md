@@ -621,6 +621,10 @@ what exists.
 - The docked workbench is the pane's whole width. Beside a 390px conversation a
   560px dock leaves neither usable, so while it is open the conversation and
   the composer step aside; the 「对话」 tab brings them back.
+- Under 760px the workbench has one column, so the explorer and the canvas
+  take turns in it: the files toggle (`data-files`) swaps one for the other,
+  exactly as a docked workbench does. Hiding the explorer outright at that
+  width leaves the toggle pressed over an empty body and the files unreachable.
 - The settings sheet fills the screen; its inset and rounded frame are a
   desktop's margin, and here they cost a sixth of the width.
 - The transcript never scrolls sideways; wide content scrolls inside its own

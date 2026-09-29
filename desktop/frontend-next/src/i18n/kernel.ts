@@ -109,6 +109,8 @@ const SAID: Record<string, string> = {
   "provider.bad_max_output_tokens": "最大输出 Token 不能是负数",
   "provider.bad_reasoning_protocol": "无法识别「{protocol}」这种思考协议",
   "provider.default_effort_not_listed": "默认档位「{level}」不在填写的档位里",
+  "provider.model_default_effort_not_listed": "{model} 的默认档位「{level}」不在为它选的档位里",
+  "provider.model_effort_unlisted": "{model} 不在已启用的模型里，不能为它单独设置档位",
   "provider.running": "这个模型上的对话正在运行，停止后再删除",
   "session.running": "该会话正在运行，停止后再删除",
   "workspace.running": "这个文件夹里有正在运行的对话，停止后再移除",
@@ -170,6 +172,7 @@ const SAID: Record<string, string> = {
     "{provider} 没说自己有哪些推理强度档位。要有，得在它的配置块里写 reasoning_protocol 或 supported_efforts",
   "effort.unsupported_level": "{provider} 不提供「{level}」档位，可选值为：{levels}",
   "effort.no_provider": "无法识别当前使用的来源，请先切换一次模型",
+  "model_mode.unsupported": "当前模型 {model} 不支持「{mode}」模式",
 
   "prompt_refine.empty": "输入框是空的，先写点内容再优化",
   "prompt_refine.too_long": "内容超过 {max_bytes} 字节，无法优化",
@@ -333,6 +336,8 @@ const SAID: Record<string, string> = {
   "studio.pin_rejected": "版本固定未能保存：{detail}",
   "update.install_running": "已有一个版本切换正在进行，请等待其完成后重试",
   "update.install_rejected": "本次版本切换未能启动：{detail}",
+  "update.restart_busy": "有 {n} 项任务正在运行，重启会中断它们",
+  "update.nothing_ready": "没有已下载好的版本可供重启安装，请重新点击安装",
 
   "loopback.host_rejected": "该请求未发往 Studio 监听的地址，已被拒绝",
   "loopback.origin_rejected": "该页面不属于 Studio，无法对其操作",

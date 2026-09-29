@@ -14,7 +14,7 @@ import type { MemoryCatalog, MemoryEdit, MemoryEntry } from "./memory";
 import type { UsageReport } from "./usage";
 export type { MemoryEdit } from "./memory";
 export type { Money, UsageDay, UsageModel, UsageProvider, UsageReport } from "./usage";
-import type { CompactionSettings, Completion, CompletionItem, ModelEntry, ModelPrice, RoleAssignments } from "./model";
+import type { CompactionSettings, Completion, CompletionItem, ModelEntry, ModelMode, ModelPrice, RoleAssignments } from "./model";
 import type { NetworkProbe, NetworkSettings } from "./network";
 import type { ApprovalMode, ApprovalVerdict, BrowserTab, Checkpoint, HistoryMessage, HostTodo, JobEntry, Preset, RewindPlan, RewindResult, RewindScope, SessionEntry, SessionStatus, WalletLine, WalletReading, PlanAction } from "./session";
 import type { ContextBreakdown, ShellOption, ShellSettings } from "./shell";
@@ -29,7 +29,7 @@ export type { AccountState, AccountUser, ApprovalMode, ApprovalVerdict, Capabili
   Checkpoint, CompactionSettings, Completion, CompletionItem, ContextBreakdown, DeviceGrant, HistoryMessage, HostTodo, BrowserTab,
   HookCatalog, HookDryRun, HookEntry, HookEventInfo, HookSource, JobEntry, McpCatalog, McpDraft,
   McpDraftServer, McpEntry, McpInstallResult, McpInstallScope, McpLoad, McpRisk, McpTool, MemoryCatalog,
-  MemoryEntry, ModelEntry, ModelPrice, NetworkProbe, NetworkSettings, Preset, RewindPlan,
+  MemoryEntry, ModelEntry, ModelMode, ModelPrice, NetworkProbe, NetworkSettings, Preset, RewindPlan,
   RewindResult, RewindScope, RoleAssignments, ScopeLayer, SessionEntry, SessionStatus,
   ShellOption, ShellSettings, SkillCatalog, SkillEntry, UpdateProgress, VersionEntry,
   VersionHub, WalletLine, WalletReading, ChangeDiff, WorkspaceChange, WorkspaceChanges, WorkspaceEntry, WorkspaceFile, WorkspaceFiles, WorkspaceInfo };
@@ -40,7 +40,7 @@ import type { MarketDetail, MarketList, MarketOwnRequest, MarketPackage, MarketP
 import type { Appearance, ThemeImport, ThemePack } from "./look";
 import type { BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, ProgressWatchSettings, SandboxSettings } from "./boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
-export type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
+export type { ModelEffort, Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 import type { StoragePlan, StorageState } from "./storage";
 
 export type * from "./plugin";
@@ -323,6 +323,10 @@ export interface AgentPort {
   // one. Resolves only on failure: a success ends with the process handing over
   // to the build it just installed.
   goToVersion(version: string): Promise<void>;
+  // Installs the release goToVersion left verified and waiting, and restarts
+  // into it. Refused with update.restart_busy while work runs here, unless
+  // force says the person has seen that.
+  restartToVersion(version: string, force: boolean): Promise<void>;
   // Returns an unsubscribe. A browser tab has no shell to report progress, so
   // it never fires there.
   onUpdateProgress(cb: (p: UpdateProgress) => void): () => void;
@@ -408,7 +412,8 @@ export interface AgentPort {
   // only this says how, and asking per path is what keeps a session that
   // touched two hundred files from shipping two hundred diffs nobody opened.
   changeDiff(path: string): Promise<ChangeDiff>;
-  workspaceFiles(path?: string, query?: string): Promise<WorkspaceFiles>;
+  // Dot entries are left out unless hidden is set; VCS stores never appear.
+  workspaceFiles(path?: string, query?: string, hidden?: boolean): Promise<WorkspaceFiles>;
   workspaceFile(path: string): Promise<WorkspaceFile>;
   saveWorkspaceFile(file: WorkspaceFile): Promise<WorkspaceFile>;
   // Where an image in the workspace is served, for a rendered document to show.
@@ -521,6 +526,8 @@ export interface AgentPort {
   setPreset(preset: Preset): Promise<void>;
   setModel(ref: string): Promise<void>;
   setEffort(effort: string): Promise<void>;
+  // "" turns the session's model mode off.
+  setModelMode(mode: string): Promise<void>;
   compaction(): Promise<CompactionSettings>;
   saveCompaction(softLimitTokens: number): Promise<CompactionSettings>;
   setGoal(text: string): Promise<void>;

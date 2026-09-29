@@ -23,22 +23,22 @@ type PermissionLists struct {
 	Deny  []string `json:"deny"`
 }
 
-// PermissionRules separates editable user lists from project config and
-// remembered project rules that the same editor cannot change. ShadowedBy
-// identifies a project config that outranks the edited user file; Effective
-// shows the merged rules actually loaded by this controller.
+// PermissionRules is what an editor needs: the lists it may write, the file
+// they land in, and — only when a project config declares its own — the merge
+// that is actually in force, which an edit here cannot move.
 type PermissionRules struct {
 	PermissionLists
-	Path            string           `json:"path"`
-	ShadowedBy      string           `json:"shadowedBy,omitempty"`
-	Effective       *PermissionLists `json:"effective,omitempty"`
-	Remembered      []string         `json:"remembered,omitempty"`
-	RememberedPath  string           `json:"rememberedPath,omitempty"`
-	RememberedError string           `json:"rememberedError,omitempty"`
+	Path       string           `json:"path"`
+	ShadowedBy string           `json:"shadowedBy,omitempty"`
+	Effective  *PermissionLists `json:"effective,omitempty"`
 	// Granted is what was allowed for this session alone, on a prompt rather
 	// than in the file. Nothing wrote it down, so a reader with only the file
 	// in front of them is looking at less than the agent may currently do.
 	Granted []string `json:"granted,omitempty"`
+	// Remembered rules are stored per workspace outside project configuration.
+	Remembered      []string `json:"remembered,omitempty"`
+	RememberedPath  string   `json:"rememberedPath,omitempty"`
+	RememberedError string   `json:"rememberedError,omitempty"`
 }
 
 // SandboxSettings is where an approved write may land, and whether bash runs
@@ -71,8 +71,8 @@ type SandboxSettings struct {
 	ShadowedBy string `json:"shadowedBy,omitempty"`
 }
 
-// PermissionRules reads the user layer this editor writes and the effective
-// project rules the current controller loaded.
+// PermissionRules reads the user layer this editor writes, and reports the
+// effective merge beside it when a project file outranks it.
 func (c *Controller) PermissionRules() PermissionRules {
 	path := config.UserConfigPath()
 	out := PermissionRules{
@@ -81,24 +81,20 @@ func (c *Controller) PermissionRules() PermissionRules {
 		ShadowedBy:      shadowingConfig(path, c.WorkspaceRoot()),
 		Granted:         c.approval.sessionGrants(),
 	}
-	if c.rememberedPath != "" {
-		if stored, err := config.LoadForEditReadOnlyStrict(c.rememberedPath); err == nil {
-			out.Remembered = append([]string(nil), stored.Permissions.Allow...)
-			if len(out.Remembered) > 0 {
-				out.RememberedPath = c.rememberedPath
-			}
-		} else {
-			out.RememberedPath = c.rememberedPath
+	if root := c.WorkspaceRoot(); root != "" {
+		store := config.NewProjectGrantStore(config.Roots{}.Home())
+		out.RememberedPath = store.Path()
+		if grant, err := store.Grant(root); err != nil {
 			out.RememberedError = err.Error()
+		} else {
+			out.Remembered = grant.Allow
 		}
 	}
-	if out.ShadowedBy == "" && len(out.Remembered) == 0 {
+	if out.ShadowedBy == "" {
 		return out
 	}
 	if cfg, err := config.LoadForRootReadOnly(c.WorkspaceRoot()); err == nil {
-		merged := listsFrom(cfg)
-		merged.Allow = append(merged.Allow, out.Remembered...)
-		if !sameLists(merged, out.PermissionLists) {
+		if merged := listsFrom(cfg); !sameLists(merged, out.PermissionLists) {
 			out.Effective = &merged
 		}
 	}

@@ -12,6 +12,7 @@ import { host } from "../port/host";
 import { useTreeKeys } from "./tree";
 import { useDismiss } from "./dismiss";
 import { asksDelete } from "./keys";
+import { clearDraftForSession } from "./drafts";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -204,6 +205,7 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
       // kernel to refuse: a delete never stops work in progress.
       if (session.runtimeId && liveIds([session.runtimeId]).length === 0) await onClose([session.runtimeId]);
       await hub.removeSession(session.path);
+      clearDraftForSession("", session.path);
       await reload();
       if (document.activeElement && document.activeElement !== document.body) return;
       (heir?.isConnected ? heir : treeKeys.ref.current?.querySelector<HTMLElement>('[role="treeitem"]'))?.focus();

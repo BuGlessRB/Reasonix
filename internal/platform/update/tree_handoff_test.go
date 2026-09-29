@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -147,5 +148,24 @@ func TestCheckTreeSwapRefusesAnInstallItCannotWrite(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(install, 0o755) })
 	if err := CheckTreeSwap(install, filepath.Join(testenv.TempDir(t), "delta")); !errors.Is(err, ErrTreeNotSwappable) {
 		t.Fatalf("err = %v, want ErrTreeNotSwappable", err)
+	}
+}
+
+// The helper is detached, so a swap that gives up leaves its reason where the
+// restored build reads it on its next launch.
+func TestAFailedSwapLeavesItsReasonForTheNextLaunch(t *testing.T) {
+	quickRetries(t)
+	h := handoff(t, map[string]string{"app.exe": "new app"})
+	put(t, h.StagingDir, "app.exe", "tampered")
+	h.Outcome = filepath.Join(testenv.TempDir(t), "swap-outcome.txt")
+	plan, err := WriteTreeHandoff(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handled, code := MaybeRunTreeHandoff([]string{treeHandoffArg, plan}); !handled || code != 1 {
+		t.Fatalf("handled=%v code=%d, want a handled failure", handled, code)
+	}
+	if got := read(t, filepath.Dir(h.Outcome), "swap-outcome.txt"); !strings.Contains(got, "app.exe") {
+		t.Fatalf("outcome = %q, want the failing file named", got)
 	}
 }

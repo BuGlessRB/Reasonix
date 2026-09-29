@@ -82,6 +82,9 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.menuKey(msg.String()); handled {
 		return m, cmd
 	}
+	if cmd, handled := m.viKey(msg); handled {
+		return m, cmd
+	}
 	empty := m.composer.Value() == ""
 	switch msg.String() {
 	case "tab":
@@ -106,6 +109,7 @@ func (m *model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, m.call("cancel", m.client.Cancel)
 		case !empty:
 			m.composer.Reset()
+			m.shell = false
 			return m, nil
 		case time.Since(m.quitArmedAt) < quitArmWindow:
 			return m, tea.Quit
@@ -202,7 +206,7 @@ func (m *model) promptKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if cmd, handled := answer(open, msg.String()); handled {
 		return cmd, true
 	}
-	if open.Kind == ItemAsk && m.ask != nil && m.ask.entering() {
+	if open.Kind == ItemAsk && m.ask != nil && m.ask.entering() && msg.String() != "ctrl+c" {
 		var cmd tea.Cmd
 		m.composer, cmd = m.composer.Update(msg)
 		return cmd, true
@@ -238,6 +242,7 @@ func (m *model) send(steer bool) tea.Cmd {
 	m.history = append(m.history, display)
 	m.histAt = len(m.history)
 	m.composer.Reset()
+	m.viCmd = false
 	if m.shell {
 		m.shell = false
 		display, text = "! "+display, "!"+text

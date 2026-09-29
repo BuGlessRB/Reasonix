@@ -28,6 +28,10 @@ type Options struct {
 	// it never stops generation. Zero uses the default; negative retains all.
 	// Provider output budgets are a separate protocol/model capability.
 	ReasoningByteLimit int
+	// MaxPerseverationRetries opts into cutting a detected perseveration
+	// (mindless repetition) loop and nudging a retry. nil or *0 reports the
+	// loop through the progress-watch channel instead; negative disables the guard.
+	MaxPerseverationRetries *int
 	// MaxOutputTokens overrides the provider's configured/default total output
 	// budget. Zero delegates to the provider; a negative value asks optional
 	// protocols to omit the budget (Anthropic still requires max_tokens).

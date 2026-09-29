@@ -100,12 +100,45 @@ describe("WorkbenchPanel", () => {
     expect(onCloseManual).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the column when its last tab closes while the explorer is open", async () => {
+    const user = userEvent.setup();
+    const onCloseManual = vi.fn();
+    const page = { id: "b1", target: "t1", url: "https://example.com", title: "My page", active: true };
+    const { container } = render(<WorkbenchPanel port={new MockPort()} tabs={[page]} manual shown={false} scheme="dark" changes={[]} onCloseManual={onCloseManual} onSurfaces={vi.fn()} onExternal={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "文件" }));
+    await user.click(screen.getByRole("button", { name: "关闭 My page" }));
+    expect(onCloseManual).not.toHaveBeenCalled();
+    expect(container.querySelector(".workbench-body")?.hasAttribute("data-files")).toBe(true);
+  });
+
   it("shows a page the person opened beside the agent's, while the agent's tab stays active", () => {
     const props = { port: new MockPort(), manual: true, shown: false, scheme: "dark" as const, changes: [], onCloseManual: vi.fn(), onSurfaces: vi.fn(), onExternal: vi.fn() };
     const agent = { id: "b1", target: "t1", url: "https://top.baidu.com", title: "百度热搜", active: true };
     const { rerender } = render(<WorkbenchPanel {...props} tabs={[agent]} />);
     rerender(<WorkbenchPanel {...props} tabs={[agent, { id: "b2", target: "t2", url: "https://example.com", title: "Link", active: false }]} />);
     expect(screen.getByRole("tab", { name: "Link" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("lists dot folders only once hidden files are asked for, and remembers the choice", async () => {
+    const user = userEvent.setup();
+    localStorage.removeItem("rx-show-hidden-files");
+    const port = new MockPort();
+    const list = vi.spyOn(port, "workspaceFiles");
+    const props = { port, tabs: [], manual: false, shown: true, scheme: "light" as const, changes: [], onCloseManual: vi.fn(), onSurfaces: vi.fn(), onExternal: vi.fn() };
+    const { unmount } = render(<WorkbenchPanel {...props} />);
+    await screen.findByRole("button", { name: "README.md" });
+    expect(screen.queryByRole("button", { name: ".reasonix" })).toBeNull();
+    expect(list).toHaveBeenLastCalledWith("", "", false);
+    const toggle = screen.getByRole("button", { name: "显示隐藏文件" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    await user.click(toggle);
+    expect(await screen.findByRole("button", { name: ".reasonix" })).toBeTruthy();
+    expect(list).toHaveBeenLastCalledWith("", "", true);
+    unmount();
+    render(<WorkbenchPanel {...props} />);
+    expect(await screen.findByRole("button", { name: ".reasonix" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "显示隐藏文件" }).getAttribute("aria-pressed")).toBe("true");
+    localStorage.removeItem("rx-show-hidden-files");
   });
 
   it("shows the file that was picked from the list rather than leaving the list over it", async () => {

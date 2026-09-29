@@ -1,3 +1,4 @@
+import type { ModelMode } from "./model";
 import type { Via } from "./wire";
 // A conversation and the states it passes through: what is running, what it
 // cost, and the points it can be wound back to.
@@ -210,6 +211,8 @@ export interface SessionStatus {
   decisions?: Decision[];
   preset: Preset;
   effort?: string;
+  // Absent unless the session's model declares a mode: its switch is not drawn.
+  modes?: ModelMode[];
   modelRef?: string;
   toolApprovalMode: ApprovalMode;
   autoApproveTools: boolean;

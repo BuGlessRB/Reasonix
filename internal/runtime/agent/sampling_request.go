@@ -129,6 +129,9 @@ func (a *Agent) buildSamplingRequest(ctx context.Context, trigger string) (sampl
 	if err != nil {
 		return samplingRequest{}, err
 	}
+	// Host-owned and set after the extension ruling: the payload it rewrites
+	// has no mode, and a replaced request must not drop the session's choice.
+	req.Mode = a.sess.mode.get()
 	return samplingRequest{req: req}, nil
 }
 

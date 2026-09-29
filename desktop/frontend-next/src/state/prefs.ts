@@ -191,3 +191,23 @@ export function onProviderOrderChange(fn: () => void): () => void {
     if (providerOrderListeners.size === 0) window.removeEventListener("storage", refreshProviderOrder);
   };
 }
+
+// Off unless this machine turned it on. Dot folders hold tool state and local
+// configuration, so the explorer lists them only for a reader who asked.
+const HIDDEN_FILES_KEY = "rx-show-hidden-files";
+
+export function showsHiddenFiles(): boolean {
+  try {
+    return localStorage.getItem(HIDDEN_FILES_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+
+export function setShowsHiddenFiles(on: boolean): void {
+  try {
+    localStorage.setItem(HIDDEN_FILES_KEY, on ? "on" : "off");
+  } catch {
+    /* the choice holds for this window and is forgotten on the next */
+  }
+}

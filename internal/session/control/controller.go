@@ -298,15 +298,14 @@ type Options struct {
 	PromptRefiner *promptrefine.Refiner
 	Sink          event.Sink
 	Policy        permission.Policy
-	// SubagentGate is the shared, mutable gate every headless-only sub-agent
-	// surface (task, writer-capable skill sub-agents, planner) reads from. Nil
-	// disables gating for those surfaces same as before this field existed.
-	// SetToolApprovalMode and ApplyHeadlessApprovalMode call Update on it so a
-	// runtime approval-mode switch reaches sub-agents, not just the parent
-	// executor's own gate.
-	SubagentGate  *SharedHeadlessGate
-	Label         string
-	ModelRef      string
+	// SubagentGate is the shared gate every headless-only sub-agent surface
+	// reads; nil disables gating there. The approval-mode setters Update it so
+	// a runtime switch reaches sub-agents, not only the executor's own gate.
+	SubagentGate *SharedHeadlessGate
+	Label        string
+	ModelRef     string
+	// ModelModes are the optional modes the session's model declares.
+	ModelModes    []config.ModelMode
 	SystemPrompt  string
 	SessionDir    string
 	SessionPath   string
@@ -379,10 +378,10 @@ type Options struct {
 	// Shell is the interpreter user-invoked "!" commands run under, so /shell
 	// matches the agent's configured [tools.shell] choice. Zero value = auto.
 	Shell sandbox.Shell
-	// OnRemember persists an "always allow" rule selected through the permission Gate.
+	// OnRemember, when set, is invoked with a new allow rule the user chose to
+	// persist to disk (e.g. "Bash(go test:*)"). The callback is wired into the
+	// permission Gate on EnableInteractiveApproval.
 	OnRemember func(rule string) RememberResult
-	// RememberedPermissionPath is empty for global sessions to avoid listing user rules twice.
-	RememberedPermissionPath string
 	// SessionRecoveryMeta lets a frontend attach scope/topic/profile metadata to
 	// an automatic recovery branch before it is written.
 	SessionRecoveryMeta func(SessionRecoveryRequest) sessionstore.BranchMeta

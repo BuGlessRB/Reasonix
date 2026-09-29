@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"reasonix/internal/base/i18n"
+	"reasonix/internal/contract/event"
 )
 
 // Two host decisions follow from a turn having recorded a user gate: the Goal
@@ -33,7 +34,8 @@ func (c *Controller) noticeUserGate() {
 		return
 	}
 	if need := c.turnUserGate(); need != "" {
-		c.notice(fmt.Sprintf(i18n.M.AwaitingUserFmt, need))
+		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeAwaitUser,
+			Text: fmt.Sprintf(i18n.M.AwaitingUserFmt, need), Detail: need})
 	}
 }
 

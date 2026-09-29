@@ -20,6 +20,7 @@ var sessionReset = map[string]bool{
 	"cacheHit":         true,
 	"cacheMiss":        true,
 	"missingReasoning": true,
+	"mode":             true,
 	"win":              true, // windowState.reset, held to its own lists below
 }
 

@@ -148,8 +148,6 @@ func (b *builder) load() error {
 		return err
 	}
 	cfg := b.cfg
-	remembered, rememberedErr := rememberedPermissionRules(b.roots, b.root)
-	cfg.Permissions.Allow = append(cfg.Permissions.Allow, remembered...)
 	migrations.deepSeekErr = deepSeekProtocolMigrationNoticeError(handleConfigLoadWarnings(opts, cfg, b.stderr), migrations.deepSeekErr)
 	// [secrets] is user-global, so arming these package globals before any
 	// subprocess can spawn is correct for every concurrent workspace.
@@ -161,13 +159,6 @@ func (b *builder) load() error {
 	// emit from their own goroutines. The goal tee and the coalescer wrap it
 	// here, before the extension hub captures it, so agents emit through both.
 	b.sink = control.NewGoalUsageTee(event.Coalesce(quotedSink(cfg, opts), event.DefaultStreamDeltaWindow))
-	if rememberedErr != nil {
-		report(b.sink, event.Event{
-			Level: event.LevelWarn, Code: event.NoticeCodeRememberedPermissionLoadFailed,
-			Text:   "Remembered permission rules could not be loaded; no rules from that file were granted.",
-			Detail: rememberedErr.Error(),
-		})
-	}
 
 	b.proxy = cfg.NetworkProxySpec()
 	if b.ext, err = startExtensions(b.ctx, opts, b.roots, b.root, b.owner, b.sink); err != nil {
@@ -368,10 +359,11 @@ func (b *builder) executor() *agent.Agent {
 		Pricing:        entry.Price,
 		ModelRef:       b.model.ref,
 		TriageProvider: triageProv, TriageModelRef: triageRef, TriagePricing: triagePrice,
-		ScreenExternalContent: cfg.Agent.ScreenExternalContent,
-		Gate:                  t.gate,
-		Hooks:                 t.hookRunner,
-		Jobs:                  b.session.jobs,
+		ScreenExternalContent:   cfg.Agent.ScreenExternalContent,
+		MaxPerseverationRetries: perseverationRetries(cfg, entry),
+		Gate:                    t.gate,
+		Hooks:                   t.hookRunner,
+		Jobs:                    b.session.jobs,
 		// Reserving writes at the executor entry covers every writer, late MCP
 		// adds included, without wrapping tool schemas.
 		WriteScheduler:     t.sub.scheduler,
@@ -398,6 +390,17 @@ func (b *builder) executor() *agent.Agent {
 	}, b.sink)
 }
 
+// perseverationRetries resolves the degenerate-generation-loop budget for the
+// active provider: the provider's own setting when it has one, else the global
+// [progress_watch].perseveration_retries default. Unset reports; negative
+// disables.
+func perseverationRetries(cfg *config.Config, entry *config.ProviderEntry) *int {
+	if entry != nil && entry.PerseverationRetries != nil {
+		return entry.PerseverationRetries
+	}
+	return cfg.ProgressWatch.PerseverationRetries
+}
+
 func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, label string) control.Options {
 	opts, cfg, root, entry, t := b.opts, b.cfg, b.root, b.model.entry, &b.tools
 	specOptions := t.specOptions
@@ -411,6 +414,7 @@ func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, 
 		SubagentGate:                   t.gate,
 		Label:                          label,
 		ModelRef:                       b.model.ref,
+		ModelModes:                     config.RequestModes(entry),
 		SystemPrompt:                   b.prompt.prompt,
 		SessionDir:                     b.session.dir,
 		Host:                           t.host,
@@ -461,9 +465,8 @@ func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, 
 		OnRemember: func(rule string) control.RememberResult {
 			return rememberPermissionRule(b.roots, root, rule)
 		},
-		RememberedPermissionPath: rememberedPermissionPath(b.roots, root),
-		SessionRecoveryMeta:      opts.SessionRecoveryMeta,
-		OnSessionRecovered:       opts.OnSessionRecovered,
+		SessionRecoveryMeta: opts.SessionRecoveryMeta,
+		OnSessionRecovered:  opts.OnSessionRecovered,
 		// Nil without provider-declaring sidecars; otherwise frontends list plugin/... models through it.
 		ProviderResolver:  b.providers.extension,
 		RuntimeGeneration: b.ext.generation,

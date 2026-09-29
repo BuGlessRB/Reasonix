@@ -346,6 +346,8 @@ type Settings interface {
 	SetResponseLanguage(lang string)
 	SetReasoningLanguage(lang string)
 	SetDisplayRecorder(fn func(content, display string))
+	ModelModes() []ModelModeView
+	SetModelMode(id string) error
 }
 
 // Provenance is input a networked frontend relays for someone acting from a

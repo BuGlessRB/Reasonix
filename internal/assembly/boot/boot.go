@@ -72,10 +72,10 @@ func effectivePlannerModel(cfg *config.Config, opts Options) string {
 }
 
 func rememberPermissionRule(roots config.Roots, workspaceRoot, rule string) control.RememberResult {
-	path := rememberedPermissionPath(roots, workspaceRoot)
-	if path == "" {
-		path = filepath.Join(roots.Home(), "config.toml")
+	if strings.TrimSpace(workspaceRoot) != "" {
+		return rememberProjectPermissionRule(roots, workspaceRoot, rule)
 	}
+	path := roots.UserConfigPath()
 	result := control.RememberResult{Rule: strings.TrimSpace(rule), Path: path}
 	unlock, err := config.LockConfigFileEdits(path)
 	if err != nil {
@@ -101,16 +101,33 @@ func rememberPermissionRule(roots config.Roots, workspaceRoot, rule string) cont
 		result.Err = err
 		return result
 	}
-	write := config.WritePrivatePermissionsAllow
-	if strings.TrimSpace(workspaceRoot) == "" {
-		write = config.WritePermissionsAllow
-	}
-	if err := write(path, edit.Permissions.Allow); err != nil {
+	if err := config.WritePermissionsAllow(path, edit.Permissions.Allow); err != nil {
 		slog.Warn("save config after permission rule", "err", err)
 		result.Err = err
 		return result
 	}
 	result.Saved = true
+	return result
+}
+
+// rememberProjectPermissionRule files a workspace's "always" under the user's
+// home: the checkout's reasonix.toml cannot grant allow rules, since a clone
+// could have written them.
+func rememberProjectPermissionRule(roots config.Roots, workspaceRoot, rule string) control.RememberResult {
+	store := config.NewProjectGrantStore(roots.Home())
+	result := control.RememberResult{Rule: strings.TrimSpace(rule), Path: store.Path()}
+	result.Err = store.Update(workspaceRoot, func(g config.ProjectGrant) (config.ProjectGrant, error) {
+		if coveredBy := coveredPermissionRule(g.Allow, result.Rule); coveredBy != "" {
+			result.CoveredBy = coveredBy
+			return g, nil
+		}
+		g.Allow = append(pruneCoveredPermissionRules(g.Allow, result.Rule), result.Rule)
+		return g, nil
+	})
+	if result.Err != nil {
+		slog.Warn("persist project permission rule", "rule", rule, "err", result.Err)
+	}
+	result.Saved = result.Err == nil && result.CoveredBy == ""
 	return result
 }
 

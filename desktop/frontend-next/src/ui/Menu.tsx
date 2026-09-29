@@ -22,6 +22,9 @@ export interface MenuItem {
   // through twice.
   header?: boolean;
   disabled?: boolean;
+  // A switch rather than a choice: picking it flips this state, and the row
+  // says which state it is in instead of being marked as the current value.
+  toggle?: boolean;
 }
 
 // Where a list stops fitting the menu's own height cap. Past it a scrollbar
@@ -232,7 +235,8 @@ export function Picker({
                   {...id}
                   data-value={it.value}
                   className={it.plain ? "mi plain" : "mi"}
-                  role="menuitem"
+                  role={it.toggle === undefined ? "menuitem" : "menuitemcheckbox"}
+                  aria-checked={it.toggle}
                   disabled={it.disabled}
                   data-on={it.value === current ? "" : undefined}
                   data-lead={it.value === lead ? "" : undefined}
@@ -254,6 +258,7 @@ export function Picker({
                       {[1, 2, 3, 4].map((level) => <i key={level} data-on={level <= (it.strength ?? 0) ? "" : undefined} />)}
                     </span>
                   )}
+                  {it.toggle !== undefined && <span className="studio-item-switch" aria-hidden="true" />}
                   {it.right && <span className="rt">{it.right}</span>}
                 </button>
               )}

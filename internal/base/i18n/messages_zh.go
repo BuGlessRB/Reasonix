@@ -59,7 +59,7 @@ var Chinese = Messages{
 
 	ChatThinking:                    "思考中…",
 	ChatThoughtForFmt:               "思考了 %d 秒",
-	ChatStatusThinkingFmt:           "%s 思考中… (%d 秒 · Esc 取消)",
+	ChatStatusThinkingFmt:           "%s 思考中… (%d 秒 · %s 取消)",
 	TurnPhaseWorking:                "工作中",
 	TurnPhaseChecking:               "检查中",
 	TurnPhaseVerifying:              "验证中",
@@ -81,6 +81,7 @@ var Chinese = Messages{
 	ChatSubagentPreviewLabel:        "▎",
 	ChatStatusRetryingFmt:           "%s 正在重试 (%d/%d)… (Esc 取消)",
 	ChatStatusCancellingFmt:         "%s 正在停止… (%d 秒 · Ctrl+C 退出)",
+	ChatStatusCancellingViFmt:       "%s 正在停止… (%d 秒)",
 	ChatStatusIdle:                  "就绪",
 	ChatStatusYoloIdle:              "已跳过工具批准",
 	ChatStatusCycleHint:             "Shift+Tab 循环询问/自动/计划 · Ctrl+Y YOLO",
@@ -98,15 +99,19 @@ var Chinese = Messages{
 	ChatStatusCacheNowFmt:           "本次命中 %s",
 	ChatStatusCacheAvgFmt:           "平均 %s",
 	ChatStatusPlanApproval:          "1 开始执行 · 2 修改计划 · 3 暂不执行并退出 · n/Esc 继续规划 · PgUp/PgDn/Ctrl+Home/End 滚动",
+	ChatStatusPlanApprovalVi:        "1 开始执行 · 2 修改计划 · 3 暂不执行并退出 · n 继续规划 · PgUp/PgDn/Ctrl+Home/End 滚动",
 	PlanApprovalPrompt:              "计划已生成（见上方）— 请选择下一步操作",
 	ApprovalChoiceHint:              "↑/↓ 选择 · Enter 确认 · y/a/p/n 快捷键",
 	PlanApprovalChoices:             "1. 开始执行\n2. 修改计划（继续规划）\n3. 暂不执行，退出计划模式\n选择 [1/2/3]（y 开始执行；n/Esc 继续规划）",
+	PlanApprovalChoicesVi:           "1. 开始执行\n2. 修改计划（继续规划）\n3. 暂不执行，退出计划模式\n选择 [1/2/3]（y 开始执行；n 继续规划）",
 	ChatStatusToolApproval:          "1 本次允许 · 2 本会话允许此范围 · 提供时 3/4 为前缀或保存 · n/Esc 拒绝 · Ctrl-C 取消本轮",
+	ChatStatusToolApprovalVi:        "1 本次允许 · 2 本会话允许此范围 · 提供时 3/4 为前缀或保存 · n 拒绝 · Ctrl-C 取消本轮",
 	AskTypeSomething:                "自己输入",
 	AskTypingHint:                   "输入后按 Enter 确认",
 	AskNoteHint:                     "在下方为此项补充说明，Enter 确认",
 	AskChatInstead:                  "先不选择，直接回复",
 	ChatStatusQuestion:              "↑/↓ 选 · 数字快选 · 空格多选 · Tab 选中并补充说明 · Enter 确认 · ←/→ 切换问题 · Esc 取消",
+	ChatStatusQuestionVi:            "↑/↓ 选 · 数字快选 · 空格多选 · Tab 选中并补充说明 · Enter 确认 · ←/→ 切换问题 · Ctrl+C 取消",
 	StatusResumePicker:              "↑/↓ 移动 · Enter 恢复 · Esc 取消",
 	AskSubmitTitle:                  "提交答案",
 	AskUnanswered:                   "(未答)",
@@ -130,6 +135,7 @@ var Chinese = Messages{
 	ApprovalNeededFmt:               "需要审批：%s",
 	ApprovalNeededWithSubjectFmt:    "需要审批：%s %s",
 	AnswerNeededFmt:                 "需要回答：%s",
+	AnswerNeededFromFmt:             "需要回答（MCP %s）：%s",
 	ToolApprovalSourceFmt:           "来源: %s",
 	ToolApprovalBuiltIn:             "内置工具",
 	ToolApprovalImageUse:            "将读取提供的图片用于图像理解。",
@@ -624,6 +630,7 @@ var Chinese = Messages{
   reasonix session show|status <machine-session-id> --json [--dir PATH]  查询单个脱敏会话
   reasonix session recovery [<machine-session-id>] --json [--dir PATH]  查询脱敏恢复状态
   reasonix hook list|status --json [--dir PATH]         查看脱敏 Hook 状态
+  reasonix trust [--dir PATH] [--yes|--revoke]          审阅并批准本项目要运行的程序
   reasonix task list|show|status|events|stop|cancel|monitor|tmux --json [--dir PATH]
                                                          查看或控制脱敏 Task
   reasonix upgrade [--check] [--force]                   更新到最新正式版（别名：reasonix update）

@@ -207,6 +207,11 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 			sess["visionDeclared"] = config.VisionDeclared(entry)
 		}
 	}
+	// Only a model that declares modes lists any, which is what keeps the
+	// switch off every other model's effort menu.
+	if modes := s.ctl().ModelModes(); len(modes) > 0 {
+		sess["modes"] = modes
+	}
 	sess["sessionCostQuote"] = s.bc.SessionCostQuote()
 	if j := s.ctl().Jobs(); len(j) > 0 {
 		sess["jobs"] = j

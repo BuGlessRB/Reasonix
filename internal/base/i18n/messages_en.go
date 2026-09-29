@@ -58,7 +58,7 @@ var English = Messages{
 
 	ChatThinking:                    "thinking…",
 	ChatThoughtForFmt:               "thought for %ds",
-	ChatStatusThinkingFmt:           "%s thinking… (%ds · Esc cancels)",
+	ChatStatusThinkingFmt:           "%s thinking… (%ds · %s cancels)",
 	TurnPhaseWorking:                "working",
 	TurnPhaseChecking:               "checking",
 	TurnPhaseVerifying:              "verifying",
@@ -80,6 +80,7 @@ var English = Messages{
 	ChatSubagentPreviewLabel:        "▎",
 	ChatStatusRetryingFmt:           "%s retrying (%d/%d)… (Esc cancels)",
 	ChatStatusCancellingFmt:         "%s stopping… (%ds · Ctrl+C exits)",
+	ChatStatusCancellingViFmt:       "%s stopping… (%ds)",
 	ChatStatusIdle:                  "ready",
 	ChatStatusYoloIdle:              "tool approvals skipped",
 	ChatStatusCycleHint:             "Shift+Tab ask/auto/plan · Ctrl+Y YOLO",
@@ -97,15 +98,19 @@ var English = Messages{
 	ChatStatusCacheNowFmt:           "turn hit %s",
 	ChatStatusCacheAvgFmt:           "avg %s",
 	ChatStatusPlanApproval:          "1 execute · 2 revise · 3 exit without executing · n/Esc keeps planning · PgUp/PgDn/Ctrl+Home/End scrolls",
+	ChatStatusPlanApprovalVi:        "1 execute · 2 revise · 3 exit without executing · n keeps planning · PgUp/PgDn/Ctrl+Home/End scrolls",
 	PlanApprovalPrompt:              "Plan ready above — choose what to do next",
 	ApprovalChoiceHint:              "↑/↓ navigate · Enter select · y/a/p/n shortcuts",
 	PlanApprovalChoices:             "1. Start execution\n2. Revise plan (keep planning)\n3. Exit without executing\nChoose [1/2/3] (y starts; n/Esc keeps planning)",
+	PlanApprovalChoicesVi:           "1. Start execution\n2. Revise plan (keep planning)\n3. Exit without executing\nChoose [1/2/3] (y starts; n keeps planning)",
 	ChatStatusToolApproval:          "1 approve once · 2 allow scope this session · 3/4 prefix or save when offered · n/Esc deny · Ctrl-C cancels turn",
+	ChatStatusToolApprovalVi:        "1 approve once · 2 allow scope this session · 3/4 prefix or save when offered · n deny · Ctrl-C cancels turn",
 	AskTypeSomething:                "Type something else",
 	AskTypingHint:                   "type below, Enter to confirm",
 	AskNoteHint:                     "note for this choice below, Enter to confirm",
 	AskChatInstead:                  "None — just chat",
 	ChatStatusQuestion:              "↑/↓ move · number to pick · space multi · Tab pick + note · Enter confirm · ←/→ switch · Esc cancel",
+	ChatStatusQuestionVi:            "↑/↓ move · number to pick · space multi · Tab pick + note · Enter confirm · ←/→ switch · Ctrl+C cancel",
 	StatusResumePicker:              "↑/↓ move · Enter resume · Esc cancel",
 	AskSubmitTitle:                  "Submit answers",
 	AskUnanswered:                   "(unanswered)",
@@ -129,6 +134,7 @@ var English = Messages{
 	ApprovalNeededFmt:               "approval needed: %s",
 	ApprovalNeededWithSubjectFmt:    "approval needed: %s %s",
 	AnswerNeededFmt:                 "answer needed: %s",
+	AnswerNeededFromFmt:             "answer needed (MCP %s): %s",
 	ToolApprovalSourceFmt:           "Source: %s",
 	ToolApprovalBuiltIn:             "built-in tool",
 	ToolApprovalImageUse:            "It will read provided image input for image understanding.",
@@ -623,6 +629,7 @@ Usage:
   reasonix session show|status <machine-session-id> --json [--dir PATH]  query one redacted session
   reasonix session recovery [<machine-session-id>] --json [--dir PATH]  query redacted recovery state
   reasonix hook list|status --json [--dir PATH]         inspect redacted hook state
+  reasonix trust [--dir PATH] [--yes|--revoke]          review and approve programs this project runs
   reasonix task list|show|status|events|stop|cancel|monitor|tmux --json [--dir PATH]
                                                          inspect or control redacted tasks
   reasonix upgrade [--check] [--force]                   update to the latest official release (also: reasonix update)

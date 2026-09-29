@@ -407,7 +407,7 @@ export interface ExtensionSurface {
  *  only pausing, which the user switched on, ends the run. */
 export interface ProgressWatch {
   stalled: boolean;
-  cause?: "rounds" | "tokens";
+  cause?: "rounds" | "tokens" | "perseveration";
   idleRounds: number;
   roundLimit?: number;
   promptTokens?: number;

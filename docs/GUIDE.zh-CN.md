@@ -613,6 +613,7 @@ CLI/TUI 文本输入可通过 `[ui].cursor_shape` 设置光标形状，支持 `u
 | `Shift+Tab` | 按 Ask → Auto → Plan → Ask 循环 | YOLO 不进入这个输入模式循环；底部状态栏会显示当前模式。 |
 | `Ctrl+Y` | 切换 YOLO 开/关 | 关闭 YOLO 时会尽量恢复之前的 Ask/Auto 基底。终端若能转发 Command/Super，也可能识别 `Cmd+Y`，但稳定可用的是 `Ctrl+Y`。 |
 | `--yolo`、`--dangerously-skip-permissions` | 启动时进入 YOLO | 和 `Ctrl+Y` 是同一个运行时模式。 |
+| `[ui].commandmode = "vi"` | 让输入框进入 vi 命令模式 | 仅限用户全局配置；项目 `reasonix.toml` 无法设置，克隆的仓库因此不会改写用户的按键。无论回合是否在运行，`Esc` 都进入命令模式；只有 `Ctrl+C` 会中断。`Ctrl+C` 在提示符非空时会清空输入框并退出 shell 模式，vi 模式与默认模式一致；vi 模式下会先把去掉首尾空白的草稿存入提示历史，可用 `Up` 召回。未设置或 `""` 保持默认，即 `Esc` 中止正在运行的回合。页脚会显示当前的输入模式：命令模式为 `NORMAL`，否则为 `INSERT`。 |
 | `/preset [light|balanced|delivery]` | 查看或切换当前会话的执行设定 | `/work-mode` 与 `/profile` 是兼容别名（`economy` → `light`）。切换就地更新执行设定、不重建 Controller；有回合、审批或后台任务时会拒绝。 |
 | `/theme [auto|light|dark|style]` | 查看或切换 CLI 主题 | 不带参数会列出背景模式和命名配色。选择会保存到用户配置；单次运行可用 `REASONIX_THEME` 和 `REASONIX_THEME_STYLE` 覆盖。 |
 | `Ctrl+O` | 切换详细 reasoning 显示 | 也可通过 `/verbose` 使用。 |
@@ -1154,6 +1155,42 @@ Reasonix 会自动管理正常执行：活跃 Todo 连续 8 个工具调用轮�
 
 **普通对话任务默认没有任何上限**——轮数、token、时长、花费都不限。它一直跑到模型自己
 结束、自适应守卫判定它不再产生进展，或者你手动停止为止。
+
+其中一个守卫就是 **perseveration（= 无意义的重复）守卫**：当模型逐字节地反复输出同一小段
+文字或推理时触发。
+
+它**默认开启检测，但只做报告**：逐字节的重复有时是合法输出——比如把某个值打印 300 次、
+一长串完全相同的表格/日志行、整页的 `=` 或 `A`——所以除非你主动选择，否则既不截断流，也不会
+有任何内容送到模型。
+
+检测到的循环会作为 `perseveration` 通知经由 progress-watch 通道呈现，运行继续。
+
+该通知每个循环片段只提示一次：同一个循环持续触发时保持安静，只有其间出现一段不触发的内容后
+才会再次提示。是否因检测到的循环结束本轮，由用户的 `progress_watch.pause` 设置决定。
+
+截断流并提醒重试是可选项，通过 `[progress_watch].perseveration_retries`（全局默认值）开启，或在某个
+`[[providers]]` 条目上设置 per-provider 的 `perseveration_retries`，它会覆盖该 provider 的
+全局默认值：
+
+```toml
+[progress_watch]
+perseveration_retries = 0   # 默认：只报告检测到的循环，不截断流
+
+[[providers]]
+name = "deepseek"
+perseveration_retries = 1   # 该 provider 额外截断并重试一次
+```
+
+为 `0` 时，检测到的循环只做报告，如上所述。
+
+**正数**则会截断该流、向用户显示一条 `[retrying (N) avoiding perseveration]` 插话、以
+mid-turn steer 路径追加一条由 host 署名的提醒，并最多重试该次数；额度用尽后本轮以可恢复的
+重复暂停结束。
+
+重试前会把该轮的循环裁剪回原句及其最后一次重复，使重试重新提交的是循环的证据而非全部内容。
+裁剪同时作用于对话记录与已存储的回复，两者因此不会出现差异。
+
+把该键设为负数则完全禁用守卫。
 
 需要时可以自行开启花费闸门。它约束的是**整个任务**（包括每一次"继续"，直到你开始不相关的
 新工作）；越过阈值时会产出一次不带工具的总结然后暂停，已完成的工作全部保留，下一条消息

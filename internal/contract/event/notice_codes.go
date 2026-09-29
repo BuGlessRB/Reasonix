@@ -14,6 +14,8 @@ const (
 	NoticeCodeToolBudget                                        = "tool_budget"
 	NoticeCodePromptQueued                                      = "prompt_queued"
 	NoticeCodeLoopGuard                                         = "loop_guard"
+	NoticeCodePerseverationLoop                                 = "perseveration_loop"
+	NoticeCodePerseverationRetry                                = "perseveration_retry"
 	NoticeCodeProgressGuard                                     = "progress_guard"
 	NoticeCodeEvidenceNudge                                     = "evidence_nudge"
 	NoticeCodeReasoningGovernor                                 = "reasoning_governor"
@@ -35,9 +37,14 @@ const (
 	NoticeCodeWorkspaceLeaseResumed, NoticeCodeWorkspaceLeaseAbandoned = "workspace_lease_resumed", "workspace_lease_abandoned"
 	// A remembered approval: Detail carries what it allows, the rule's subject.
 	NoticeCodePermissionSaved, NoticeCodePermissionCovered, NoticeCodePermissionSaveFailed = "permission_saved", "permission_covered", "permission_save_failed"
-	NoticeCodeRememberedPermissionLoadFailed                                               = "remembered_permission_load_failed"
 	// An external tool result a screening model judged to address the agent.
 	NoticeCodeSuspectedInjection = "suspected_injection"
+	// Programs a project file names (hooks, language servers) held back until approved.
+	NoticeCodeProjectProgramsAwaitingApproval = "project_programs_awaiting_approval"
+	// An approved workspace program whose files changed; the host did not run it.
+	NoticeCodeProjectProgramChanged = "project_program_changed"
 	// A conversation opened from a 1.x log went on in a new session of its own.
 	NoticeCodeSessionContinuedFrom1x = "session_continued_from_1x"
+	// A turn handed its open list back to the user; Detail is the model's `need`, as it wrote it.
+	NoticeCodeAwaitUser = "await_user"
 )

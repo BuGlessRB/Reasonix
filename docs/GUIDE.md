@@ -783,6 +783,7 @@ Mode and display shortcuts:
 | `Shift+Tab` | Cycles Ask → Auto → Plan → Ask | YOLO remains outside this composer-mode cycle; the footer shows the active mode. |
 | `Ctrl+Y` | Toggles YOLO on/off | Turning YOLO off restores the previous Ask/Auto base when known. Terminals that forward Command/Super may also send `Cmd+Y`, but `Ctrl+Y` is the reliable terminal shortcut. |
 | `--yolo`, `--dangerously-skip-permissions` | Starts chat in YOLO | Same runtime mode as `Ctrl+Y`. |
+| `[ui].commandmode = "vi"` | Opts the composer into a vi command mode | User/global only; a project `reasonix.toml` cannot set it, so a cloned repo never rebinds the user's keys. `Esc` enters command mode, a running turn or not; only `Ctrl+C` interrupts. `Ctrl+C` with a non-empty prompt clears it and leaves shell mode, in vi mode and out; in vi mode it first saves the trimmed draft to the prompt history, so `Up` recalls it. Unset or `""` keeps the default, where `Esc` stops a running turn. The footer names the current input mode, `NORMAL` in command mode and `INSERT` otherwise. |
 | `/preset [balanced|delivery]` | Shows or switches the current session's execution setting (执行设定) | `/work-mode` and `/profile` are compatibility aliases (`economy` → `light`). Switching updates the execution setting in place without rebuilding the controller; blocked while a turn, approval, or background job is active. |
 | `/theme [auto|light|dark|style]` | Shows or switches the CLI theme | Bare `/theme` lists background modes and named accent palettes. The choice is saved to the user config; `REASONIX_THEME` and `REASONIX_THEME_STYLE` can override it for one run. |
 | `Ctrl+O` | Toggles verbose reasoning display | Also available through `/verbose`. |
@@ -1505,6 +1506,51 @@ an explicit run budget is needed.
 **An ordinary chat task has no limit of any kind by default** — not rounds, not
 tokens, not time, not money. It runs until the model finishes, an adaptive
 guard decides it stopped making progress, or you stop it.
+
+One such guard is the **perseveration guard** (a model stuck echoing one block):
+it detects when the model emits the same short block of text or reasoning
+byte-for-byte.
+
+Detection is **on by default**, but it only reports: a byte-identical block is
+sometimes legitimate output — printing a value 300 times, a run of identical
+table or log rows, a page of `=` or `A` — so nothing is cut and nothing reaches
+the model unless you opt in.
+
+A detected loop is surfaced through the progress-watch channel as a
+`perseveration` notice, and the run goes on.
+
+The notice is said once per loop episode: while the same loop keeps tripping the
+guard it stays quiet, and it is said again only after a block that does not trip
+the guard in between. The user's `progress_watch.pause` setting is what ends the
+run on a detected loop.
+
+Cutting the stream and nudging a retry is opt-in with
+`[progress_watch].perseveration_retries` (a global default) or a per-provider
+`perseveration_retries` on a `[[providers]]` entry, which overrides the global
+value for that provider:
+
+```toml
+[progress_watch]
+perseveration_retries = 0   # the default: report a detected loop, never cut
+
+[[providers]]
+name = "deepseek"
+perseveration_retries = 1   # this provider also cuts and retries once
+```
+
+At `0` a detected loop is only reported, as above.
+
+A **positive** value also cuts the stream, shows the user a
+`[retrying (N) avoiding perseveration]` interjection, appends a host-authored
+nudge through the mid-turn steer path, and retries up to that many times; once
+the budget is spent the run stops resumably with a perseveration pause.
+
+Before retrying, it trims the loop from the turn back to the phrase and its last
+repetition, so the retry resubmits evidence of the loop rather than all of it.
+The trim reaches both the transcript and the stored turn, so the two never
+diverge.
+
+Setting the key negative disables the guard entirely.
 
 An optional spend gate is available when you want one. It bounds a whole task
 (every "continue" included, until you start unrelated work), and on crossing it

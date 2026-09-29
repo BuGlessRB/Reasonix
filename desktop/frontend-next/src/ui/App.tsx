@@ -8,6 +8,7 @@ import { useLaunchHealth } from "./launchhealth";
 import { Nav } from "./Nav";
 import { useLinkRouting } from "./links";
 import { Pane, type PaneReport } from "./Pane";
+import { clearDraftForSession } from "./drafts";
 import { DOCK, Gutter, RAIL, dockMax, keepWidth, widthOf } from "./Gutter";
 import { listenAction } from "./listen";
 import { folded as roomGaveUp, onRoomWidth } from "./viewport";
@@ -20,6 +21,7 @@ import { Boundary } from "./Boundary";
 import { SettingsUnavailable } from "./SettingsUnavailable";
 import { useMachineBooks } from "./machinebooks";
 import { usePaint } from "./paint";
+import { rememberActivePane, savedActivePane } from "./activepane";
 import { Sidebar } from "./Sidebar";
 import { Sky } from "./Sky";import { useAddWorkspace } from "./addws";
 import { PaneTabs } from "./PaneTabs";
@@ -74,7 +76,7 @@ function savedPins(): Set<string> {
 export function App({ hub }: { hub: HubPort }) {
   const [runtimes, setRuntimes] = useState<RuntimeView[]>([]);
   const [panesRead, setPanesRead] = useState(false);
-  const [active, setActive] = useState("");
+  const [active, setActive] = useState(savedActivePane);
   const [tree, setTree] = useState<TreeWorkspace[]>([]);
   // An empty tree before the first read settles is an unread one, not a
   // machine with no folders; only the kernel's answer can say the latter.
@@ -118,6 +120,7 @@ export function App({ hub }: { hub: HubPort }) {
   const [runs, setRuns] = useState<Record<string, { run: string; live: boolean }>>({});
   const activeRef = useRef("");
   activeRef.current = active;
+  useEffect(() => rememberActivePane(active), [active]);
   const reportsRef = useRef<Record<string, PaneReport>>({});
   const runsRef = useRef(runs);
   runsRef.current = runs;
@@ -529,6 +532,7 @@ export function App({ hub }: { hub: HubPort }) {
     async (path: string, archived: boolean, runtimeId?: string) => {
       if (runtimeId) await closePanes([runtimeId]);
       await hub.archiveSession(path, archived);
+      if (archived) clearDraftForSession("", path);
       if (archived) {
         setPinnedSessions((current) => {
           if (!current.has(path)) return current;

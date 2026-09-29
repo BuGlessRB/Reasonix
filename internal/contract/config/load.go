@@ -123,12 +123,12 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	userDefaultModel := cfg.DefaultModel
 	globalCLI := cfg.CLI
 	globalSecrets := cfg.Secrets
-	globalSandbox := holdUserGlobals(cfg.Sandbox, cfg.Tools.Shell.Env)
+	held := holdUserScope(cfg)
 	globalRemote, globalStorage, globalServe := cfg.Remote.Clone(), maps.Clone(cfg.Storage), cfg.Serve
 	globalDesktopLanguage := cfg.Desktop.Language
 	globalPricingCurrency := cfg.Desktop.Currency
 	globalBillingDisplayCurrency := cfg.Billing.DisplayCurrency
-	globalTelemetry, globalStatusline, globalProgressWatch := cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch
+	globalTelemetry, globalStatusline, globalProgressWatch, globalUICommandMode := cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch, cfg.UI.CommandMode
 
 	tomlSources = append(tomlSources, projectTOML)
 	projectMeta, err := mergeTOML(cfg, projectTOML)
@@ -152,8 +152,6 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	// reasonix.toml must not be able to flip on the workflow-breaking env/path
 	// protections.
 	cfg.Secrets = globalSecrets
-	// Sandbox grants are the same kind of control (see heldUserGlobals).
-	globalSandbox.restore(cfg, projectMeta)
 	// Remote hosts, storage locations and serve authentication are user-global:
 	// a repo must not inject hosts or forwards, redirect where transcripts live,
 	// or choose serve's launch token, auth mode, or trust in forwarded headers.
@@ -163,10 +161,10 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.Desktop.Language = globalDesktopLanguage
 	cfg.Desktop.Currency = globalPricingCurrency
 	cfg.Billing.DisplayCurrency = globalBillingDisplayCurrency
-	// Telemetry is a user-global privacy choice and a statusline a command the TUI
-	// runs unprompted: project config sets neither, even with no global value.
-	// The progress watch decides when the user's own runs pause, so it is theirs.
-	cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch = globalTelemetry, globalStatusline, globalProgressWatch
+	// Telemetry, statusline and progress watch are user-global: a project sets
+	// none, even with no global value. The composer's key bindings are the user's
+	// too, so a cloned repo cannot rebind Esc through a project [ui] commandmode.
+	cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch, cfg.UI.CommandMode = globalTelemetry, globalStatusline, globalProgressWatch, globalUICommandMode
 	// TOML decoding replaces [[plugins]] wholesale, so cfg.Plugins now holds
 	// only the last file's. Re-merge by name across all sources (later wins) so a
 	// project reasonix.toml doesn't drop the global config's MCP servers.
@@ -189,6 +187,8 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	} else if ok {
 		cfg.Desktop.ProviderAccess = access
 	}
+	// Sandbox, permission, shell env and program grants only narrow (see heldScope).
+	held.narrow(cfg, r, root, projectMeta)
 
 	// Claude Code's .mcp.json (project root) is read last and merged into
 	// [[plugins]], so a server configured for Claude works here unchanged.

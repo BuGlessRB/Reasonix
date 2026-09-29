@@ -33,6 +33,9 @@ type Options struct {
 	Inline bool
 	// HideTurnUsage keeps each request's token and cost receipt off the transcript.
 	HideTurnUsage bool
+	// CommandMode gives the composer a vi command mode: Esc enters command
+	// mode, a running turn or not, and only Ctrl+C interrupts.
+	CommandMode bool
 	// Statusline, when set, turns the footer's context JSON into one line
 	// that replaces the telemetry row; "" keeps the built-in row.
 	Statusline func(ctx context.Context, stdin string) string
@@ -71,6 +74,7 @@ type model struct {
 	history       []string
 	histAt        int
 	draft         string // what the composer held when a history walk began
+	viCmd         bool   // idle composer is in vi command (normal) mode, not insert
 	pastes        pasteStore
 	status        Status
 	quitArmedAt   time.Time

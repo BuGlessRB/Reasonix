@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"reasonix/internal/base/i18n"
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/contract/provider"
 )
@@ -254,5 +255,55 @@ func TestTUIAmbiguousResumeWithCopyIsRefused(t *testing.T) {
 	}
 	if after, _ := os.ReadDir(dir); len(after) != len(before) {
 		t.Fatalf("an ambiguous --copy wrote %d files, want none", len(after)-len(before))
+	}
+}
+
+// --continue --copy with no saved session has nothing to duplicate: the UI
+// starts fresh rather than failing the --copy check.
+func TestTUIContinueCopyWithNoSessionStartsFresh(t *testing.T) {
+	isolateCLIConfigHome(t)
+	ws, err := filepath.EvalSymlinks(testenv.TempDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var path string
+	var ambiguous *ambiguousSessionQueryError
+	var gotErr error
+	stderr := captureStderr(t, func() {
+		path, ambiguous, gotErr = tuiResolveResume(ws, "", true, true)
+	})
+	if gotErr != nil || path != "" || ambiguous != nil {
+		t.Fatalf("path=%q ambiguous=%v err=%v, want a clean fresh start", path, ambiguous, gotErr)
+	}
+	if !strings.Contains(stderr, i18n.M.NoSessionToResumeStartingNew) {
+		t.Fatalf("did not report the fresh-session fallback: %q", stderr)
+	}
+}
+
+// --copy with neither --resume nor --continue stays a usage error in the UI.
+func TestTUICopyWithoutResumeIsUsageError(t *testing.T) {
+	isolateCLIConfigHome(t)
+	ws, err := filepath.EvalSymlinks(testenv.TempDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, ambiguous, gotErr := tuiResolveResume(ws, "", false, true)
+	if gotErr == nil || !strings.Contains(gotErr.Error(), "--copy requires --resume or --continue") {
+		t.Fatalf("path=%q ambiguous=%v err=%v, want the --copy usage error", path, ambiguous, gotErr)
+	}
+}
+
+// A bare -r opens the picker, and the picker resumes its choice in place, so
+// --copy cannot duplicate it: --continue alongside the picker must not be read
+// as the fresh-start fallback that skips --copy.
+func TestTUIPickerContinueCopyWithCopyIsRefused(t *testing.T) {
+	isolateCLIConfigHome(t)
+	ws, err := filepath.EvalSymlinks(testenv.TempDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, ambiguous, gotErr := tuiResolveResume(ws, resumePickerSentinel, true, true)
+	if gotErr == nil || !strings.Contains(gotErr.Error(), "--copy requires --resume or --continue") {
+		t.Fatalf("path=%q ambiguous=%v err=%v, want the --copy usage error", path, ambiguous, gotErr)
 	}
 }

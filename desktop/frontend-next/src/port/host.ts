@@ -44,6 +44,9 @@ export interface HostPort {
    *  hide every other; hideBrowserView puts them all away again. */
   showBrowserView(target: string, rect: ViewRect): void;
   hideBrowserView(): void;
+  /** Put the page on screen away the way hideBrowserView does, answering with
+   *  a picture of what it showed at that moment, or "" when none was taken. */
+  freezeBrowserView(): Promise<string>;
   controlBrowserView(target: string, action: BrowserControl): void;
   /** Load what the person typed. false when the shell refused the address. */
   navigateBrowserView(target: string, address: string): Promise<boolean>;
@@ -126,6 +129,7 @@ interface ElectronBridge {
   revealPath?(base: string, path: string): Promise<Refusal | null>;
   showBrowserView?(target: string, rect: ViewRect): Promise<void>;
   hideBrowserView?(): Promise<void>;
+  freezeBrowserView?(): Promise<string>;
   controlBrowserView?(target: string, action: string): Promise<void>;
   navigateBrowserView?(target: string, address: string): Promise<boolean>;
   onBrowserLoadState?(listener: (state: BrowserLoadState) => void): () => void;
@@ -197,6 +201,11 @@ class ElectronHost implements HostPort {
   hideBrowserView() {
     void this.api.hideBrowserView?.();
   }
+  freezeBrowserView() {
+    if (this.api.freezeBrowserView) return this.api.freezeBrowserView().catch(() => "");
+    this.hideBrowserView();
+    return Promise.resolve("");
+  }
   controlBrowserView(target: string, action: BrowserControl) {
     void this.api.controlBrowserView?.(target, action);
   }
@@ -253,6 +262,9 @@ class BrowserHost implements HostPort {
   }
   showBrowserView() {}
   hideBrowserView() {}
+  freezeBrowserView() {
+    return Promise.resolve("");
+  }
   controlBrowserView() {}
   navigateBrowserView() {
     return Promise.resolve(false);

@@ -134,6 +134,25 @@ func TestUICursorShapeNormalizes(t *testing.T) {
 	}
 }
 
+func TestUICommandMode(t *testing.T) {
+	c := Default()
+	for _, tt := range []struct {
+		in   string
+		want bool
+	}{
+		{"", false},
+		{"VI", true},
+		{" vi ", true},
+		{"emacs", false},
+		{"unknown", false},
+	} {
+		c.UI.CommandMode = tt.in
+		if got := c.UICommandMode(); got != tt.want {
+			t.Errorf("UICommandMode(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestUICloseBehaviorNormalizes(t *testing.T) {
 	c := Default()
 	for _, tt := range []struct {
@@ -1457,10 +1476,7 @@ effort = "max"
 		t.Fatal(err)
 	}
 
-	cfg, err := LoadForRoot(root)
-	if err != nil {
-		t.Fatalf("LoadForRoot: %v", err)
-	}
+	cfg := approveWorkspacePrograms(t, root)
 	userProvider, ok := cfg.Provider("deepseek")
 	if !ok {
 		t.Fatalf("user deepseek provider missing: %+v", cfg.Providers)
@@ -1512,10 +1528,7 @@ api_key_env = "PROJECT_ONLY_KEY"
 		t.Fatal(err)
 	}
 
-	cfg, err := LoadForRoot(root)
-	if err != nil {
-		t.Fatalf("LoadForRoot: %v", err)
-	}
+	cfg := approveWorkspacePrograms(t, root)
 	shared, ok := cfg.Provider("shared")
 	if !ok {
 		t.Fatalf("shared provider missing: %+v", cfg.Providers)
@@ -2020,10 +2033,7 @@ api_key_env = "PROJECT_KEY"
 		t.Fatal(err)
 	}
 
-	cfg, err := LoadForRoot(root)
-	if err != nil {
-		t.Fatalf("LoadForRoot: %v", err)
-	}
+	cfg := approveWorkspacePrograms(t, root)
 	if _, ok := cfg.Provider("global"); !ok {
 		t.Fatal("runtime config should include user provider before saving")
 	}

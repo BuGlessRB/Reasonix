@@ -633,76 +633,8 @@ func RenderTOMLProjectDelta(c *Config) string {
 
 	// [agent] section — per-field comparison
 	var agentBuf strings.Builder
-	anyAgent := false
-
-	if sp := strings.TrimSpace(c.Agent.SystemPrompt); sp != "" && sp != d.Agent.SystemPrompt {
-		agentBuf.WriteString("system_prompt = \"\"\"\n")
-		agentBuf.WriteString(sp)
-		agentBuf.WriteString("\"\"\"\n")
-		anyAgent = true
-	}
-	if c.Agent.SystemPromptFile != "" && c.Agent.SystemPromptFile != d.Agent.SystemPromptFile {
-		fmt.Fprintf(&agentBuf, "system_prompt_file = %q\n", c.Agent.SystemPromptFile)
-		anyAgent = true
-	}
-	if c.Agent.Temperature != d.Agent.Temperature {
-		fmt.Fprintf(&agentBuf, "temperature = %s\n", formatFloat(c.Agent.Temperature))
-		anyAgent = true
-	}
-	if c.Agent.RecoveryModel != "" && c.Agent.RecoveryModel != d.Agent.RecoveryModel {
-		fmt.Fprintf(&agentBuf, "recovery_model = %q\n", c.Agent.RecoveryModel)
-		anyAgent = true
-	}
-	if c.Agent.ReasoningLanguage != d.Agent.ReasoningLanguage {
-		if l := c.ReasoningLanguage(); l != "auto" {
-			fmt.Fprintf(&agentBuf, "reasoning_language = %q\n", l)
-			anyAgent = true
-		}
-	}
-	if c.Agent.CompactRatio != d.Agent.CompactRatio {
-		fmt.Fprintf(&agentBuf, "compact_ratio = %s\n", formatFloat(c.Agent.CompactRatio))
-		anyAgent = true
-	}
-	if c.Agent.Keep != nil && !reflect.DeepEqual(c.Agent.Keep, d.Agent.Keep) {
-		fmt.Fprintf(&agentBuf, "keep = %s\n", renderStringArray(c.Agent.Keep))
-		anyAgent = true
-	}
-	if c.Agent.RecentKeep > 0 && c.Agent.RecentKeep != d.Agent.RecentKeep {
-		fmt.Fprintf(&agentBuf, "recent_keep = %d\n", c.Agent.RecentKeep)
-		anyAgent = true
-	}
-	if len(c.Agent.PlanModeReadOnlyCommands) > 0 && !reflect.DeepEqual(c.Agent.PlanModeReadOnlyCommands, d.Agent.PlanModeReadOnlyCommands) {
-		fmt.Fprintf(&agentBuf, "plan_mode_read_only_commands = %s\n", renderStringArray(c.Agent.PlanModeReadOnlyCommands))
-		anyAgent = true
-	}
-	if c.Agent.PlannerModel != "" && c.Agent.PlannerModel != d.Agent.PlannerModel {
-		fmt.Fprintf(&agentBuf, "planner_model = %q\n", c.Agent.PlannerModel)
-		anyAgent = true
-	}
-	if c.Agent.SubagentModel != "" && c.Agent.SubagentModel != d.Agent.SubagentModel {
-		fmt.Fprintf(&agentBuf, "subagent_model = %q\n", c.Agent.SubagentModel)
-		anyAgent = true
-	}
-	if len(c.Agent.SubagentModels) > 0 && !reflect.DeepEqual(c.Agent.SubagentModels, d.Agent.SubagentModels) {
-		fmt.Fprintf(&agentBuf, "subagent_models = %s\n", renderStringMap(c.Agent.SubagentModels))
-		anyAgent = true
-	}
-	if c.Agent.SubagentEffort != "" && c.Agent.SubagentEffort != d.Agent.SubagentEffort {
-		fmt.Fprintf(&agentBuf, "subagent_effort = %q\n", c.Agent.SubagentEffort)
-		anyAgent = true
-	}
-	if len(c.Agent.SubagentEfforts) > 0 && !reflect.DeepEqual(c.Agent.SubagentEfforts, d.Agent.SubagentEfforts) {
-		fmt.Fprintf(&agentBuf, "subagent_efforts = %s\n", renderStringMap(c.Agent.SubagentEfforts))
-		anyAgent = true
-	}
-	if c.Agent.MaxSubagentDepth != d.Agent.MaxSubagentDepth {
-		fmt.Fprintf(&agentBuf, "max_subagent_depth = %d\n", c.Agent.MaxSubagentDepth)
-		anyAgent = true
-	}
-	if c.Agent.OutputStyle != "" && c.Agent.OutputStyle != d.Agent.OutputStyle {
-		fmt.Fprintf(&agentBuf, "output_style = %q\n", c.Agent.OutputStyle)
-		anyAgent = true
-	}
+	anyAgent := renderAgentDelta(&agentBuf, c, d)
+	anyAgent = renderAgentTail(&agentBuf, c, d) || anyAgent
 
 	if anyAgent {
 		b.WriteString("[agent]\n")
@@ -766,6 +698,7 @@ func RenderTOMLProjectDelta(c *Config) string {
 			if p.MaxOutputTokens != 0 {
 				fmt.Fprintf(&b, "max_output_tokens = %d\n", p.MaxOutputTokens)
 			}
+			renderPerseverationRetries(&b, p.PerseverationRetries, nil)
 			if p.Price != nil {
 				fmt.Fprintf(&b, "price       = %s\n", renderPricingInline(p.Price))
 			}

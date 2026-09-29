@@ -5,8 +5,9 @@ import "./testkit";
 import { Composer } from "./Composer";
 import { MockPort } from "../port/mock";
 import type { AgentPort, ApprovalMode, Attachment, Completion, ModelEntry, Preset, SessionStatus } from "../port/port";
+import { draftKey } from "./drafts";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.clear(); });
 
 const status = (over: Partial<SessionStatus> = {}) =>
   ({
@@ -27,20 +28,22 @@ function deferred<T>() {
 }
 
 function draw(
-  over: { running?: boolean; onSubmit?: (text: string) => Promise<boolean>; port?: MockPort; st?: SessionStatus; changeCount?: number } = {},
+  over: { running?: boolean; onSubmit?: (text: string) => Promise<boolean>; port?: MockPort; st?: SessionStatus; changeCount?: number; host?: string } = {},
 ) {
   const port = over.port ?? new MockPort();
   const onSubmit = over.onSubmit ?? vi.fn(async () => true);
+  const st = over.st ?? status();
   const view = render(
     <Composer
       port={port as unknown as AgentPort}
-      status={over.st ?? status()}
+      status={st}
       running={over.running ?? false}
       focus={0}
       onSubmit={onSubmit}
       onChanged={vi.fn()}
       onError={vi.fn()}
       changeCount={over.changeCount}
+      draftKey={draftKey(over.host ?? "", st.workspaceRoot ?? "/workspace", st.sessionPath ?? "")}
     />,
   );
   const box = view.container.querySelector('textarea[aria-label="任务输入"]') as HTMLTextAreaElement;
@@ -89,6 +92,78 @@ describe("composer submission", () => {
     await act(async () => pending.resolve(false));
     expect(await screen.findByText("81 行 · 展开到输入框")).toBeTruthy();
     expect(box.value).toBe("");
+  });
+});
+
+describe("composer drafts", () => {
+  it("restores unsent text when a session is reopened", () => {
+    const first = draw({ st: status({ sessionPath: "/sessions/one.jsonl" }) });
+    fireEvent.change(first.box, { target: { value: "继续写这段", selectionStart: 6 } });
+    first.unmount();
+
+    const reopened = draw({ st: status({ sessionPath: "/sessions/one.jsonl" }) });
+    expect(reopened.box.value).toBe("继续写这段");
+  });
+
+  it("keeps drafts apart by session and remote host", () => {
+    const one = status({ sessionPath: "/sessions/one.jsonl" });
+    const first = draw({ st: one });
+    fireEvent.change(first.box, { target: { value: "仅本机会话一", selectionStart: 6 } });
+    first.unmount();
+
+    const otherSession = draw({ st: status({ sessionPath: "/sessions/two.jsonl" }) });
+    expect(otherSession.box.value).toBe("");
+    otherSession.unmount();
+    const remote = draw({ st: one, host: "remote-a" });
+    expect(remote.box.value).toBe("");
+    remote.unmount();
+    const reopened = draw({ st: one });
+    expect(reopened.box.value).toBe("仅本机会话一");
+  });
+
+  it("removes a draft only after the host accepts its submission", async () => {
+    const st = status({ sessionPath: "/sessions/one.jsonl" });
+    const first = draw({ st });
+    fireEvent.change(first.box, { target: { value: "发出去", selectionStart: 3 } });
+    first.unmount();
+    const reopened = draw({ st });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => expect(localStorage.getItem(draftKey("", "/workspace", st.sessionPath!))).toBeNull());
+    reopened.unmount();
+    expect(draw({ st }).box.value).toBe("");
+  });
+
+  it("binds text typed before a new session receives its path", () => {
+    const port = new MockPort() as unknown as AgentPort;
+    const props = { port, status: status(), running: false, onSubmit: async () => true, onChanged: vi.fn(), onError: vi.fn() };
+    const view = render(<Composer {...props} />);
+    const box = view.container.querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: "新会话的草稿", selectionStart: 6 } });
+    const path = "/sessions/new.jsonl";
+    view.rerender(<Composer {...props} status={status({ sessionPath: path })} draftKey={draftKey("", "/workspace", path)} />);
+    view.unmount();
+    expect(draw({ st: status({ sessionPath: path }) }).box.value).toBe("新会话的草稿");
+  });
+
+  it("flushes the latest line when the page closes before the debounce", () => {
+    const st = status({ sessionPath: "/sessions/one.jsonl" });
+    const first = draw({ st });
+    fireEvent.change(first.box, { target: { value: "刚输入的字", selectionStart: 5 } });
+    window.dispatchEvent(new Event("pagehide"));
+    expect(localStorage.getItem(draftKey("", "/workspace", st.sessionPath!))).toBe("刚输入的字");
+  });
+
+  it("keeps the pending text durable until submission succeeds", async () => {
+    const pending = deferred<boolean>();
+    const st = status({ sessionPath: "/sessions/one.jsonl" });
+    const first = draw({ st, onSubmit: () => pending.promise });
+    fireEvent.change(first.box, { target: { value: "等待服务器确认", selectionStart: 7 } });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    window.dispatchEvent(new Event("pagehide"));
+    const key = draftKey("", "/workspace", st.sessionPath!);
+    expect(localStorage.getItem(key)).toBe("等待服务器确认");
+    await act(async () => pending.resolve(true));
+    expect(localStorage.getItem(key)).toBeNull();
   });
 });
 
@@ -331,5 +406,45 @@ describe("the effort ladder follows the source", () => {
     fireEvent.click(trigger(container));
     await waitFor(() => expect(trigger(container).textContent).not.toContain("未声明"));
     expect(models).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("a model mode switch", () => {
+  const gpt: ModelEntry[] = [{ ref: "openai/gpt-5.6-sol", provider: "openai", model: "gpt-5.6-sol", efforts: ["auto", "medium", "high"] }];
+  const pro = (active: boolean) => [{ id: "pro", labelKey: "model_mode.pro", hintKey: "model_mode.pro.hint", costlier: true, active }];
+  const open = async (st: SessionStatus, port = new MockPort()) => {
+    vi.spyOn(port, "models").mockResolvedValue(gpt);
+    const view = draw({ port, st });
+    await waitFor(() => expect(view.container.querySelector(".studio-effort-picker")?.textContent).not.toContain("未声明"));
+    fireEvent.click(view.container.querySelector(".studio-effort-picker") as HTMLElement);
+    return { ...view, port };
+  };
+
+  it("is drawn only for a model that declares a mode", async () => {
+    await open(status({ modelRef: "openai/gpt-5.6-sol" }));
+    expect(screen.queryByRole("menuitemcheckbox")).toBeNull();
+  });
+
+  it("says it costs more and turns the mode on", async () => {
+    const port = new MockPort();
+    const set = vi.spyOn(port, "setModelMode");
+    await open(status({ modelRef: "openai/gpt-5.6-sol", modes: pro(false) }), port);
+    const row = screen.getByRole("menuitemcheckbox");
+    expect(row.getAttribute("aria-checked")).toBe("false");
+    expect(row.textContent).toContain("Pro 模式");
+    expect(row.textContent).toContain("费用更高");
+    fireEvent.click(row);
+    await waitFor(() => expect(set).toHaveBeenCalledWith("pro"));
+  });
+
+  it("reads as on, and a second pick turns it off", async () => {
+    const port = new MockPort();
+    const set = vi.spyOn(port, "setModelMode");
+    const { container } = await open(status({ modelRef: "openai/gpt-5.6-sol", modes: pro(true) }), port);
+    expect(container.querySelector(".studio-effort-picker")?.textContent).toContain("Pro 模式");
+    const row = screen.getByRole("menuitemcheckbox");
+    expect(row.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(row);
+    await waitFor(() => expect(set).toHaveBeenCalledWith(""));
   });
 });
