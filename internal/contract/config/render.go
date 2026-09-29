@@ -1005,13 +1005,19 @@ func projectProvidersDifferFromDefaults(providers []ProviderEntry, defaults *Con
 }
 
 func projectScopedConfigForRender(c *Config) *Config {
-	if c == nil || len(c.providerSources) == 0 {
+	if c == nil || len(c.providerSources) == 0 && c.projectProviderEditBaseline == nil {
 		return c
 	}
 	cp := *c
 	cp.Providers = make([]ProviderEntry, 0, len(c.Providers)+len(c.shadowedProjectProviders))
 	for _, p := range c.Providers {
 		if c.providerSources[providerMergeKey(p)] == providerSourceUser {
+			continue
+		}
+		if c.projectProviderEditBaseline != nil && !c.explicitProjectProviderNames[providerMergeKey(p)] &&
+			slices.ContainsFunc(c.projectProviderEditBaseline, func(before ProviderEntry) bool {
+				return providerMergeKey(before) == providerMergeKey(p) && reflect.DeepEqual(before, p)
+			}) {
 			continue
 		}
 		cp.Providers = append(cp.Providers, p)
