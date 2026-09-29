@@ -709,7 +709,6 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
               aria-describedby="studio-speed-detail"
               aria-label={t("查看生成速度详情")}
             >
-              <StudioIcon name="gauge" />
               <Spark points={trail} w={44} h={13} />
               <b>{tps > 0 ? tps.toFixed(1) : "—"}</b><span>tok/s</span><i data-live={running ? "" : undefined} aria-hidden="true" />
             </button>
