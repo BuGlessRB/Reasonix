@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/base/i18n"
+	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/ext/skill"
 )
@@ -56,6 +57,25 @@ func (c *Controller) SubmitHTTPFrom(input, format string, via *provider.Via) {
 	// runRefTurnWithFormat 族 wrapper 注入 ctx（review fix7234and7168：
 	// format 是每个被接纳 turn 的属性，统一架构）。
 	c.submitHTTPWithFormat(input, "", turnTags{format: f, via: via})
+}
+
+// SubmitOptions are what a submission asks beyond its text.
+type SubmitOptions struct {
+	Format string
+	Via    *provider.Via
+	// RefuseUnknownSlash keeps a slash command no registry answers off the
+	// model: the line gets an unknown-command notice and starts no turn.
+	RefuseUnknownSlash bool
+}
+
+// SubmitHTTPOptions is SubmitHTTPFrom with every per-submission option spelled
+// out, for a frontend that asks for more than a format and a device.
+func (c *Controller) SubmitHTTPOptions(input string, opts SubmitOptions) {
+	f := strings.TrimSpace(opts.Format)
+	if f != "" && isNonTurnHTTPInput(input) {
+		f = ""
+	}
+	c.submitHTTPWithFormat(input, "", turnTags{format: f, via: opts.Via, refuseUnknownSlash: opts.RefuseUnknownSlash})
 }
 
 // SubmitDisplay runs input as a turn while remembering the user-facing display
@@ -390,15 +410,24 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 			})
 			return
 		}
-		// Unknown slash input is prose more often than a typo ("/etc/hosts
-		// looks wrong", pasted paths, half-remembered commands) — send it as a
-		// regular message instead of dead-ending the submission, with a notice
-		// so real typos are still visible (#5756).
-		c.notice("unknown command: " + trimmed + " — sent as a regular message")
-		runRefTurn(input, display)
+		c.answerUnresolvedSlash(trimmed, fields[0], tags.refuseUnknownSlash, func() { runRefTurn(input, display) })
 	default:
 		runRefTurn(input, display)
 	}
+}
+
+// answerUnresolvedSlash settles a slash line nothing resolved. Unknown slash
+// input is prose more often than a typo ("/etc/hosts looks wrong", pasted paths,
+// half-remembered commands), so it is sent as a regular message with a notice
+// that keeps real typos visible (#5756) — unless the submitter asked to refuse.
+func (c *Controller) answerUnresolvedSlash(trimmed, cmd string, refuse bool, send func()) {
+	if refuse {
+		c.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Code: event.NoticeCodeUnknownCommand,
+			Text: i18n.M.SlashUnknown + ": " + cmd})
+		return
+	}
+	c.notice("unknown command: " + trimmed + " — sent as a regular message")
+	send()
 }
 
 func (c *Controller) applyGoalCommand(input, display string) bool {

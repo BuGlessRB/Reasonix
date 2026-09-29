@@ -47,4 +47,6 @@ const (
 	NoticeCodeSessionContinuedFrom1x = "session_continued_from_1x"
 	// A turn handed its open list back to the user; Detail is the model's `need`, as it wrote it.
 	NoticeCodeAwaitUser = "await_user"
+	// A slash command nothing resolves, refused rather than sent as prose.
+	NoticeCodeUnknownCommand = "unknown_command"
 )
