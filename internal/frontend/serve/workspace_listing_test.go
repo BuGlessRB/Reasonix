@@ -1,8 +1,11 @@
 package serve
 
 import (
+	"encoding/json"
 	"errors"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +13,8 @@ import (
 	"testing"
 
 	"reasonix/internal/base/testenv"
+	"reasonix/internal/contract/config"
+	"reasonix/internal/session/control"
 )
 
 func listingTree(t *testing.T) string {
@@ -46,14 +51,14 @@ func lockDir(t *testing.T, dir string) {
 
 func TestListingAFolderReadsThatFolder(t *testing.T) {
 	root := listingTree(t)
-	top, err := listFolder(root, "")
+	top, err := listFolder(root, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(top.Directories, []string{"alpha", "zeta"}) || !slices.Equal(top.Files, []string{"top.md"}) {
 		t.Fatalf("root = %+v, want alpha and zeta beside top.md, with dot entries and dependency trees left out", top)
 	}
-	alpha, err := listFolder(root, "alpha")
+	alpha, err := listFolder(root, "alpha", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +76,7 @@ func TestAnUnreadableSiblingDoesNotStopAFolderOpening(t *testing.T) {
 		t.Fatal(err)
 	}
 	lockDir(t, locked)
-	got, err := listFolder(root, "zeta")
+	got, err := listFolder(root, "zeta", false)
 	if err != nil {
 		t.Fatalf("opening zeta beside an unreadable folder: %v", err)
 	}
@@ -87,7 +92,7 @@ func TestASearchPassesOverAnUnreadableFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	lockDir(t, locked)
-	got, err := searchFiles(root, ".txt")
+	got, err := searchFiles(root, ".txt", false)
 	if err != nil {
 		t.Fatalf("search beside an unreadable folder: %v", err)
 	}
@@ -97,7 +102,7 @@ func TestASearchPassesOverAnUnreadableFolder(t *testing.T) {
 }
 
 func TestAMissingFolderIsNotFound(t *testing.T) {
-	if _, err := listFolder(listingTree(t), "gone"); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := listFolder(listingTree(t), "gone", false); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("err = %v, want not-exist", err)
 	}
 }
@@ -113,7 +118,7 @@ func TestAFolderLinkedOutOfTheTreeIsRefused(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
 		t.Skipf("cannot create a directory link here: %v", err)
 	}
-	if _, err := listFolder(root, "escape"); !errors.Is(err, errListingOutsideTree) {
+	if _, err := listFolder(root, "escape", false); !errors.Is(err, errListingOutsideTree) {
 		t.Fatalf("err = %v, want the folder refused as outside the workspace", err)
 	}
 }
@@ -134,7 +139,7 @@ func TestALinkIsListedAsWhatItResolvesTo(t *testing.T) {
 			t.Skipf("cannot create a link here: %v", err)
 		}
 	}
-	top, err := listFolder(root, "")
+	top, err := listFolder(root, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +149,7 @@ func TestALinkIsListedAsWhatItResolvesTo(t *testing.T) {
 	if !slices.Equal(top.Files, []string{"file-link", "top.md"}) {
 		t.Fatalf("files = %v, want the linked file beside top.md and no link that leaves the tree or dangles", top.Files)
 	}
-	inner, err := listFolder(root, "folder-link")
+	inner, err := listFolder(root, "folder-link", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,11 +176,65 @@ func TestASearchListsOnlyLinksToFilesInTheTree(t *testing.T) {
 			t.Skipf("cannot create a link here: %v", err)
 		}
 	}
-	got, err := searchFiles(root, "txt")
+	got, err := searchFiles(root, "txt", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(got.Files, []string{"alpha/a.txt", "near.txt", "zeta/z.txt"}) {
 		t.Fatalf("search = %v", got.Files)
+	}
+}
+
+// Dot entries are the reader's to ask for, and VCS stores and dependency trees
+// stay out even then: the explorer is for the project, not a repository's store.
+func TestHiddenEntriesAreListedOnlyWhenAskedFor(t *testing.T) {
+	root := listingTree(t)
+	top, err := listFolder(root, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(top.Directories, []string{".cache", "alpha", "zeta"}) || !slices.Equal(top.Files, []string{".env", "top.md"}) {
+		t.Fatalf("root with dots = %+v, want .cache and .env beside the rest, and no .git or node_modules", top)
+	}
+	found, err := searchFiles(root, "env", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(found.Files, []string{".env"}) {
+		t.Fatalf("search with dots = %+v", found.Files)
+	}
+	quiet, err := searchFiles(root, "env", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(quiet.Files) != 0 {
+		t.Fatalf("search without dots = %+v, want nothing", quiet.Files)
+	}
+}
+
+func TestWorkspaceFilesEndpointListsHiddenEntriesOnRequest(t *testing.T) {
+	root := listingTree(t)
+	bc := NewBroadcaster()
+	ctrl := control.New(control.Options{Runner: fakeRunner{}, Sink: bc, WorkspaceRoot: root})
+	srv := httptest.NewServer(operatorHandler(New(ctrl, bc, config.ServeConfig{})))
+	defer srv.Close()
+	read := func(url string) workspaceListing {
+		t.Helper()
+		resp, err := http.Get(srv.URL + url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var got workspaceListing
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	if got := read("/workspace/files"); slices.Contains(got.Directories, ".cache") {
+		t.Fatalf("default listing = %+v, want dot entries hidden", got)
+	}
+	if got := read("/workspace/files?hidden=1"); !slices.Contains(got.Directories, ".cache") || slices.Contains(got.Directories, ".git") {
+		t.Fatalf("hidden=1 listing = %+v, want .cache and no .git", got)
 	}
 }

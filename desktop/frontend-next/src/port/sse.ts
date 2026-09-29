@@ -430,10 +430,11 @@ export class SsePort extends SseBackup implements AgentPort {
     return this.get<ChangeDiff>(`/changes/diff?path=${encodeURIComponent(path)}`);
   }
 
-  workspaceFiles(path = "", query = "") {
+  workspaceFiles(path = "", query = "", hidden = false) {
     const params = new URLSearchParams();
     if (path) params.set("path", path);
     if (query) params.set("q", query);
+    if (hidden) params.set("hidden", "1");
     return this.get<WorkspaceFiles>(`/workspace/files${params.size ? `?${params}` : ""}`);
   }
 

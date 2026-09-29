@@ -493,6 +493,7 @@ export const EN: Record<string, string> = {
   "留空时按这个顺序尝试：先 ssh-agent 持有的密钥，再 ~/.ssh 下的默认密钥；只有填了下面的环境变量或该机器要求交互时，才会走密码。": "Left blank, it tries in this order: keys held by ssh-agent, then the default keys under ~/.ssh. A password is only used when one of the variables below is set, or the machine asks interactively.",
   "在代码编辑器中打开工作区": "Open the workspace in a code editor",
   "在系统文件管理器中显示工作区": "Show the workspace in the system file manager",
+  "显示隐藏文件": "Show hidden files",
   "在访达中显示": "Reveal in Finder",
   "在文件资源管理器中显示": "Reveal in File Explorer",
   "在系统文件管理器中显示": "Show in file manager",

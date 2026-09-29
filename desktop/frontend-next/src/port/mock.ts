@@ -409,12 +409,13 @@ export class MockPort extends MockBackup implements AgentPort {
     };
   }
 
-  async workspaceFiles(path = "", query = "") {
-    const all = ["README.md", "internal/provider/retry.go"];
+  async workspaceFiles(path = "", query = "", hidden = false) {
+    const all = ["README.md", "internal/provider/retry.go", ...(hidden ? [".gitignore", ".reasonix/REASONIX.local.md"] : [])];
     if (query) return { files: all.filter((p) => p.toLowerCase().includes(query.toLowerCase())), directories: [] };
     if (path === "internal") return { files: [], directories: ["internal/provider"] };
     if (path === "internal/provider") return { files: ["internal/provider/retry.go"], directories: [] };
-    return { files: ["README.md"], directories: ["internal"] };
+    if (path === ".reasonix") return { files: [".reasonix/REASONIX.local.md"], directories: [] };
+    return hidden ? { files: [".gitignore", "README.md"], directories: [".reasonix", "internal"] } : { files: ["README.md"], directories: ["internal"] };
   }
   async workspaceFile(path: string) { return { path, content: `// ${path}\n`, revision: "fixture" }; }
   workspaceImageURL(path: string) { return `/fixture/${path}`; }
