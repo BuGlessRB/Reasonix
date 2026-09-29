@@ -39,6 +39,10 @@ type Options struct {
 	// Statusline, when set, turns the footer's context JSON into one line
 	// that replaces the telemetry row; "" keeps the built-in row.
 	Statusline func(ctx context.Context, stdin string) string
+	// YoloConfirmed says the one-time YOLO notice was already accepted, and
+	// ConfirmYolo records it when a second Ctrl+Y accepts it here.
+	YoloConfirmed bool
+	ConfirmYolo   func() error
 }
 
 // Run drives the terminal until the user quits or ctx ends.
@@ -94,6 +98,10 @@ type model struct {
 	// rows above it to land in.
 	frameRows int
 	glyphs    *glyphFit // console-measured stand-ins for runes drawn wider than counted
+	// yoloRestore is the posture Ctrl+Y leaves YOLO for; yoloArmedAt is a
+	// first, unconfirmed Ctrl+Y waiting for the second.
+	yoloRestore string
+	yoloArmedAt time.Time
 }
 
 type (

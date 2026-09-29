@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/eventwire"
+	"reasonix/internal/safety/permission"
 )
 
 type runOutputFormat string
@@ -53,6 +54,19 @@ type runResultUsage struct {
 	Estimated                bool `json:"estimated,omitempty"`
 }
 
+// runPermissionRecord is what the result says about permissions: the posture
+// the run settled on and every call its gate refused.
+type runPermissionRecord struct {
+	mode    string
+	denials []runPermissionDenial
+}
+
+type runPermissionDenial struct {
+	ToolName  string `json:"tool_name"`
+	ToolUseID string `json:"tool_use_id"`
+	Code      string `json:"code"`
+}
+
 type runResult struct {
 	Type       string  `json:"type"`
 	Subtype    string  `json:"subtype"`
@@ -76,6 +90,11 @@ type runResult struct {
 	OriginalTotals []pricing.Money    `json:"original_totals,omitempty"`
 	CostQuote      *pricing.CostQuote `json:"cost_quote,omitempty"`
 	Usage          runResultUsage     `json:"usage"`
+	// PermissionDenials lists every call a permission gate refused, by the
+	// refusal's code; a run that wrote nothing says why here, not only in prose.
+	PermissionDenials []runPermissionDenial `json:"permission_denials"`
+	// PermissionMode is the posture the run settled on, named or defaulted.
+	PermissionMode string `json:"permission_mode,omitempty"`
 }
 
 type machineEventUsage struct {
@@ -99,6 +118,7 @@ type machineEventRecord struct {
 	ToolName       string             `json:"tool_name,omitempty"`
 	ToolReadOnly   bool               `json:"tool_read_only,omitempty"`
 	ToolError      bool               `json:"tool_error,omitempty"`
+	RefusalCode    string             `json:"refusal_code,omitempty"`
 	ToolTruncated  bool               `json:"tool_truncated,omitempty"`
 	ToolDurationMS int64              `json:"tool_duration_ms,omitempty"`
 	Usage          *machineEventUsage `json:"usage,omitempty"`
@@ -153,6 +173,7 @@ type runOutputSink struct {
 	machineToolNames    map[string]string
 	nextMachineToolID   uint64
 	nextMachineToolName uint64
+	permissions         runPermissionRecord
 	err                 error
 }
 
@@ -225,6 +246,9 @@ func (s *runOutputSink) Emit(e event.Event) {
 	}
 	if e.Kind == event.TurnDone {
 		s.turns++
+	}
+	if e.Kind == event.ToolResult && permission.IsRefusalCode(e.Tool.RefusalCode) {
+		s.permissions.denials = append(s.permissions.denials, runPermissionDenial{ToolName: e.Tool.Name, ToolUseID: e.Tool.ID, Code: e.Tool.RefusalCode})
 	}
 	// stdout carries the answer alone, so a warning had nowhere to go and was
 	// dropped — a planner fallback, a folded user turn, an unread check. stderr
@@ -326,24 +350,26 @@ func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr err
 		}
 	}
 	return s.encoder.Encode(runResult{
-		Type:            "result",
-		Subtype:         completion.subtype,
-		IsError:         completion.isError,
-		DurationMS:      time.Since(started).Milliseconds(),
-		NumTurns:        turns,
-		Result:          resultText,
-		SessionID:       sessionID,
-		TotalCost:       s.cost,
-		Currency:        s.currency,
-		TotalCostUSD:    s.cost,
-		CostComplete:    s.costComplete || (!s.sawQuote && s.currency != ""),
-		DisplayComplete: s.displayComplete,
-		DisplayStatus:   s.displayStatus,
-		AggregateMode:   s.aggregateMode,
-		OriginalCosts:   s.originalCosts,
-		OriginalTotals:  s.originalTotals,
-		CostQuote:       aggQuote,
-		Usage:           s.usage,
+		Type:              "result",
+		Subtype:           completion.subtype,
+		IsError:           completion.isError,
+		DurationMS:        time.Since(started).Milliseconds(),
+		NumTurns:          turns,
+		Result:            resultText,
+		SessionID:         sessionID,
+		TotalCost:         s.cost,
+		Currency:          s.currency,
+		TotalCostUSD:      s.cost,
+		CostComplete:      s.costComplete || (!s.sawQuote && s.currency != ""),
+		DisplayComplete:   s.displayComplete,
+		DisplayStatus:     s.displayStatus,
+		AggregateMode:     s.aggregateMode,
+		OriginalCosts:     s.originalCosts,
+		OriginalTotals:    s.originalTotals,
+		CostQuote:         aggQuote,
+		Usage:             s.usage,
+		PermissionDenials: append([]runPermissionDenial{}, s.permissions.denials...),
+		PermissionMode:    s.permissions.mode,
 	})
 }
 
@@ -381,6 +407,7 @@ func (s *runOutputSink) machineEventRecordFor(e event.Event, sequence uint64) ma
 		record.ToolName = machineOpaqueValue(s.machineToolNames, &s.nextMachineToolName, "tool_name", e.Tool.Name)
 		record.ToolReadOnly = e.Tool.ReadOnly
 		record.ToolError = e.Tool.Err != ""
+		record.RefusalCode = e.Tool.RefusalCode
 		record.ToolTruncated = e.Tool.Bound.Lossy()
 		record.ToolDurationMS = e.Tool.DurationMs
 	case event.Usage:
@@ -428,4 +455,15 @@ func machineEventKind(kind event.Kind) string {
 		return names[kind]
 	}
 	return "unknown"
+}
+
+// SetPermissionMode records the posture the run settled on. A nil sink, which
+// a text run without a result object has, takes nothing.
+func (s *runOutputSink) SetPermissionMode(mode string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.permissions.mode = mode
+	s.mu.Unlock()
 }

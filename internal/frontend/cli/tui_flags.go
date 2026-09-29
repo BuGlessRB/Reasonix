@@ -39,8 +39,8 @@ func newTUIFlags() *tuiFlags {
 	fs.Lookup("resume").NoOptDefVal = resumePickerSentinel
 	f.copy = fs.Bool("copy", false, "with --resume/--continue: duplicate the session and continue in the copy")
 	f.effort = fs.String("effort", "", "session reasoning effort override")
-	f.permissionMode = fs.String("permission-mode", "", "permission mode: manual | ask | auto | acceptEdits | dontAsk | plan | bypassPermissions")
-	f.yolo = fs.Bool("yolo", false, "skip tool approvals (alias for --permission-mode bypassPermissions)")
+	f.permissionMode = fs.String("permission-mode", "", "permission mode: read-only | manual | ask | auto | acceptEdits | dontAsk | plan | bypassPermissions (default: auto where the OS sandbox confines writes and the folder is trusted, otherwise ask)")
+	f.yolo = fs.Bool("yolo", false, "skip approval prompts; the sandbox, network policy and deny rules still apply (alias for --permission-mode bypassPermissions)")
 	fs.BoolVar(f.yolo, "dangerously-skip-permissions", false, "alias for --yolo")
 	f.maxSteps = fs.Int("max-steps", 0, "one-off max tool-call rounds (0 = automatic)")
 	fs.StringArrayVar(&f.addDirs, "add-dir", nil, "allow tool access to an additional directory (repeatable)")

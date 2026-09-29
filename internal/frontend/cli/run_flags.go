@@ -35,7 +35,7 @@ func newRunFlags() *runFlags {
 	f.resume = fs.String("resume", "", "resume by session file path, session ID, or machine session ID (takes precedence over --continue)")
 	f.copySession = fs.Bool("copy", false, "with --resume/--continue: duplicate the session and continue in the copy (escape hatch when the original is held by another Reasonix process)")
 	f.effort = fs.String("effort", "", "session reasoning effort override")
-	f.permissionMode = fs.String("permission-mode", "ask", "permission mode: manual | ask | auto | acceptEdits | dontAsk | plan | bypassPermissions")
+	f.permissionMode = fs.String("permission-mode", "", "permission mode: read-only | manual | ask | auto | acceptEdits | dontAsk | bypassPermissions (default: auto where the OS sandbox confines writes and the folder is trusted, otherwise ask)")
 	f.autoApprove, f.yolo = registerRunApprovalFlags(fs)
 	f.printOnly = fs.BoolP("print", "p", false, "print only the final response")
 	f.eventsJSONL = fs.Bool("events-jsonl", false, "emit a redacted structured event stream as JSONL")

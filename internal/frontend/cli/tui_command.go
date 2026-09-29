@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	"reasonix/internal/base/i18n"
 	"reasonix/internal/contract/config"
+	"reasonix/internal/contract/surface"
 	"reasonix/internal/frontend/serve"
 	"reasonix/internal/frontend/termrender"
 	"reasonix/internal/frontend/tui"
@@ -94,8 +96,10 @@ func runTUI(args []string, version string) int {
 	if resumed != nil {
 		_ = ctrl.Resume(resumed, resumePath)
 	}
-	if permissionsSet {
-		ctrl.SetToolApprovalMode(permissions.approval)
+	home := config.Roots{}.Home()
+	if err := settleTUIPosture(ctrl, permissions, permissionsSet, home, bufio.NewScanner(os.Stdin), os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 1
 	}
 	if permissions.plan {
 		ctrl.SetPlanMode(true)
@@ -106,7 +110,7 @@ func runTUI(args []string, version string) int {
 		return 1
 	}
 	serveCfg := config.ServeConfig{AuthMode: "none"}
-	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg})
+	hub := serve.NewHub(serve.HubOptions{Serve: serveCfg, Surface: surface.CLI})
 	defer hub.Shutdown()
 	adoptFirstPane(hub, ctrl, bc, bc, serveCfg, leases)
 
@@ -121,6 +125,8 @@ func runTUI(args []string, version string) int {
 		HideTurnUsage: cfg != nil && !cfg.UI.ShowTurnUsage,
 		CommandMode:   cfg != nil && cfg.UICommandMode(),
 		Statusline:    statuslineRunner(cfg),
+		YoloConfirmed: config.YoloAcknowledged(home),
+		ConfirmYolo:   func() error { return config.AcknowledgeYolo(home) },
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

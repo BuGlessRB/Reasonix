@@ -19,6 +19,8 @@ func TestParseToolApprovalMode(t *testing.T) {
 		{"deny", ToolApprovalDontAsk, true},
 		{"YOLO", ToolApprovalYolo, true},
 		{"bypass", ToolApprovalYolo, true},
+		{"readOnly", ToolApprovalReadOnly, true},
+		{"read-only", ToolApprovalReadOnly, true},
 		{"surprise", "", false},
 		{"", "", false},
 	} {

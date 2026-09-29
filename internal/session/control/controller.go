@@ -361,7 +361,8 @@ type Options struct {
 	RuntimeOwner *extension.RuntimeOwner
 	// WorkspaceRoot confines checkpoint restores ("" = none); frontends pass the launch cwd.
 	WorkspaceRoot          string
-	WorkspaceRepo          gitcmd.Repo // WorkspaceRoot's identity, resolved when the session opened
+	WorkspaceRepo          gitcmd.Repo     // WorkspaceRoot's identity, resolved when the session opened
+	Posture                PostureEvidence // what DefaultApprovalMode decides from
 	ExternalFolderToolRefs externalFolderToolRefs
 	ShowTurnReceipt        bool // attach the end-of-turn verification report; see display_prefs.go
 	// ResponseLanguage controls final-answer language preference. Empty/auto

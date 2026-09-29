@@ -285,38 +285,3 @@ func (m *model) recall(back bool) bool {
 	}
 	return true
 }
-
-// cycleMode steps ask → auto → plan → ask, the order the footer names them.
-// Plan is its own switch on the kernel, so entering it leaves the approval
-// mode where it was and leaving it returns to ask.
-func (m *model) cycleMode() tea.Cmd {
-	s := &m.status
-	var step func(context.Context) error
-	switch {
-	case s.Plan:
-		s.Plan, s.ToolApprovalMode = false, "ask"
-		step = func(ctx context.Context) error {
-			if err := m.client.SetPlan(ctx, false); err != nil {
-				return err
-			}
-			return m.client.SetApprovalMode(ctx, "ask")
-		}
-	case s.ToolApprovalMode == "auto":
-		s.Plan = true
-		step = func(ctx context.Context) error { return m.client.SetPlan(ctx, true) }
-	default:
-		s.ToolApprovalMode = "auto"
-		step = func(ctx context.Context) error { return m.client.SetApprovalMode(ctx, "auto") }
-	}
-	return tea.Sequence(m.call("mode", step), m.fetchStatus())
-}
-
-// toggleYolo flips between skipping approvals and asking for them.
-func (m *model) toggleYolo() tea.Cmd {
-	next := "yolo"
-	if m.status.ToolApprovalMode == "yolo" {
-		next = "ask"
-	}
-	m.status.ToolApprovalMode = next
-	return tea.Sequence(m.call("mode", func(ctx context.Context) error { return m.client.SetApprovalMode(ctx, next) }), m.fetchStatus())
-}

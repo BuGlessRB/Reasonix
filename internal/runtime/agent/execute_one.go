@@ -496,18 +496,14 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 				errMsg:  "blocked: MCP server identity is not authorized",
 			}, true
 		}
-		if denyGate, ok := a.svc.gate.(ExplicitDenyGate); ok && denyGate.ExplicitlyDenies(plan.permName, gateArgs) {
-			return toolOutcome{
-				output:  "blocked: denied by permission policy — this tool/command is on the deny list. Do not retry it; choose another approach or stop and explain.",
-				blocked: true,
-				errMsg:  "blocked by permission policy",
-			}, true
+		if outcome, blocked := mcpFastPathBlock(ctx, a.svc.gate, plan.permName, gateArgs, plan.readOnly); blocked {
+			return outcome, true
 		}
 	} else if a.svc.gate != nil {
-		allow, reason, err := a.svc.gate.Check(ctx, plan.permName, gateArgs, plan.readOnly)
+		v, err := permission.VerdictOf(ctx, a.svc.gate, plan.permName, gateArgs, plan.readOnly)
 		if err != nil {
 			return toolOutcome{
-				output:    fmt.Sprintf("blocked: %s (%v)", reason, err),
+				output:    fmt.Sprintf("blocked: %s (%v)", v.Reason, err),
 				blocked:   true,
 				errMsg:    fmt.Sprintf("blocked: %v", err),
 				execution: shellRefusal(plan.execTool, plan.execArgs, tool.ShellPhaseAuthorization),
@@ -516,15 +512,16 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 		// permission.decision: the host verdict is computed first; the
 		// extension ruling may override it in either direction (an allow
 		// overriding a host deny is the full-trust contract and is audited).
-		if blocked, early := a.interceptExtensionPermission(ctx, plan, &allow); early {
+		if blocked, early := a.interceptExtensionPermission(ctx, plan, &v.Allow); early {
 			return blocked, true
 		}
-		if !allow {
+		if !v.Allow {
 			return toolOutcome{
-				output:    "blocked: " + reason,
-				blocked:   true,
-				errMsg:    "blocked by permission policy",
-				execution: shellRefusal(plan.execTool, plan.execArgs, tool.ShellPhaseAuthorization),
+				output:      "blocked: " + v.Reason,
+				blocked:     true,
+				errMsg:      "blocked by permission policy",
+				refusalCode: v.Code,
+				execution:   shellRefusal(plan.execTool, plan.execArgs, tool.ShellPhaseAuthorization),
 			}, true
 		}
 	}

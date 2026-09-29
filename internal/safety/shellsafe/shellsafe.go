@@ -12,13 +12,13 @@ import (
 	"reasonix/internal/base/shellparse"
 )
 
-// ReadOnlyCommands holds single-word commands whose base name alone implies a
-// read-only operation. Ones read-only only for certain subcommands are in
-// ReadOnlyPrefixes; ones a flag can turn into writers stay here and are
-// rejected by ArgsMakeReadOnlyCommandWrite. `sed`/`awk` are absent on purpose:
-// they write through their own script language, which nothing here parses.
+// ReadOnlyCommands holds commands whose base name alone implies a read; ones
+// read-only only for some subcommands are in ReadOnlyPrefixes, and arguments
+// that turn one into a writer are ArgsMakeReadOnlyCommandWrite's. Absent on
+// purpose: sed/awk write through a script language nothing here parses,
+// less/man run commands, info writes where it is told.
 var ReadOnlyCommands = map[string]bool{
-	"cat": true, "head": true, "tail": true, "less": true, "more": true,
+	"cat": true, "head": true, "tail": true, "more": true,
 	"ls": true, "find": true, "locate": true, "which": true, "whereis": true, "type": true,
 	"grep": true, "egrep": true, "fgrep": true, "rg": true,
 	"echo": true, "printf": true,
@@ -29,7 +29,7 @@ var ReadOnlyCommands = map[string]bool{
 	"stat": true, "file": true, "du": true, "df": true,
 	"ps": true, "top": true, "htop": true,
 	"diff": true, "cmp": true, "comm": true,
-	"man": true, "info": true, "help": true,
+	"help": true,
 	"true": true, "false": true, "test": true, "[": true,
 	"basename": true, "dirname": true, "realpath": true, "readlink": true,
 	// PowerShell inspection cmdlets. Keep this list intentionally narrow: only
@@ -72,9 +72,7 @@ var ReadOnlyPrefixes = map[string]map[string]bool{
 		"ls": true, "list": true, "view": true, "info": true,
 		"outdated": true, "audit": true,
 	},
-	"cargo": {
-		"check": true, "doc": true, "search": true,
-	},
+	"cargo": {"search": true},
 	"docker": {
 		"ps": true, "images": true, "inspect": true, "logs": true,
 		"stats": true, "info": true, "version": true,
@@ -129,6 +127,7 @@ func ClassifyReadOnlyFields(fields []string) (base, sub string, out []string, ok
 		return "", "", nil, false
 	}
 	base = strings.ToLower(fields[0])
+	fields = withoutGitLocationOptions(base, fields)
 	if ReadOnlyCommands[base] {
 		if hasResolvedSubstitution(fields) && !substitutionSafeCommands[base] {
 			return "", "", nil, false
@@ -263,6 +262,7 @@ func readOnlyFields(fields []string) (base, sub string, ok bool) {
 		return "", "", false
 	}
 	base = strings.ToLower(fields[0])
+	fields = withoutGitLocationOptions(base, fields)
 	if ReadOnlyCommands[base] {
 		return base, "", true
 	}
