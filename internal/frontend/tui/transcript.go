@@ -58,9 +58,10 @@ type Item struct {
 	Verdict  string
 
 	// ItemNotice. Count folds a repeated notice into the row already there.
-	Level string
-	Code  string
-	Count int
+	Level  string
+	Code   string
+	Count  int
+	Detail string
 
 	Compaction *eventwire.Compaction
 	Receipt    *eventwire.CompletionReceipt
@@ -471,7 +472,7 @@ func (t *Transcript) foldNotice(ev eventwire.Event) {
 			return
 		}
 	}
-	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemNotice, Level: level, Code: ev.Code, Text: ev.Text})
+	t.Items = append(t.Items, Item{ID: t.id(), Kind: ItemNotice, Level: level, Code: ev.Code, Text: ev.Text, Detail: ev.Detail})
 }
 
 func (t *Transcript) sealSays() {

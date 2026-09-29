@@ -199,8 +199,9 @@ var English = Messages{
 	CompactionAuto:    "auto",
 	CompactionManual:  "manual",
 
-	CompactionChangesKept: "changes kept",
-	CompactionBackstopped: "kept by the host",
+	CompactionEstimatedTokens: "estimated tokens",
+	CompactionChangesKept:     "changes kept",
+	CompactionBackstopped:     "kept by the host",
 
 	ReadinessContinuing: "finishing what this turn still owes",
 

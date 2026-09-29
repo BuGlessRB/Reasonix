@@ -317,6 +317,8 @@ func (m *model) onScreenMsg(msg tea.Msg) (tea.Cmd, bool) {
 		return m.onClipImage(msg), true
 	case clipTextMsg:
 		return m.onClipText(msg), true
+	case helpMsg:
+		return m.onHelp(msg), true
 	case sessionsMsg:
 		return m.onSessions(msg), true
 	case resumedMsg:

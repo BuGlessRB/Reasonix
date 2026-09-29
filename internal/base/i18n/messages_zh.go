@@ -200,8 +200,9 @@ var Chinese = Messages{
 	CompactionAuto:    "自动",
 	CompactionManual:  "手动",
 
-	CompactionChangesKept: "处改动已保留",
-	CompactionBackstopped: "由主机保留",
+	CompactionEstimatedTokens: "估算 token",
+	CompactionChangesKept:     "处改动已保留",
+	CompactionBackstopped:     "由主机保留",
 
 	ReadinessContinuing: "这一轮还欠东西，继续把它做完",
 

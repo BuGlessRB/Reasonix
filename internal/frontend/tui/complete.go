@@ -115,7 +115,8 @@ func (m *model) localCommands(line string) []CompletionItem {
 		return nil
 	}
 	cmds := []CompletionItem{{Label: "/resume", Insert: "/resume", Hint: i18n.M.CmdResume}}
-	cmds = append(cmds, CompletionItem{Label: "/version", Insert: "/version", Hint: i18n.M.CmdVersion})
+	cmds = append(cmds, CompletionItem{Label: "/version", Insert: "/version", Hint: i18n.M.CmdVersion},
+		CompletionItem{Label: "/help", Insert: "/help", Hint: i18n.M.CmdHelp})
 	if m.scr != nil {
 		cmds = append(cmds, CompletionItem{Label: "/mouse", Insert: "/mouse", Hint: i18n.M.CmdMouse})
 	}

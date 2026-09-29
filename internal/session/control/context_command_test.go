@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"reasonix/internal/contract/event"
 	"reasonix/internal/runtime/agent"
 )
 
@@ -52,5 +53,17 @@ func TestThousandsGroupsDigits(t *testing.T) {
 		if got := thousands(in); got != want {
 			t.Errorf("thousands(%d) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// /context names its report, so a frontend can open the breakdown it carries
+// instead of showing the summary line alone.
+func TestContextCommandNamesItsReport(t *testing.T) {
+	events := make(chan event.Event, 4)
+	c := New(Options{Sink: event.FuncSink(func(e event.Event) { events <- e })})
+	c.Submit("/context")
+	e := <-events
+	if e.Kind != event.Notice || e.Code != event.NoticeCodeContextReport || e.Text == "" {
+		t.Fatalf("event = %+v, want the context report notice", e)
 	}
 }

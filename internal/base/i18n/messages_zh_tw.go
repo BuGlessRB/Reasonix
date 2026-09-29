@@ -194,8 +194,9 @@ var ChineseTraditional = Messages{
 	CompactionAuto:    "自動",
 	CompactionManual:  "手動",
 
-	CompactionChangesKept: "處變更已保留",
-	CompactionBackstopped: "由主機保留",
+	CompactionEstimatedTokens: "估算 token",
+	CompactionChangesKept:     "處變更已保留",
+	CompactionBackstopped:     "由主機保留",
 
 	ReadinessContinuing: "這一輪還欠東西，繼續把它做完",
 
