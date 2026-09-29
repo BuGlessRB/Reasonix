@@ -524,6 +524,9 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		// RefuseUnknownSlash answers a slash command nothing resolves with a
 		// notice instead of sending it to the model.
 		RefuseUnknownSlash bool `json:"refuseUnknownSlash"`
+		// LocalShell keeps a `!` command off the conversation: its output is
+		// shown and the model is not asked to answer it.
+		LocalShell bool `json:"localShell"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || (body.Input == "" && len(body.Invocations) == 0) {
 		missingField(w, "input")
@@ -606,7 +609,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	submitOrShell(ctrl, r, body.Input, body.Format, body.RefuseUnknownSlash)
+	submitOrShell(ctrl, r, body.Input, body.Format, body.RefuseUnknownSlash, body.LocalShell)
 	// After synchronous admission, a successful start sets Running. A silent
 	// drop (rotating/closed) leaves Running false — return 409 instead of 202.
 	// Finishing-window park also leaves Running false briefly; prefer 202 only

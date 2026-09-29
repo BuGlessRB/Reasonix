@@ -496,3 +496,18 @@ func TestHiddenTurnUsageNeverReachesTheScreen(t *testing.T) {
 		}
 	}
 }
+
+// A `!` command is the user's own: it goes to the kernel marked to stay local,
+// and no turn is waiting to be named after it.
+func TestShellModeRunsTheCommandLocally(t *testing.T) {
+	m, k := testModel(t)
+	typeText(m, "!")
+	typeText(m, "ls -la")
+	run(m, press(m, "enter"))
+	if !strings.Contains(strings.Join(k.seen(), "\n"), `POST /submit {"input":"!ls -la","localShell":true}`) {
+		t.Fatalf("calls:\n%s", strings.Join(k.seen(), "\n"))
+	}
+	if len(m.tr.awaiting) != 0 {
+		t.Fatalf("the command waits to be named by a turn: %v", m.tr.awaiting)
+	}
+}

@@ -256,11 +256,12 @@ func (m *model) send(steer bool) tea.Cmd {
 	m.viCmd = false
 	if m.shell {
 		m.shell = false
-		display, text = "! "+display, "!"+text
 		if m.tr.Running {
 			m.tr.AddNotice("warn", i18n.M.ShellWaitsForTurn)
 			return m.commit()
 		}
+		m.tr.AddEcho("! " + display)
+		return tea.Batch(m.commit(), m.call("send", func(ctx context.Context) error { return m.client.RunShell(ctx, text) }))
 	}
 	if m.tr.Running {
 		row := m.tr.AddQueued(display, steer)

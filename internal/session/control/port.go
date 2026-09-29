@@ -360,6 +360,12 @@ type Provenance interface {
 	AnswerQuestionFrom(id string, answers []event.AskAnswer, via *provider.Via)
 }
 
+// LocalShell is a `!` command typed on the machine the kernel runs on. Only
+// the full port names it: an editor has no prompt of its own to type one at.
+type LocalShell interface {
+	RunShellWith(command string, opts ShellRun)
+}
+
 // SessionAPI is the full driving port — the composition of every sub-port, for
 // a frontend that drives all of it: the TUI does, and the HTTP server all but
 // one. A leaner frontend names EditorAPI instead.
@@ -379,6 +385,7 @@ type SessionAPI interface {
 	Inbox
 	Provenance
 	BackgroundJobs
+	LocalShell
 }
 
 // EditorAPI is what an editor integration drives over ACP: turns, approvals and
@@ -422,5 +429,6 @@ var (
 	_ Settings           = (*Controller)(nil)
 	_ Inbox              = (*Controller)(nil)
 	_ Provenance         = (*Controller)(nil)
+	_ LocalShell         = (*Controller)(nil)
 	_ SessionAPI         = (*Controller)(nil)
 )
