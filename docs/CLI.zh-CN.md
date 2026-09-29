@@ -240,6 +240,23 @@ reasonix run "运行测试" --output-format stream-json
 执行失败时使用 `subtype: "error_during_execution"` 和 `is_error: true`。
 结构化模式会把运行时错误保留在 JSON 中，不再额外重复输出一份人类可读错误。
 
+宿主对回答的判定放在回答旁边，不改变退出码：
+
+- `-p` 模式会在标准错误里点名 `permission_denials` 中被拒的调用。
+- 模型已结束、但宿主的最终就绪检查没有满足时（例如最后一次写入后没有运行检查），
+  结果带 `readiness`（`attempts`、`missing`），运行仍算成功。
+- 回合有 `completion_summary` 时，`completion` 字段会复述它。
+- `--events-jsonl` 的 `run_done` 带被拒次数和 `readiness`。
+
+`reasonix run` 的退出码：
+
+| 退出码 | 含义 |
+| --- | --- |
+| `0` | 模型已结束，包括有调用被拒或就绪检查未满足的情况。 |
+| `1` | 运行失败：模型服务、配置、上限或取消。 |
+| `2` | 命令行参数无效。 |
+| `3` | 指定了 `--fail-on-unverified` 且最终就绪检查未满足。 |
+
 ### 脱敏机器接口
 
 自动化只需要生命周期遥测、不能接收 prompt、reasoning、工具参数/输出或审批文本时，

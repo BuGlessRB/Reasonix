@@ -95,6 +95,10 @@ type runResult struct {
 	PermissionDenials []runPermissionDenial `json:"permission_denials"`
 	// PermissionMode is the posture the run settled on, named or defaulted.
 	PermissionMode string `json:"permission_mode,omitempty"`
+	// Readiness is the unmet final-readiness judgement, if any; the run still
+	// exits 0 unless --fail-on-unverified asked otherwise.
+	Readiness  *eventwire.FinalReadiness    `json:"readiness,omitempty"`
+	Completion *eventwire.CompletionSummary `json:"completion,omitempty"`
 }
 
 type machineEventUsage struct {
@@ -145,6 +149,9 @@ type machineRunDone struct {
 	DurationMS    int64             `json:"duration_ms"`
 	NumTurns      int               `json:"num_turns"`
 	Usage         machineEventUsage `json:"usage"`
+	// PermissionDenials counts refused calls; the list itself carries content.
+	PermissionDenials int                       `json:"permission_denials,omitempty"`
+	Readiness         *eventwire.FinalReadiness `json:"readiness,omitempty"`
 }
 
 type runOutputSink struct {
@@ -166,6 +173,7 @@ type runOutputSink struct {
 	originalTotals      []pricing.Money
 	sawQuote            bool
 	originalCosts       map[string]float64
+	verdict             runVerdict
 	quoteLedger         *pricing.Ledger
 	turns               int
 	sequence            uint64
@@ -250,6 +258,7 @@ func (s *runOutputSink) Emit(e event.Event) {
 	if e.Kind == event.ToolResult && permission.IsRefusalCode(e.Tool.RefusalCode) {
 		s.permissions.denials = append(s.permissions.denials, runPermissionDenial{ToolName: e.Tool.Name, ToolUseID: e.Tool.ID, Code: e.Tool.RefusalCode})
 	}
+	s.verdict.observe(e)
 	// stdout carries the answer alone, so a warning had nowhere to go and was
 	// dropped — a planner fallback, a folded user turn, an unread check. stderr
 	// already carries what the run says about itself and breaks no pipeline.
@@ -299,6 +308,7 @@ func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr err
 		if s.final != "" {
 			_, s.err = fmt.Fprintln(s.out, s.final)
 		}
+		writeDenialWarning(s.errOut, s.permissions.denials)
 		return s.err
 	}
 	completion := classifyRunCompletion(runErr)
@@ -317,6 +327,9 @@ func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr err
 			DurationMS:    time.Since(started).Milliseconds(),
 			NumTurns:      turns,
 			Usage:         machineEventUsage{InputTokens: s.usage.InputTokens, OutputTokens: s.usage.OutputTokens, CacheHitTokens: s.usage.CacheReadInputTokens, CacheMissTokens: s.usage.CacheCreationInputTokens},
+
+			PermissionDenials: len(s.permissions.denials),
+			Readiness:         runReadiness(runErr),
 		})
 	}
 	resultText := s.final
@@ -370,6 +383,8 @@ func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr err
 		Usage:             s.usage,
 		PermissionDenials: append([]runPermissionDenial{}, s.permissions.denials...),
 		PermissionMode:    s.permissions.mode,
+		Readiness:         runReadiness(runErr),
+		Completion:        s.verdict.completion,
 	})
 }
 
