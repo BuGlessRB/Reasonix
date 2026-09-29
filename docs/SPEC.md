@@ -1119,6 +1119,7 @@ context_window = 1000000   # tokens; harness compacts older history near this li
 # max_output_tokens = 65536          # heavy reasoning / long tool loops
 # max_output_tokens = 131072         # only after repeated finish_reason=length
 # max_output_tokens never changes compact_ratio
+# idle_timeout_seconds = 300         # per-provider stream idle watchdog; default 300s (a silent pre-header wait is retried once, so up to ~2×)
 # model_overrides = { "deepseek-flash" = { context_window = 1000000, max_output_tokens = 32768 } }
 
 # A single-model entry still works for custom OpenAI-compatible endpoints.

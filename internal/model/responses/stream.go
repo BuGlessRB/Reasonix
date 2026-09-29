@@ -436,7 +436,7 @@ func sseData(line string) (string, bool) {
 
 func interruptedRead(err error, idle time.Duration, stalled bool) error {
 	if stalled {
-		return provider.StreamInterrupt(fmt.Errorf("responses: stream idle timeout after %s", idle), provider.StreamInterruptIdleTimeout)
+		return provider.StreamInterrupt(fmt.Errorf("responses: stream idle timeout after %s; raise idle_timeout_seconds to allow a longer silence", idle), provider.StreamInterruptIdleTimeout)
 	}
 	return provider.StreamInterrupt(err, provider.ClassifyStreamInterrupt(err))
 }

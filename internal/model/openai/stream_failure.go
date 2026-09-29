@@ -59,7 +59,7 @@ func streamFailure(emitted bool, err error) error {
 // expired. Downstream the error is an unexpected EOF like any other, so the
 // reason is attached here rather than inferred from the message later.
 func stallCut(name string, idle time.Duration) error {
-	err := fmt.Errorf("%s: stream stalled — no data for %s, connection likely dropped: %w", name, idle, io.ErrUnexpectedEOF)
+	err := fmt.Errorf("%s: stream stalled — no data for %s, connection likely dropped; raise idle_timeout_seconds to allow a longer silence: %w", name, idle, io.ErrUnexpectedEOF)
 	return provider.StreamInterrupt(err, provider.StreamInterruptIdleTimeout)
 }
 

@@ -7,6 +7,7 @@ import (
 	"net"
 	"syscall"
 	"testing"
+	"time"
 )
 
 // The classifier used to match phrases like "stalled" and "forcibly closed".
@@ -27,6 +28,31 @@ func TestClassifyStreamInterruptIgnoresWording(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := ClassifyStreamInterrupt(tc.err); got != tc.want {
 				t.Fatalf("ClassifyStreamInterrupt = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// An unset, zero or negative idle_timeout_seconds must keep the built-in
+// default rather than becoming a zero window that trips on the first byte, and a
+// value past the ceiling must clamp to it rather than overflow int64 negative.
+func TestIdleTimeoutFromExtra(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		extra map[string]any
+		want  time.Duration
+	}{
+		{"absent", map[string]any{}, StreamIdleTimeout},
+		{"nil map", nil, StreamIdleTimeout},
+		{"zero", map[string]any{IdleTimeoutSecondsKey: 0}, StreamIdleTimeout},
+		{"negative", map[string]any{IdleTimeoutSecondsKey: -5}, StreamIdleTimeout},
+		{"seconds", map[string]any{IdleTimeoutSecondsKey: 8}, 8 * time.Second},
+		{"at ceiling", map[string]any{IdleTimeoutSecondsKey: MaxIdleTimeoutSeconds}, MaxIdleTimeoutSeconds * time.Second},
+		{"past ceiling", map[string]any{IdleTimeoutSecondsKey: 10_000_000_000}, MaxIdleTimeoutSeconds * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IdleTimeoutFromExtra(tc.extra); got != tc.want {
+				t.Fatalf("IdleTimeoutFromExtra = %v, want %v", got, tc.want)
 			}
 		})
 	}
