@@ -1422,7 +1422,11 @@ body { background: var(--page) !important; }
 .workbench-empty { flex: 1; display: flex; place-content: center; align-items: center; gap: 8px; color: var(--faint); font: 500 11px/1 var(--ui); }
 .workbench-empty svg { width: 18px; height: 18px; }
 .workbench-error { padding: 8px 12px; border-bottom: 1px solid var(--danger); color: var(--danger); font: 500 10px/1.4 var(--ui); }
-@media (max-width: 760px) { .workbench-body { grid-template-columns: minmax(0, 1fr); } .workbench-explorer { display: none; } }
+@media (max-width: 760px) {
+  .workbench-body { grid-template-columns: minmax(0, 1fr); }
+  .workbench-body:not([data-files]) .workbench-explorer { display: none; }
+  .workbench-body[data-files] .workbench-canvas { display: none; }
+}
 
 /* Settings is one stable layer in the current window. */
 .prefs {
