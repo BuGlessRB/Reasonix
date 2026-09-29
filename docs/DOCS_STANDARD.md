@@ -25,7 +25,7 @@ Current areas:
 | --- | --- | --- | --- |
 | Kernel, Studio shell, tooling, standing instructions | `*` | @esengine | @SivanCola |
 | User guides and references | `docs/`, `sdk/`, `README*`, `SECURITY.md` | @SivanCola | @esengine |
-| Studio contracts and processes | `docs/STUDIO_*.md`, `docs/DOCS_STANDARD.md` | @esengine | @SivanCola |
+| Studio contracts and processes | `docs/STUDIO_*.md`, `docs/DOCS_STANDARD.md`, `docs/*_CONTRACT.md`, `docs/TOOL_APPROVAL_MODES.md`, `docs/CAPABILITY_DIAGNOSTICS.md`, `docs/CHECKPOINTS.md`, `docs/EXTENSION_*.md`, `docs/SUBAGENT_*.md`, `docs/SESSION_MEMORY_RETRIEVAL.md` | @esengine | @SivanCola |
 | Release lines and moving between them | `docs/ROADMAP.md`, `docs/MIGRATING.md` | @esengine | @SivanCola |
 | Kernel design proposals | `docs/design/` | @esengine | @SivanCola |
 | Release notes and release signing | `release-notes/`, `.signpath/`, `release-studio.yml` | @esengine | @SivanCola |
@@ -36,7 +36,7 @@ Current areas:
 | --- | --- | --- | --- |
 | Document | everything not listed below | required | 320 |
 | Landing | `README.md`, `README.zh-CN.md` | none (CODEOWNERS) | 320 |
-| Machine-read | `REASONIX.md`, `AGENTS.md`, `CLAUDE.md`, `.github/`, `.reasonix/`, skill and guardian prompts | none (CODEOWNERS) | 320 |
+| Machine-read | `REASONIX.md`, `AGENTS.md`, `CLAUDE.md`, `.github/`, `.reasonix/`, skill and guardian prompts, `docs/EXTENSION_PROTOCOL.generated.md` | none (CODEOWNERS) | 320 |
 | Release note | `release-notes/` | none (published verbatim) | 200 per item |
 
 The class table lives in `tools/repolint/docs.go`. Change both together.

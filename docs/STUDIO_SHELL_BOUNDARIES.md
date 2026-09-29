@@ -1,3 +1,10 @@
+---
+owner: @esengine
+backup: @SivanCola
+status: active
+reviewed: 2026-09-29
+---
+
 # Studio: the shell's boundaries
 
 This is not a plan and carries no dates. It is the set of boundaries Studio's
@@ -40,11 +47,9 @@ carries a boundary the host owns and no configuration can switch off
 - Checks run outermost first, so a caller that reached the socket under another
   name learns nothing about the credential.
 
-The user's `[serve]` authentication does not participate. Studio's boundary is
-this gate, and the two cannot share one cookie — a configured `auth_mode =
-"token"` left in place would refuse the launch credential on every request.
-`cmd/reasonix-studio-host` strips authentication out of the config it hands the
-hub for exactly that reason, and a test pins it.
+The user's `[serve]` authentication does not participate. Studio's boundary is this gate, and the two cannot share one cookie — a configured `auth_mode = "token"` left in place would refuse the launch credential on every request.
+
+`cmd/reasonix-studio-host` strips authentication out of the config it hands the hub for exactly that reason, and a test pins it.
 
 The hub's auth-disabled mode still holds mutations to a launch token; a request
 this gate admitted counts as holding it.
@@ -120,11 +125,9 @@ deciding its API.
 | Projection | pull | Recomputed on demand; losing a read costs nothing the next one does not restore. |
 | State whose loss changes execution | replayable event or recoverable snapshot | A client that missed it cannot recover by asking again later. |
 
-The status icon is the worked example of the first two: prefs are durable
-intent and live in the config file (`GET`/`PUT /tray/prefs`), while the fold the
-icon paints is a projection (`GET /tray/state`) that gets no id, no replay and
-no lifecycle. Promoting a projection to an event makes a rendering detail into a
-fact the stream has to guarantee.
+The status icon is the worked example of the first two: prefs are durable intent and live in the config file (`GET`/`PUT /tray/prefs`), while the fold the icon paints is a projection (`GET /tray/state`) that gets no id, no replay and no lifecycle.
+
+Promoting a projection to an event makes a rendering detail into a fact the stream has to guarantee.
 
 A pending question put to the user is the third kind, and must not be modelled
 as a notification.

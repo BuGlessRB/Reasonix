@@ -1,3 +1,10 @@
+---
+owner: @esengine
+backup: @SivanCola
+status: active
+reviewed: 2026-09-29
+---
+
 # Subagent profiles
 
 Subagent profiles are reusable, explicitly invoked agents for focused work such
@@ -21,12 +28,9 @@ reasonix subagent create reviewer \
   --effort high
 ```
 
-With a workspace, `create` defaults to project scope. Outside a workspace it
-defaults to global scope. Pass `--scope project` or `--scope global` to make the
-choice explicit. Project profiles are stored under
-`.reasonix/skills/<name>/SKILL.md`; global profiles are stored under the
-Reasonix home Skill directory described in
-[Configuration paths](./CONFIG_PATHS.md).
+With a workspace, `create` defaults to project scope. Outside a workspace it defaults to global scope. Pass `--scope project` or `--scope global` to make the choice explicit.
+
+Project profiles are stored under `.reasonix/skills/<name>/SKILL.md`; global profiles are stored under the Reasonix home Skill directory described in [Configuration paths](./CONFIG_PATHS.md).
 
 The prompt may come from `--prompt`, `--prompt-file PATH`,
 `--prompt-file -`, or piped stdin:
@@ -87,11 +91,9 @@ reasonix subagent run reviewer "review and fix the current diff"
 git diff | reasonix subagent run reviewer --max-steps 20
 ```
 
-Put `run`/`try` flags before the task. Both commands also accept `--model REF`
-and `--dir PATH`. `try` always selects the read-only runner. `run` uses the
-normal isolated runner; permission `deny` rules and sandbox restrictions still
-apply. Ordinary `reasonix run` remains a plain one-shot task entry point and
-does not implicitly interpret `/<profile>` syntax.
+Put `run`/`try` flags before the task. Both commands also accept `--model REF` and `--dir PATH`. `try` always selects the read-only runner. `run` uses the normal isolated runner; permission `deny` rules and sandbox restrictions still apply.
+
+Ordinary `reasonix run` remains a plain one-shot task entry point and does not implicitly interpret `/<profile>` syntax.
 
 ## Manage profiles
 
@@ -143,11 +145,9 @@ You are a focused code reviewer. Inspect the requested changes and return only
 actionable findings, ordered by severity.
 ```
 
-`invocation: manual` prevents automatic discovery in the model's pinned Skill
-index; users can still invoke the profile explicitly. `allowed-tools` is a
-profile-level allowlist, not a way to bypass permissions. `read-only: true`
-forces the read-only tool registry (writer tools stripped); omitted/`false`
-keeps the legacy writable default.
+`invocation: manual` prevents automatic discovery in the model's pinned Skill index; users can still invoke the profile explicitly. `allowed-tools` is a profile-level allowlist, not a way to bypass permissions.
+
+`read-only: true` forces the read-only tool registry (writer tools stripped); omitted/`false` keeps the legacy writable default.
 
 You may hand-author richer `runAs: subagent` Skills, including custom Skill
 paths and extra frontmatter. They can be listed and invoked, but the profile
@@ -193,8 +193,6 @@ Profiles created in desktop settings and with `reasonix subagent create` share
 the same files. Refresh or start a new session after changing profiles so an
 already-running session reloads the Skill registry.
 
-If invocation reports an unknown or disabled profile, check
-`reasonix subagent list`, the current `--dir`, and `skills.disabled_skills`. If
-editing reports that a profile is custom or rich, edit its `SKILL.md` directly
-instead of forcing it through the profile editor. Unknown model references and
-invalid effort levels are rejected when Reasonix resolves the effective model.
+If invocation reports an unknown or disabled profile, check `reasonix subagent list`, the current `--dir`, and `skills.disabled_skills`. If editing reports that a profile is custom or rich, edit its `SKILL.md` directly instead of forcing it through the profile editor.
+
+Unknown model references and invalid effort levels are rejected when Reasonix resolves the effective model.

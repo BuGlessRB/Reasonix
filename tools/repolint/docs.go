@@ -45,6 +45,7 @@ var docClassByPrefix = []struct {
 	{"REASONIX.md", classMachine},
 	{"AGENTS.md", classMachine},
 	{"CLAUDE.md", classMachine},
+	{"docs/EXTENSION_PROTOCOL.generated.md", classMachine},
 	{".github/", classMachine},
 	{".reasonix/", classMachine},
 	{"internal/ext/skill/builtincontent/", classMachine},

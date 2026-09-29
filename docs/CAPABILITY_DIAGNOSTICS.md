@@ -1,3 +1,10 @@
+---
+owner: @esengine
+backup: @SivanCola
+status: active
+reviewed: 2026-09-29
+---
+
 # Capability diagnostics
 
 <a href="./GUIDE.md">Guide</a>
@@ -85,12 +92,9 @@ Common codes: `mcp.command_not_found`, `mcp.invalid_transport`,
 with “Include current session runtime” to read the **active tab Host** without
 starting a second Host.
 
-Each MCP entry identifies the exact winning configuration with `source`,
-`source_path`, and `effective`. Startup failures also report `startup_stage`
-(`launch`, `authorization`, `initialize`, or `tools/list`),
-`startup_elapsed_ms`, and a bounded, credential-redacted `stderr` tail. This
-distinguishes duplicate/shadowed registration from a genuinely slow or broken
-handshake without exposing full process output.
+Each MCP entry identifies the exact winning configuration with `source`, `source_path`, and `effective`. Startup failures also report `startup_stage` (`launch`, `authorization`, `initialize`, or `tools/list`), `startup_elapsed_ms`, and a bounded, credential-redacted `stderr` tail.
+
+This distinguishes duplicate/shadowed registration from a genuinely slow or broken handshake without exposing full process output.
 
 ### 4. Ask the agent (`reasonix-guide`)
 
@@ -240,14 +244,11 @@ Reports rewrite paths as:
 - `~/...` under the user home
 - `<external>/basename` for other absolute paths (no full external path)
 
-They never intentionally emit usernames, full external paths, environment
-variable **values**, header **values**, tokens, or URL query strings. MCP
-entries list env/header **keys** only. Error text that may carry raw HTTP
-response bodies or MCP stderr passes through the product-wide secret redactor
-(Authorization schemes, Bearer/JWT/vendor tokens, `KEY=value` and JSON
-`"key":"value"` credential forms, Cookie/Set-Cookie values) and is truncated to
-400 characters. Prefer copying report JSON into issues or chat over pasting raw
-config files.
+They never intentionally emit usernames, full external paths, environment variable **values**, header **values**, tokens, or URL query strings. MCP entries list env/header **keys** only.
+
+Error text that may carry raw HTTP response bodies or MCP stderr passes through the product-wide secret redactor (Authorization schemes, Bearer/JWT/vendor tokens, `KEY=value` and JSON `"key":"value"` credential forms, Cookie/Set-Cookie values) and is truncated to 400 characters.
+
+Prefer copying report JSON into issues or chat over pasting raw config files.
 
 ## What is *not* diagnosed here
 

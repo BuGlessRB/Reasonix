@@ -1,3 +1,10 @@
+---
+owner: @esengine
+backup: @SivanCola
+status: active
+reviewed: 2026-09-29
+---
+
 # Extension Runtime v2 (Spatiotemporal Composability)
 
 English overview of the Reasonix plugin/runtime v2 model.
@@ -46,35 +53,25 @@ reasonix doctor runtime --json
 reasonix plugin doctor <name>
 ```
 
-Reports component status, plan, effect receipts, recoverability, lifecycle
-metrics, and the process-local `runtimeOwnerFallbacks` count. Product boot binds
-an isolated owner; a non-zero fallback count identifies compatibility code that
-reached the shared default owner and needs explicit wiring.
-Plan diagnostics separate two facts: `prefixChanged` is computed after build by
-comparing the previous and current snapshot `CacheHash`; `providerChanged`
-reports provider capability additions, removals, or reloads. A provider-only
-backend roll therefore reports `prefixChanged=false, providerChanged=true` when
-the provider-visible system prompt and tool schemas remain byte-identical.
+Reports component status, plan, effect receipts, recoverability, lifecycle metrics, and the process-local `runtimeOwnerFallbacks` count. Product boot binds an isolated owner; a non-zero fallback count identifies compatibility code that reached the shared default owner and needs explicit wiring.
+
+Plan diagnostics separate two facts: `prefixChanged` is computed after build by comparing the previous and current snapshot `CacheHash`; `providerChanged` reports provider capability additions, removals, or reloads.
+
+A provider-only backend roll therefore reports `prefixChanged=false, providerChanged=true` when the provider-visible system prompt and tool schemas remain byte-identical.
 
 ## Effect receipts
 
-Irreversible external work is recorded in the current `RuntimeOwner`'s receipt
-store. Independent sessions never share publish/drain state or recovery
-evidence. Recovery never claims successful rollback for irreversible effects;
-use the owner-scoped `AssessRecoverability(generation)` /
-`DecideResume(generation)` methods.
+Irreversible external work is recorded in the current `RuntimeOwner`'s receipt store. Independent sessions never share publish/drain state or recovery evidence.
 
-The receipt ledger supports **in-process rebuild/resume only**. It is not
-persisted, so recovery after a process crash is outside this runtime-v2 scope.
-Memory is bounded to the latest 32 generations and 256 receipts per generation.
-Eviction also drops associated file-prior bytes and marks the affected
-generation's evidence as truncated, so diagnostics refuse to claim a clean
-rollback when complete evidence is no longer available.
-Message-send deduplication follows the same receipt retention: evicting a
-message receipt releases its `(generation, messageID)` key instead of growing a
-second unbounded ledger. File priors are capped at 8 MiB per entry and 32 MiB
-per `RuntimeOwner`; writes beyond either limit record `prior_truncated`, and
-recovery remains conservative rather than claiming a clean rollback.
+Recovery never claims successful rollback for irreversible effects; use the owner-scoped `AssessRecoverability(generation)` / `DecideResume(generation)` methods.
+
+The receipt ledger supports **in-process rebuild/resume only**. It is not persisted, so recovery after a process crash is outside this runtime-v2 scope. Memory is bounded to the latest 32 generations and 256 receipts per generation.
+
+Eviction also drops associated file-prior bytes and marks the affected generation's evidence as truncated, so diagnostics refuse to claim a clean rollback when complete evidence is no longer available.
+
+Message-send deduplication follows the same receipt retention: evicting a message receipt releases its `(generation, messageID)` key instead of growing a second unbounded ledger.
+
+File priors are capped at 8 MiB per entry and 32 MiB per `RuntimeOwner`; writes beyond either limit record `prior_truncated`, and recovery remains conservative rather than claiming a clean rollback.
 
 - Provider stream open records `provider-submit:<id>` (irreversible).
 - Completed provider streams unregister their drain callback; only streams still

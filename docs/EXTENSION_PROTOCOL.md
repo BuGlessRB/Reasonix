@@ -1,10 +1,15 @@
+---
+owner: @esengine
+backup: @SivanCola
+status: active
+reviewed: 2026-09-29
+---
+
 # Reasonix Extension Protocol v2
 
-The Extension Protocol is the stable wire contract between Reasonix (the
-**host**) and code extensions running as out-of-process **sidecars**. It is
-how an installed plugin with a `runtime` block intercepts runtime events,
-owns replacement strategies, contributes streaming model providers, and
-publishes structured UI — without ever linking into the host binary.
+The Extension Protocol is the stable wire contract between Reasonix (the **host**) and code extensions running as out-of-process **sidecars**.
+
+It is how an installed plugin with a `runtime` block intercepts runtime events, owns replacement strategies, contributes streaming model providers, and publishes structured UI — without ever linking into the host binary.
 
 - Protocol ID: `reasonix.extension.v2`
 - Machine-readable schema: `internal/ext/extension/protocol/schema.generated.json`
@@ -28,11 +33,8 @@ disagree, the generated schema wins.
 
 ## Lifecycle
 
-1. The host spawns the sidecar (exec form, no shell) and sends
-   `extension/initialize` first. The params carry the manifest expectation:
-   the intercepts, replaces, providers, and UI actions the host will accept.
-   For one runtime generation, the host initializes at most four sidecars in
-   parallel under one shared 30-second startup budget.
+1. The host spawns the sidecar (exec form, no shell) and sends `extension/initialize` first. The params carry the manifest expectation: the intercepts, replaces, providers, and UI actions the host will accept.
+   - For one runtime generation, the host initializes at most four sidecars in parallel under one shared 30-second startup budget.
 2. The sidecar answers with its declaration. The host validates it: exact
    protocol major version, and every subscription, replacement slot,
    provider, and UI action must be a **subset of the plugin manifest**.
@@ -50,12 +52,9 @@ disagree, the generated schema wins.
 
 ## Content references
 
-Payload fields marked externalizable that exceed **64 KiB** are offloaded
-into the host content store: the frame carries an `ExternalizedField`
-descriptor (JSON pointer, content ref, byte count, SHA-256) and a `null`
-placeholder. The peer pages the bytes back with `host/content/read` in
-**256 KiB** chunks, verifying byte count and hash. A single content object is
-capped at **8 MiB**. Unknown or expired refs fail with `content_ref_expired`.
+Payload fields marked externalizable that exceed **64 KiB** are offloaded into the host content store: the frame carries an `ExternalizedField` descriptor (JSON pointer, content ref, byte count, SHA-256) and a `null` placeholder.
+
+The peer pages the bytes back with `host/content/read` in **256 KiB** chunks, verifying byte count and hash. A single content object is capped at **8 MiB**. Unknown or expired refs fail with `content_ref_expired`.
 
 ## Interception
 
@@ -67,17 +66,10 @@ drops the observation with a warning instead of stalling the Agent.
 - Ordinary interceptors run **sequentially** in a deterministic order:
   priority ascending (manifest `priority`, -1000..1000, default 0), then
   plugin ID, then registration order.
-- Decisions per call: `continue` (pass the payload along), `block` (abort
-  the operation with a user-visible reason), `replace` (substitute the
-  payload — the host re-validates it against the point's DTO and schema
-  before use), and `allow`/`deny` (only legal at `permission.decision`).
-  A full-trust `allow` overrides a host deny and is audited.
-- Replacement **strategy slots** (`system_prompt`, `context`,
-  `provider_request`, `provider_response`, `compaction`, `session_policy`,
-  `permission`, `frontend_events`, `tool:<name>`, `provider:<ref>`) have
-  exactly one owner across all installed plugins. The chain runs first; the
-  slot owner gets the final say. A strategy owner's timeout or error always
-  fails the operation.
+- Decisions per call: `continue` (pass the payload along), `block` (abort the operation with a user-visible reason), `replace` (substitute the payload — the host re-validates it against the point's DTO and schema before use), and `allow`/`deny` (only legal at `permission.decision`).
+- A full-trust `allow` overrides a host deny and is audited.
+- Replacement **strategy slots** (`system_prompt`, `context`, `provider_request`, `provider_response`, `compaction`, `session_policy`, `permission`, `frontend_events`, `tool:<name>`, `provider:<ref>`) have exactly one owner across all installed plugins.
+- The chain runs first; the slot owner gets the final say. A strategy owner's timeout or error always fails the operation.
 - Timeouts: input/tool/permission points default to 5s; the
   session/context/compaction/system-prompt family to 30s; a manifest may tune
   per-runtime up to a 60s ceiling. Optional observation-only extensions that
@@ -110,16 +102,11 @@ Streams follow `extension/provider/stream/open` → `stream/chunk` →
 
 ## Structured UI
 
-Extensions with the `ui` capability publish `status`, `card`, `form`,
-`notification`, `panel`, and `view` payloads (`host/ui/publish`) and ask
-questions
-(`host/ui/request`: confirm, input, select, multiselect). Surfaces are
-**structured only**: no HTML, CSS, JavaScript, remote scripts, arbitrary
-frontend components, or uncontrolled URLs; Markdown renders through each
-frontend's existing safe renderer. Every surface update carries the plugin
-ID, surface ID, session ID, and runtime generation; stale-generation
-updates are dropped so late results after a tab switch or reload can never
-overwrite current state.
+Extensions with the `ui` capability publish `status`, `card`, `form`, `notification`, `panel`, and `view` payloads (`host/ui/publish`) and ask questions (`host/ui/request`: confirm, input, select, multiselect).
+
+Surfaces are **structured only**: no HTML, CSS, JavaScript, remote scripts, arbitrary frontend components, or uncontrolled URLs; Markdown renders through each frontend's existing safe renderer.
+
+Every surface update carries the plugin ID, surface ID, session ID, and runtime generation; stale-generation updates are dropped so late results after a tab switch or reload can never overwrite current state.
 
 A `panel` holds a place in the frontend's side rail rather than scrolling
 past in the transcript: re-publishing the same surface id updates what is
@@ -160,25 +147,16 @@ reason table lives in the generated index.
 
 ## Stability contract
 
-Within major version 2, the only permitted evolutions are: new optional
-fields, new enum values, and new methods. Existing required fields,
-directions, limits, error reasons, and semantics never change. The canonical
-schema and its SHA-256 hash are produced by `cmd/extension-protocol-gen`;
-CI's `go test ./...` enforces this via the deterministic-generation test
-(`TestGeneratedArtifactsAreDeterministicAndCommitted`), so any drift —
-including an accidental semantic change — fails the build.
+Within major version 2, the only permitted evolutions are: new optional fields, new enum values, and new methods. Existing required fields, directions, limits, error reasons, and semantics never change.
+
+The canonical schema and its SHA-256 hash are produced by `cmd/extension-protocol-gen`; CI's `go test ./...` enforces this via the deterministic-generation test (`TestGeneratedArtifactsAreDeterministicAndCommitted`), so any drift — including an accidental semantic change — fails the build.
 
 ## Security model
 
-A code extension is **full trust**: it runs outside the Reasonix sandbox
-with the unfiltered inherited environment, can read the full session and
-environment, can bypass permissions, and can operate the machine directly.
-Installing, updating, replacing, or `--link`ing a plugin with a `runtime`
-block is the authorization — there is no second confirmation. Only plugins
-installed through the plugin flow (recorded in `plugin-packages.json`) can
-start a sidecar; project configuration can never declare one. Before any
-sidecar diagnostics, structured UI, interceptor reasons, or provider errors
-reach the UI, logs, or error surfaces, the host runs its credential redaction
-pass. Ordinary provider/model content is preserved as product data. The
-install preview, plugin details, and capability diagnostics always display the
-FULL TRUST block for runtime plugins.
+A code extension is **full trust**: it runs outside the Reasonix sandbox with the unfiltered inherited environment, can read the full session and environment, can bypass permissions, and can operate the machine directly.
+
+Installing, updating, replacing, or `--link`ing a plugin with a `runtime` block is the authorization — there is no second confirmation. Only plugins installed through the plugin flow (recorded in `plugin-packages.json`) can start a sidecar; project configuration can never declare one.
+
+Before any sidecar diagnostics, structured UI, interceptor reasons, or provider errors reach the UI, logs, or error surfaces, the host runs its credential redaction pass. Ordinary provider/model content is preserved as product data.
+
+The install preview, plugin details, and capability diagnostics always display the FULL TRUST block for runtime plugins.

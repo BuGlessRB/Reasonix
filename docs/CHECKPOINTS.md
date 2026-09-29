@@ -1,11 +1,15 @@
+---
+owner: @esengine
+backup: @SivanCola
+status: active
+reviewed: 2026-09-29
+---
+
 # Design: Checkpoints & Rewind
 
-Status: **Phase 1 + 2 implemented** — snapshot store, capture seam, the Esc-Esc /
-`/rewind` CLI picker, and the desktop hover-rewind, with the full Claude Code menu:
-restore code / conversation / both, fork-from-here, and summarize from / up to
-here. Snapshot-based and aligned with Claude Code. An optional git-backed mode is
-the remaining (lower-priority) follow-up. Tracks the most requested missing
-capability from v1 — an edit safety net / undo.
+Status: **Phase 1 + 2 implemented** — snapshot store, capture seam, the Esc-Esc / `/rewind` CLI picker, and the desktop hover-rewind, with the full Claude Code menu: restore code / conversation / both, fork-from-here, and summarize from / up to here. Snapshot-based and aligned with Claude Code.
+
+An optional git-backed mode is the remaining (lower-priority) follow-up. Tracks the most requested missing capability from v1 — an edit safety net / undo.
 
 This document describes rewind snapshots. For the autonomous-run rule about when
 the agent should pause and ask the user, see
@@ -25,11 +29,8 @@ independent of git:
 
 - **Zero git pollution** — never commits, stages, or touches `.git/`. Works in a
   non-git directory.
-- **Tracks only previewable edit-tool changes** — `write_file` / `edit_file` / `multi_edit`.
-  File moves via `move_file` follow the same workspace permission boundary, but
-  are not yet represented in checkpoint previews.
-  `bash` side effects are **not** tracked (no way to know what a shell command
-  touched), exactly as Claude Code. Risky bash is already permission-gated.
+- **Tracks only previewable edit-tool changes** — `write_file` / `edit_file` / `multi_edit`. File moves via `move_file` follow the same workspace permission boundary, but are not yet represented in checkpoint previews.
+- `bash` side effects are **not** tracked (no way to know what a shell command touched), exactly as Claude Code. Risky bash is already permission-gated.
 - Full pre-edit content snapshots (simple; storage bounded by retention, below).
 
 An optional **git-backed mode** (v1's `auto-git-rollback`) is a possible Phase 2
@@ -39,11 +40,8 @@ for users who want git-level safety; it is explicitly out of scope here.
 
 - **One checkpoint per user turn.** A checkpoint opens when a turn starts
   (`Controller.Send` / `runTurn`), labelled with the user prompt.
-- **Pre-edit snapshot.** In `agent.(*Agent).executeOne`, before running a tool
-  whose `ReadOnly()` is false and which implements `tool.Previewer`, call
-  `Preview(args)` → `diff.Change{Path, Kind, OldText}` and record a snapshot of
-  that file into the active checkpoint. `tool.Previewer` already exists and the
-  file-writers implement it, so this is one centralized seam — no per-tool code.
+- **Pre-edit snapshot.** In `agent.(*Agent).executeOne`, before running a tool whose `ReadOnly()` is false and which implements `tool.Previewer`, call `Preview(args)` → `diff.Change{Path, Kind, OldText}` and record a snapshot of that file into the active checkpoint.
+- `tool.Previewer` already exists and the file-writers implement it, so this is one centralized seam — no per-tool code.
   - Dedup per path per turn: only the **first** touch is snapshotted (that is the
     file's turn-start content).
   - `Kind == create` (file did not exist) → store `Content = nil` so a restore
