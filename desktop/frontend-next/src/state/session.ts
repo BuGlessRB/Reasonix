@@ -84,6 +84,9 @@ function sealTurn(items: Item[], err?: string): Item[] {
   let stillborn = 0;
   const sealed: Item[] = [];
   for (const i of items) {
+    // The kernel clears pending decisions when the turn ends; a history
+    // rebuild must not carry these expired prompts into the next turn.
+    if (promptOpen(i)) continue;
     if (i.t === "tool" && i.running && i.tool.partial) {
       stillborn++;
       continue;

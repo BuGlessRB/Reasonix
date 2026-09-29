@@ -406,6 +406,26 @@ describe("a question the run is still blocked on", () => {
     expect(asks(s)[0].ask.id).toBe("ask-1");
   });
 
+  it("drops a cancelled ask before a rewritten user turn is restored and sent", () => {
+    const cancelled = reduce(run([asking("ask-1")]), {
+      kind: "turn_done", cancelled: true, err: "context canceled",
+    } as SessionEvent);
+    const rewritten = reduce(reduce(cancelled, rebuild([said("Earlier answer")])),
+      { kind: "__user", id: "edited", text: "Rewritten question", pending: false } as SessionEvent);
+    expect(rewritten.items.map((i) => i.t)).toEqual(["say", "user"]);
+    expect(asks(rewritten)).toHaveLength(0);
+  });
+
+  it("removes pending prompts at turn end but keeps answered questions", () => {
+    const first = run([asking("answered"), asking("pending"), approving("approval")]);
+    const answered = reduce(first, {
+      kind: "__decided", id: asks(first)[0].id, answers: [["egui 0.27"]],
+    } as SessionEvent);
+    const ended = reduce(answered, { kind: "turn_done", cancelled: true } as SessionEvent);
+    expect(asks(ended).map((i) => [i.ask.id, i.answered])).toEqual([["answered", [["egui 0.27"]]]]);
+    expect(ended.items.some((i) => i.t === "approval")).toBe(false);
+  });
+
   it("keeps an approval the same way, for the same reason", () => {
     const s = run([approving("apv-1"), rebuild([said("先写文件")])]);
     expect(s.items.filter((i) => i.t === "approval")).toHaveLength(1);
