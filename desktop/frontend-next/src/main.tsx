@@ -14,26 +14,30 @@ import { install as installFileDrop } from "./ui/filedrop";
 import { host } from "./port/host";
 import { play } from "./boot/intro";
 import { settled } from "./boot/gate";
-import { onRemoteConnectionEnded, remoteConnectionEnded, remoteHub } from "./port/cloud_remote";
+import { onRemoteConnectionEnded, remoteConnectionEnded, remoteHub, signInAgain, type RemoteEnd } from "./port/cloud_remote";
 
-function RemoteAwareApp({ hub, remote }: { hub: HubPort; remote: boolean }) {
-  const [disconnected, setDisconnected] = useState(() => remote && remoteConnectionEnded());
+function RemoteAwareApp({ hub, remote }: { hub: HubPort; remote: string | null }) {
+  const [ended, setEnded] = useState<RemoteEnd | null>(() => (remote ? remoteConnectionEnded() : null));
   useEffect(() => {
     if (!remote) return;
-    const closed = () => setDisconnected(true);
-    return onRemoteConnectionEnded(closed);
+    return onRemoteConnectionEnded(setEnded);
   }, [remote]);
+  const reauth = ended?.kind === "reauth";
   return (
     <>
       <App hub={hub} />
-      {disconnected && (
-        <div className="remote-closed" role="alert" aria-label={t("远程连接已断开")}>
+      {ended && remote && (
+        <div className="remote-closed" role="alert" aria-label={reauth ? t("需要重新登录") : t("远程连接已断开")}>
           <span aria-hidden="true" />
           <div>
-            <b>{t("远程连接已断开")}</b>
-            <p>{t("这台电脑已停止网页控制。重新连接需要再次验证设备状态。")}</p>
+            <b>{reauth ? t("需要重新登录") : t("远程连接已断开")}</b>
+            <p>{reauth
+              ? t("为了安全，远程控制在登录满 24 小时或退出登录后需要重新登录。")
+              : t("这台电脑已停止网页控制。重新连接需要再次验证设备状态。")}</p>
           </div>
-          <button onClick={() => location.reload()}>{t("重新连接")}</button>
+          {reauth
+            ? <button onClick={() => void signInAgain(remote)}>{t("重新登录")}</button>
+            : <button onClick={() => location.reload()}>{t("重新连接")}</button>}
         </div>
       )}
     </>
@@ -141,7 +145,7 @@ pick().then(
     installFileDrop();
     root.render(
       <StrictMode>
-        <RemoteAwareApp hub={hub} remote={new URLSearchParams(location.search).has("device")} />
+        <RemoteAwareApp hub={hub} remote={new URLSearchParams(location.search).get("device")?.trim() || null} />
       </StrictMode>,
     );
     intro.progress(2);

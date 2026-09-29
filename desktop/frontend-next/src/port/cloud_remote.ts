@@ -1,66 +1,47 @@
 import type { HubPort } from "./hub";
 import { SseHub } from "./hub";
 import { t } from "../i18n";
+import { linkCodec, RemoteLink, RemoteLinkError, type RemoteConnection, type RemoteEnd } from "./cloud_link";
 
 const ACCOUNT = (import.meta.env.VITE_ACCOUNTS_API || "https://id.reasonix.io").replace(/\/$/, "");
 const RELAY = (import.meta.env.VITE_REMOTE_GATEWAY || "wss://remote.reasonix.io").replace(/\/$/, "");
+const REMOTE_HOME = import.meta.env.VITE_REMOTE_HOME || "https://reasonix.io/remote/";
 const HANDSHAKE_TIMEOUT_MS = 30_000;
-const REQUEST_TIMEOUT_MS = 30_000;
-let connectionEnded = false;
-const connectionEndedListeners = new Set<(reason: string) => void>();
+let connectionEnded: RemoteEnd | null = null;
+const connectionEndedListeners = new Set<(end: RemoteEnd) => void>();
+const { bytesToBase64, base64ToBytes, concatChunks } = linkCodec;
 
-function announceClosed(reason = "") {
-  connectionEnded = true;
-  for (const listener of connectionEndedListeners) listener(reason);
+function announceClosed(end: RemoteEnd) {
+  connectionEnded = end;
+  for (const listener of connectionEndedListeners) listener(end);
 }
 
+export type { RemoteEnd };
 export const remoteConnectionEnded = () => connectionEnded;
-export const onRemoteConnectionEnded = (listener: (reason: string) => void) => {
+export const onRemoteConnectionEnded = (listener: (end: RemoteEnd) => void) => {
   connectionEndedListeners.add(listener);
   return () => { connectionEndedListeners.delete(listener); };
 };
+
+// Signing out first is what makes the sign-in page ask: it sends a visitor who
+// still holds a session straight on, and that session is the one too old to
+// control a computer.
+export async function signInAgain(deviceId: string, nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis)) {
+  try {
+    await nativeFetch(`${ACCOUNT}/auth/logout`, { method: "POST", credentials: "include" });
+  } catch {
+    // The sign-in page still works; it will just offer to continue as the old session.
+  }
+  const home = new URL(REMOTE_HOME);
+  home.searchParams.set("device", deviceId);
+  location.href = `${home.origin}/login/?next=${encodeURIComponent(home.pathname + home.search)}`;
+}
 
 interface RemoteDevice {
   id: string;
   publicKey: string;
   capabilities: string[];
   revokedAt?: string | null;
-}
-
-interface PendingResponse {
-  chunks: Map<number, string>;
-  resolve: (value: Response) => void;
-  reject: (reason: unknown) => void;
-  timer: ReturnType<typeof setTimeout>;
-  status?: number;
-  contentType?: string;
-  etag?: string;
-}
-
-function bytesToBase64(bytes: Uint8Array) {
-  let binary = "";
-  for (let at = 0; at < bytes.length; at += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
-  }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-}
-
-function base64ToBytes(value: string) {
-  const padded = value.replaceAll("-", "+").replaceAll("_", "/") + "=".repeat((4 - value.length % 4) % 4);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
-
-function concatChunks(chunks: Map<number, string>) {
-  const parts = [...chunks.entries()].sort(([a], [b]) => a - b).map(([, value]) => base64ToBytes(value));
-  const size = parts.reduce((total, part) => total + part.length, 0);
-  const joined = new Uint8Array(size);
-  let offset = 0;
-  for (const part of parts) {
-    joined.set(part, offset);
-    offset += part.length;
-  }
-  return joined;
 }
 
 async function encryptedChannel(device: RemoteDevice, socket: WebSocket) {
@@ -141,88 +122,6 @@ function waitForSocketOpen(socket: WebSocket, timeout = HANDSHAKE_TIMEOUT_MS): P
   });
 }
 
-class RemoteTransport {
-  private readonly pending = new Map<string, PendingResponse>();
-
-  constructor(
-    private readonly socket: WebSocket,
-    private readonly channel: Awaited<ReturnType<typeof encryptedChannel>>,
-  ) {
-    socket.addEventListener("message", (event) => void this.receive(String(event.data)));
-    socket.addEventListener("close", (event) => {
-      this.failAll(new Error(t("远程连接已断开，请重新连接。")));
-      announceClosed(event.reason);
-    });
-  }
-
-  async fetch(request: Request): Promise<Response> {
-    if (this.socket.readyState !== WebSocket.OPEN) throw new Error(t("远程连接已断开，请重新连接。"));
-    const id = crypto.randomUUID();
-    const body = new Uint8Array(await request.arrayBuffer());
-    const response = new Promise<Response>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(t("远程 Studio 暂无响应，请检查电脑是否在线后重试。")));
-      }, REQUEST_TIMEOUT_MS);
-      this.pending.set(id, { chunks: new Map(), resolve, reject, timer });
-    });
-    const payload = await this.channel.seal({
-      v: 1, type: "desktop.request", id, method: request.method,
-      path: request.url.slice(location.origin.length), body: bytesToBase64(body),
-    });
-    if (this.socket.readyState !== WebSocket.OPEN) {
-      const pending = this.pending.get(id);
-      if (pending) {
-        clearTimeout(pending.timer);
-        this.pending.delete(id);
-      }
-      throw new Error(t("远程连接已断开，请重新连接。"));
-    }
-    this.socket.send(payload);
-    return response;
-  }
-
-  private async receive(wire: string) {
-    let message: Record<string, unknown>;
-    try {
-      message = await this.channel.open(wire);
-    } catch {
-      return;
-    }
-    const id = typeof message.id === "string" ? message.id : "";
-    const pending = this.pending.get(id);
-    if (!pending) return;
-    if (message.type === "error") {
-      clearTimeout(pending.timer);
-      this.pending.delete(id);
-      pending.reject(new Error(typeof message.error === "string" ? message.error : t("远程 Studio 拒绝了这次请求。")));
-      return;
-    }
-    if (message.type !== "desktop.response" || typeof message.index !== "number" || typeof message.body !== "string") return;
-    pending.status = typeof message.status === "number" ? message.status : pending.status;
-    pending.contentType = typeof message.contentType === "string" ? message.contentType : pending.contentType;
-    pending.etag = typeof message.etag === "string" ? message.etag : pending.etag;
-    pending.chunks.set(message.index, message.body);
-    if (message.done !== true) return;
-    clearTimeout(pending.timer);
-    this.pending.delete(id);
-    const headers = new Headers();
-    if (pending.contentType) headers.set("content-type", pending.contentType);
-    if (pending.etag) headers.set("etag", pending.etag);
-    const status = pending.status ?? 500;
-    const bytes = concatChunks(pending.chunks);
-    pending.resolve(new Response(status === 204 || status === 304 ? null : bytes, { status, headers }));
-  }
-
-  private failAll(error: Error) {
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(error);
-    }
-    this.pending.clear();
-  }
-}
-
 interface ReplayAnswer {
   frames?: Array<Record<string, unknown>> | null;
   complete?: boolean;
@@ -287,40 +186,76 @@ export class RemoteEventSource {
   }
 }
 
-async function connect(deviceId: string, nativeFetch: typeof fetch) {
-  const bootstrap = (globalThis as typeof globalThis & {
-    __rxRemoteBootstrap?: Promise<Response> | null;
-  }).__rxRemoteBootstrap;
+async function grantFailure(issued: Response): Promise<RemoteLinkError> {
+  const body = await issued.json().catch(() => null) as { error?: { code?: string } } | null;
+  const code = body?.error?.code;
+  if (issued.status === 401 || code === "remote_reauth_required") {
+    return new RemoteLinkError("reauth", t("远程控制需要重新登录。"));
+  }
+  if (issued.status === 404 || code === "device_not_found") {
+    return new RemoteLinkError("ended", t("这台电脑已从账号中移除。"));
+  }
+  return new RemoteLinkError("transient", t("无法授权 Web Studio，请重新登录后再试。"));
+}
+
+async function connect(deviceId: string, nativeFetch: typeof fetch, useBootstrap: boolean): Promise<RemoteConnection> {
+  const scope = globalThis as typeof globalThis & { __rxRemoteBootstrap?: Promise<Response> | null };
+  const bootstrap = useBootstrap ? scope.__rxRemoteBootstrap : null;
+  scope.__rxRemoteBootstrap = null;
   if (!bootstrap) performance.mark("reasonix:remote:start");
-  const issued = await (bootstrap ?? nativeFetch(`${ACCOUNT}/me/remote-grants`, {
-    method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ targetDeviceId: deviceId, scopes: ["desktop"] }),
-  }));
-  if (!issued.ok) throw new Error(t("无法授权 Web Studio，请重新登录后再试。"));
+  let issued: Response;
+  try {
+    issued = await (bootstrap ?? nativeFetch(`${ACCOUNT}/me/remote-grants`, {
+      method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ targetDeviceId: deviceId, scopes: ["desktop"] }),
+    }));
+  } catch {
+    throw new RemoteLinkError("transient", t("远程中转服务暂时不可用，请稍后重试。"));
+  }
+  if (!issued.ok) throw await grantFailure(issued);
   const { grant, device: target } = await issued.json() as { grant: { ticket: string }; device?: RemoteDevice };
   if (!target || target.id !== deviceId || target.revokedAt || !target.capabilities.includes("desktop")) {
-    throw new Error(t("请先更新这台电脑上的 Studio，再连接。"));
+    throw new RemoteLinkError("ended", t("请先更新这台电脑上的 Studio，再连接。"));
   }
   performance.mark("reasonix:remote:authorized");
   const socket = new WebSocket(`${RELAY}/v1/sessions/connect`, ["reasonix.remote.v1", `reasonix.auth.${grant.ticket}`]);
-  await waitForSocketOpen(socket);
-  const readyWire = nextMessage(socket);
-  const channel = await encryptedChannel(target, socket);
-  const ready = await channel.open(await readyWire);
-  if (ready.type !== "ready" || ready.deviceId !== target.id) throw new Error(t("远程 Studio 身份校验失败，请停止连接并检查设备。"));
-  performance.mark("reasonix:remote:ready");
-  performance.measure("reasonix:remote:authorize", "reasonix:remote:start", "reasonix:remote:authorized");
-  performance.measure("reasonix:remote:handshake", "reasonix:remote:authorized", "reasonix:remote:ready");
-  performance.measure("reasonix:remote:connect", "reasonix:remote:start", "reasonix:remote:ready");
-  return new RemoteTransport(socket, channel);
+  try {
+    await waitForSocketOpen(socket);
+    const readyWire = nextMessage(socket);
+    const channel = await encryptedChannel(target, socket);
+    const ready = await channel.open(await readyWire);
+    if (ready.type !== "ready" || ready.deviceId !== target.id) {
+      throw new RemoteLinkError("ended", t("远程 Studio 身份校验失败，请停止连接并检查设备。"));
+    }
+    performance.mark("reasonix:remote:ready");
+    performance.measure("reasonix:remote:authorize", "reasonix:remote:start", "reasonix:remote:authorized");
+    performance.measure("reasonix:remote:handshake", "reasonix:remote:authorized", "reasonix:remote:ready");
+    performance.measure("reasonix:remote:connect", "reasonix:remote:start", "reasonix:remote:ready");
+    const features = Array.isArray(ready.features) ? ready.features.filter((item): item is string => typeof item === "string") : [];
+    return { socket, channel, features };
+  } catch (error) {
+    try { socket.close(1000, "Handshake failed"); } catch { /* never opened */ }
+    if (error instanceof RemoteLinkError) throw error;
+    throw new RemoteLinkError("transient", error instanceof Error ? error.message : String(error));
+  }
 }
 
 export async function remoteHub(deviceId: string): Promise<HubPort> {
   const nativeFetch = globalThis.fetch.bind(globalThis);
-  const transport = await connect(deviceId, nativeFetch);
+  let first: RemoteConnection;
+  try {
+    first = await connect(deviceId, nativeFetch, true);
+  } catch (error) {
+    if (error instanceof RemoteLinkError && error.kind === "reauth") {
+      await signInAgain(deviceId, nativeFetch);
+      return new Promise<never>(() => {});
+    }
+    throw error;
+  }
+  const link = new RemoteLink(first, () => connect(deviceId, nativeFetch, false), announceClosed);
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init);
-    return new URL(request.url).origin === location.origin ? transport.fetch(request) : nativeFetch(request);
+    return new URL(request.url).origin === location.origin ? link.fetch(request) : nativeFetch(request);
   }) as typeof fetch;
   globalThis.EventSource = RemoteEventSource as unknown as typeof EventSource;
   return new SseHub();

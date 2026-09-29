@@ -45,11 +45,11 @@ describe("remote Studio binary framing", () => {
 
   it("announces a relay disconnect to the Web Studio shell", () => {
     let reason = "";
-    const stop = onRemoteConnectionEnded((value) => { reason = value; });
-    remoteCodec.announceClosed("Disconnected by device");
+    const stop = onRemoteConnectionEnded((end) => { reason = end.reason; });
+    remoteCodec.announceClosed({ kind: "ended", reason: "Disconnected by device" });
     stop();
     expect(reason).toBe("Disconnected by device");
-    expect(remoteConnectionEnded()).toBe(true);
+    expect(remoteConnectionEnded()).toEqual({ kind: "ended", reason: "Disconnected by device" });
   });
 
   it("starts polling after the host watermark instead of replaying restored history", async () => {
