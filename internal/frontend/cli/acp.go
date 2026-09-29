@@ -312,7 +312,7 @@ func (f *acpFactory) SessionConfigState(_ context.Context, p acp.SessionConfigSt
 	entryDescription := ""
 	if ok {
 		currentModel = entry.Name + "/" + entry.Model
-		entryDescription = entry.Name
+		entryDescription = entry.Label()
 	}
 	modelOptions, modelInfos := acpModelOptions(cfg)
 	if !hasModelOption(modelOptions, currentModel) {
@@ -459,12 +459,12 @@ func acpModelOptions(cfg *config.Config) ([]acp.SessionConfigSelectOption, []acp
 			options = append(options, acp.SessionConfigSelectOption{
 				Value:       ref,
 				Name:        ref,
-				Description: p.Name,
+				Description: p.Label(),
 			})
 			models = append(models, acp.ModelInfo{
 				ModelID:     ref,
 				Name:        ref,
-				Description: p.Name,
+				Description: p.Label(),
 			})
 		}
 	}

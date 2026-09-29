@@ -29,6 +29,7 @@ export type Port = {
   setProviderWebSearch(name: string, on: boolean): Promise<void>;
   setProviderThinking(name: string, on: boolean): Promise<void>;
   setProviderContinuation(name: string, mode: string): Promise<void>;
+  renameProvider(names: string[], displayName: string): Promise<void>;
 };
 
 // One account: every configured entry that answers on the same host.
@@ -38,6 +39,8 @@ export interface Account {
   host: string;
   // The config entry's own name, shown only when one host holds two accounts.
   hint: string;
+  // What the account is called when nobody has renamed it.
+  derived: string;
   byKind: Record<string, ProviderEntry>;
   kinds: string[];
 }
@@ -49,7 +52,7 @@ function groupAccounts(list: ProviderEntry[]): Account[] {
     const key = accountKey(host, p.keyEnv);
     let a = out.get(key);
     if (!a) {
-      a = { key, label: "", host, hint: p.name, byKind: {}, kinds: [] };
+      a = { key, label: "", host, hint: p.name, derived: "", byKind: {}, kinds: [] };
       out.set(key, a);
     }
     const kind = p.kind || "openai";
@@ -60,7 +63,11 @@ function groupAccounts(list: ProviderEntry[]): Account[] {
   }
   // Every door has to be in hand before the account can be named: the one the
   // user renamed is not always the first the config file lists.
-  for (const a of out.values()) a.label = accountLabel(a.host, Object.values(a.byKind));
+  for (const a of out.values()) {
+    const entries = Object.values(a.byKind);
+    a.label = accountLabel(a.host, entries);
+    a.derived = accountLabel(a.host, entries.map((e) => ({ ...e, displayName: undefined })));
+  }
   return disambiguate([...out.values()]);
 }
 
@@ -81,6 +88,11 @@ interface ProvidersProps {
 }
 
 const SEARCH_FROM = 6;
+// The kernel counts characters; maxLength counts UTF-16 units, so this can only
+// stop short of the kernel's limit, never past it.
+const DISPLAY_NAME_MAX = 64;
+
+const shownName = (a: Account) => Object.values(a.byKind).find((e) => e.displayName?.trim())?.displayName?.trim() ?? "";
 
 // A list of accounts beside the one being edited: picking a row is navigation,
 // and every field of the picked account is on screen without a second click.
@@ -91,6 +103,7 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
   const [busy, setBusy] = useState("");
   const [picked, setPicked] = useState("");
   const [q, setQ] = useState("");
+  const [renaming, setRenaming] = useState("");
   const order = useProviderOrder();
   const rows = useRef(new Map<string, HTMLButtonElement>());
   // The accounts that existed when an add began: the one that is new afterwards
@@ -131,6 +144,33 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
     }
   };
 
+  // An empty name, or the one it would be called anyway, clears the label so
+  // the account follows its derived name again.
+  const rename = async (a: Account, typed: string) => {
+    setRenaming("");
+    const value = typed.trim();
+    const next = value === a.derived ? "" : value;
+    if (next === shownName(a)) return;
+    const names = Object.values(a.byKind).map((e) => e.name);
+    setBusy(`rename:${a.key}`);
+    onFailed("");
+    try {
+      await port.renameProvider(names, next);
+      reload();
+      onChanged();
+    } catch (e) {
+      onFailed(reason(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const startRename = (key: string) => {
+    setAdding(false);
+    setPicked(key);
+    setRenaming(key);
+  };
+
   const move = (key: string, direction: -1 | 1) => {
     const next = moveAccount(order, accounts.map((a) => a.key), key, direction);
     if (!next) return;
@@ -158,12 +198,41 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
             const entries = Object.values(a.byKind);
             const inUse = entries.some((e) => e.inUse);
             const keyless = entries.every((e) => !e.hasKey);
+            if (renaming === a.key) {
+              return (
+                <div className="svcrow-wrap" data-selected="true" data-renaming="" key={a.key}>
+                  <input className="svcrow-name" autoFocus maxLength={DISPLAY_NAME_MAX} spellCheck={false}
+                    defaultValue={shownName(a) || a.derived} placeholder={a.derived}
+                    aria-label={t("重命名 {name}", { name: a.label })}
+                    title={t("回车保存，Esc 取消；留空恢复为「{name}」", { name: a.derived })}
+                    onFocus={(ev) => ev.currentTarget.select()}
+                    onBlur={(ev) => void rename(a, ev.currentTarget.value)}
+                    data-action-keydown="provider.rename" data-target={a.key}
+                    onKeyDown={(ev) => {
+                      if (ev.key === "Enter") {
+                        ev.preventDefault();
+                        ev.currentTarget.blur();
+                      } else if (ev.key === "Escape") {
+                        // Abandoning a rename is not closing the settings page.
+                        ev.stopPropagation();
+                        ev.currentTarget.value = shownName(a) || a.derived;
+                        ev.currentTarget.blur();
+                      }
+                    }} />
+                </div>
+              );
+            }
             return (
               <div className="svcrow-wrap" data-selected={!adding && a.key === selected} key={a.key}>
                 <button className="svcrow" data-action-click="provider.select" data-action-keydown="provider.move" data-target={a.key}
                   ref={(node) => { if (node) rows.current.set(a.key, node); else rows.current.delete(a.key); }}
                   aria-pressed={!adding && a.key === selected}
                   onKeyDown={(event) => {
+                    if (event.key === "F2") {
+                      event.preventDefault();
+                      startRename(a.key);
+                      return;
+                    }
                     if (!query && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
                       && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
                       event.preventDefault();
@@ -178,7 +247,11 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
                   <i className="pstate" data-state={inUse ? "use" : keyless ? "warn" : undefined}
                     title={t(inUse ? "正在用" : keyless ? "缺 key" : "")} />
                 </button>
-                {!query && shown.length > 1 && <span className="svcrow-order">
+                <span className="svcrow-order">
+                  <button data-action="provider.rename-start" data-target={a.key} disabled={busy !== ""}
+                    aria-label={t("重命名 {name}（F2）", { name: a.label })}
+                    title={t("重命名 {name}（F2）", { name: a.label })}
+                    onClick={() => startRename(a.key)}><StudioIcon name="edit" /></button>
                   {index > 0 && <button data-action="provider.move" data-target={a.key} data-value="up"
                     aria-label={t("上移 {name}（Alt+上方向键）", { name: a.label })}
                     title={t("上移 {name}（Alt+上方向键）", { name: a.label })}
@@ -187,7 +260,7 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
                     aria-label={t("下移 {name}（Alt+下方向键）", { name: a.label })}
                     title={t("下移 {name}（Alt+下方向键）", { name: a.label })}
                     onClick={() => move(a.key, 1)}><StudioIcon name="arrow" className="svcrow-arrow-down" /></button>}
-                </span>}
+                </span>
               </div>
             );
           })}
@@ -217,6 +290,7 @@ export function Providers({ port, onChanged, onFailed, protocol, onProtocol, act
             kind={protocol[current.key] ?? activeKindFor(current)}
             onProtocol={(k) => onProtocol(current, k)}
             onRemove={remove}
+            onRename={() => startRename(current.key)}
             declare={declare}
             onEdited={() => { reload(); onChanged(); }}
             onFailed={onFailed} />

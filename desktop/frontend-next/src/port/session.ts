@@ -214,6 +214,8 @@ export interface SessionStatus {
   // Absent unless the session's model declares a mode: its switch is not drawn.
   modes?: ModelMode[];
   modelRef?: string;
+  // The label the user gave modelRef's provider; absent when none is set.
+  providerDisplayName?: string;
   toolApprovalMode: ApprovalMode;
   autoApproveTools: boolean;
   bypass: boolean;

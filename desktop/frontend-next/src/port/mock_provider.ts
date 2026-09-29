@@ -122,6 +122,11 @@ export class MockProvider extends MockBoundary {
     this.sources = this.sources.map((p) => (p.name === name ? { ...p, continuation: mode } : p));
   }
 
+  async renameProvider(names: string[], displayName: string): Promise<void> {
+    const label = displayName.trim();
+    this.sources = this.sources.map((p) => (names.includes(p.name) ? { ...p, displayName: label || undefined } : p));
+  }
+
   async setProviderThinking(name: string, on: boolean): Promise<void> {
     this.sources = this.sources.map((p) => (p.name === name ? { ...p, sendsThinking: on } : p));
   }

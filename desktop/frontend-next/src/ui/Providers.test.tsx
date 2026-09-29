@@ -96,3 +96,75 @@ it("moves a focused service with Alt+Arrow and keeps focus on its row", async ()
   expect(rows().map((row) => row.querySelector(".nm")?.textContent)).toEqual(["alpha", "beta", "gamma"]);
   expect(document.activeElement).toBe(beta);
 });
+
+function drawRenamable(list: ProviderEntry[]) {
+  let current = list;
+  const port = {
+    providers: vi.fn(async () => current),
+    protocols: vi.fn(async () => []),
+    renameProvider: vi.fn(async (names: string[], displayName: string) => {
+      current = current.map((p) => (names.includes(p.name) ? { ...p, displayName: displayName || undefined } : p));
+    }),
+  } as unknown as Port & { renameProvider: ReturnType<typeof vi.fn> };
+  const onChanged = vi.fn();
+  render(<Providers port={port} onChanged={onChanged} onFailed={() => {}} protocol={{}}
+    onProtocol={() => {}} activeKindFor={(a) => a.kinds[0]} />);
+  return { port, onChanged };
+}
+
+const names = () => rows().map((row) => row.querySelector(".nm")?.textContent);
+const list = () => within(document.querySelector(".plist") as HTMLElement);
+
+it("renames an account from its row, relabelling every door and leaving names alone", async () => {
+  const doors = [
+    { ...entry("relay", "https://relay.example/v1"), keyEnv: "RELAY_KEY" },
+    { ...entry("relay-2", "https://relay.example/anthropic"), kind: "anthropic", keyEnv: "RELAY_KEY" },
+    entry("beta", "https://beta.example"),
+  ];
+  const { port, onChanged } = drawRenamable(doors);
+  await screen.findAllByText("beta.example");
+  await userEvent.click(list().getByRole("button", { name: /重命名 relay（F2）/ }));
+  const field = screen.getByRole("textbox", { name: /重命名 relay/ }) as HTMLInputElement;
+  expect(field.value).toBe("relay");
+  await userEvent.clear(field);
+  await userEvent.type(field, "  公司网关 {Enter}");
+  expect(port.renameProvider).toHaveBeenCalledWith(["relay", "relay-2"], "公司网关");
+  await screen.findByText("公司网关", { selector: ".nm" });
+  expect(names()).toEqual(["公司网关", "beta"]);
+  expect(within(detail()).getByRole("heading").textContent).toBe("公司网关");
+  expect(onChanged).toHaveBeenCalled();
+});
+
+it("an emptied name goes back to the derived one, and Escape changes nothing", async () => {
+  const { port } = drawRenamable([{ ...entry("alpha", "https://alpha.example"), displayName: "旧名字" }]);
+  await screen.findByText("旧名字", { selector: ".nm" });
+
+  const closes = vi.fn();
+  window.addEventListener("keydown", closes);
+  rows()[0].focus();
+  await userEvent.keyboard("{F2}");
+  await userEvent.type(screen.getByRole("textbox", { name: /重命名/ }), "别的{Escape}");
+  window.removeEventListener("keydown", closes);
+  expect(closes).not.toHaveBeenCalledWith(expect.objectContaining({ key: "Escape" }));
+  expect(port.renameProvider).not.toHaveBeenCalled();
+  expect(names()).toEqual(["旧名字"]);
+
+  await userEvent.click(within(detail()).getByRole("button", { name: /重命名 旧名字/ }));
+  const field = screen.getByRole("textbox", { name: /重命名/ }) as HTMLInputElement;
+  expect(field.value).toBe("旧名字");
+  expect(field.placeholder).toBe("alpha");
+  expect(field.maxLength).toBe(64);
+  await userEvent.clear(field);
+  await userEvent.keyboard("{Enter}");
+  expect(port.renameProvider).toHaveBeenCalledWith(["alpha"], "");
+  await screen.findByText("alpha", { selector: ".nm" });
+});
+
+it("saving the name it already has sends nothing", async () => {
+  const { port } = drawRenamable([entry("alpha", "https://alpha.example")]);
+  await screen.findAllByText("alpha.example");
+  await userEvent.click(list().getByRole("button", { name: /重命名 alpha（F2）/ }));
+  await userEvent.keyboard("{Enter}");
+  expect(port.renameProvider).not.toHaveBeenCalled();
+  expect(screen.queryByRole("textbox", { name: /重命名/ })).toBeNull();
+});

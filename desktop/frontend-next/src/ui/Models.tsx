@@ -33,7 +33,7 @@ export function groupVendors(models: ModelEntry[]): Vendor[] {
   // calling one of them something else is two names for one thing.
   for (const v of out.values()) {
     const entries = Object.values(v.byKind).flat();
-    v.label = accountLabel(v.host, entries.map((m) => ({ name: m.provider, preset: m.preset })));
+    v.label = accountLabel(v.host, entries.map((m) => ({ name: m.provider, preset: m.preset, displayName: m.displayName })));
   }
   return disambiguate([...out.values()]);
 }

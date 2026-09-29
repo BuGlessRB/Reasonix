@@ -13,3 +13,14 @@ it("groups the composer model menu by saved account order", () => {
   expect(items.map((item) => item.value).slice(0, 5))
     .toEqual([`__account:${accountKey("beta.example")}`, "beta/third", `__account:${accountKey("alpha.example")}`, "alpha/first", "alpha/second"]);
 });
+
+it("labels an account and its rows by the display name while refs stay on the config name", () => {
+  const models: ModelEntry[] = [
+    { ref: "relay/first", provider: "relay", displayName: "公司网关", vendor: "relay.example", model: "first", kind: "openai" },
+    { ref: "other/second", provider: "other", vendor: "other.example", model: "second", kind: "openai" },
+  ];
+  const items = modelMenu(models);
+  expect(items[0]).toMatchObject({ header: true, label: "公司网关", right: "relay.example" });
+  expect(items[1]).toMatchObject({ value: "relay/first", label: "first" });
+  expect(items[1].desc).toContain("公司网关");
+});

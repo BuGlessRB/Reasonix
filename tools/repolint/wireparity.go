@@ -22,6 +22,7 @@ const (
 	tsMcpFile      = "desktop/frontend-next/src/port/mcp.ts"
 	tsShellFile    = "desktop/frontend-next/src/port/shell.ts"
 	tsShareFile    = "desktop/frontend-next/src/port/share.ts"
+	tsProviderFile = "desktop/frontend-next/src/port/provider.ts"
 )
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
@@ -117,6 +118,10 @@ var mirroredWireTypes = []wireMirror{
 	{"internal/state/checkpoint/types.go", "RewindResult", tsSessionFile, "RewindResult"},
 	{"internal/contract/eventwire/wire.go", "ShellExecution", tsWireFile, "Execution"},
 	{"internal/contract/eventwire/workspace_lease.go", "WorkspaceLease", tsWireFile, "WorkspaceLease"},
+	// A source and a model as the pickers name them. A label the page cannot
+	// read puts the config name back on screen after the user renamed it.
+	{"internal/frontend/serve/providers.go", "providerView", tsProviderFile, "ProviderEntry"},
+	{"internal/frontend/serve/settings.go", "modelEntry", tsModelFile, "ModelEntry"},
 }
 
 type wireMirror struct {

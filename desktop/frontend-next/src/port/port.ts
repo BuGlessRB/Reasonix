@@ -310,6 +310,8 @@ export interface AgentPort {
   setProviderWebSearch(name: string, on: boolean): Promise<void>;
   setProviderThinking(name: string, on: boolean): Promise<void>;
   setProviderContinuation(name: string, mode: string): Promise<void>;
+  // Relabels the entries shown as one account; "" puts the derived name back.
+  renameProvider(names: string[], displayName: string): Promise<void>;
 
   // Whether the opening sequence still owes this machine a showing, and the
   // acknowledgement that closes it out.

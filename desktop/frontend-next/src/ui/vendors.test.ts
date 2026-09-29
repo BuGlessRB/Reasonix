@@ -40,6 +40,12 @@ describe("accountLabel", () => {
     expect(accountLabel("api.moonshot.cn", [{ name: "kimi-cn", preset: true }])).toBe("moonshot");
   });
 
+  it("puts a display name ahead of every name, curated or typed", () => {
+    const doors = [{ name: "deepseek", preset: true }, { name: "deepseek-anthropic", preset: true, displayName: " 公司账号 " }];
+    expect(accountLabel("api.deepseek.com", doors)).toBe("公司账号");
+    expect(accountLabel(host, [{ name: "Agnes", displayName: "   " }])).toBe("Agnes");
+  });
+
   it("finds the chosen name behind a door the config lists first", () => {
     const doors = [{ name: "apihub" }, { name: "Agnes" }];
     expect(accountLabel(host, doors)).toBe("Agnes");
@@ -56,5 +62,13 @@ describe("disambiguate", () => {
       { host: "h", label: "apihub", hint: "work" },
     ]);
     expect(two.map((v) => v.label)).toEqual(["apihub", "apihub · work"]);
+  });
+
+  it("leaves two accounts on one host alone once the user named them apart", () => {
+    const named = disambiguate([
+      { host: "h", label: "个人", hint: "apihub" },
+      { host: "h", label: "公司", hint: "apihub-2" },
+    ]);
+    expect(named.map((v) => v.label)).toEqual(["个人", "公司"]);
   });
 });

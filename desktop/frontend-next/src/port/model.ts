@@ -36,6 +36,8 @@ export interface ModelPrice {
 export interface ModelEntry {
   ref: string;
   provider: string;
+  // What the user renamed provider to; provider stays the identity.
+  displayName?: string;
   model: string;
   kind?: string;
   active?: boolean;

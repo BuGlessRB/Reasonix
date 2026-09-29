@@ -37,6 +37,9 @@ export class SseProvider extends SseBoundary {
     return this.post("/providers/continuation", { name, mode });
   }
 
+  renameProvider(names: string[], displayName: string) {
+    return this.post("/providers/display-name", { names, displayName });
+  }
   editProvider(edit: ProviderEdit) {
     return this.post("/providers/edit", edit);
   }
