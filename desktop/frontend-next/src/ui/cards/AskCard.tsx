@@ -6,6 +6,7 @@ import type { Item } from "../../state/session";
 import { answerSource } from "../source";
 import { useViewer } from "../../state/viewer";
 import { useIme } from "../ime";
+import { LazyMarkdown } from "../LazyMarkdown";
 
 const ADVANCE_MS = 220;
 
@@ -171,7 +172,7 @@ export function AskCard({ item, onAnswer }: Props) {
                   panes.current[i] = el;
                 }}
               >
-                <div className="ask-q">{q.prompt}</div>
+                <div className="ask-q"><LazyMarkdown text={q.prompt} /></div>
                 <div className="ask-hint">{t(q.multi ? "可多选" : "请选择一项")}</div>
                 <div className="opts" aria-label={q.prompt}>
                   {q.options.filter((o) => !isOtherOption(o.label)).map((o) => (
