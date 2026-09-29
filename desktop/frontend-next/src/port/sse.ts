@@ -6,6 +6,7 @@ import type { StoragePlan, StorageState } from "./storage";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import { host } from "./host";
 import { current } from "../i18n";
+import { openLiveStream } from "./livestream";
 
 // The running project is the default, so its requests stay the bare path they
 // have always been and only a cross-project read carries the folder.
@@ -626,10 +627,12 @@ export class SsePort extends SseBackup implements AgentPort {
     };
     // EventSource resumes on its own: it reconnects carrying the last id it
     // saw, and the server replays from there. Recovery here is for the frames
-    // shed without the connection ever dropping.
-    const es = new EventSource(this.base + "/events", { withCredentials: true });
-    es.onmessage = (m) => feed(m.data);
-    const detach = () => es.close();
+    // shed without the connection ever dropping, and a replacement stream for
+    // one that went silent without dropping resumes from the same cursor.
+    const detach = openLiveStream(
+      () => this.base + "/events" + (seen === null ? "" : `?lastEventId=${seen}`),
+      feed,
+    );
     if (bootstrap) void bootstrapFrom(bootstrap);
     return () => {
       live = false;
