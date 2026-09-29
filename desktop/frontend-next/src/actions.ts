@@ -91,6 +91,7 @@ export const ACTIONS: UIAction[] = [
   // header ask the same thing of the kernel, and which grant rides on
   // data-target, with "all" as the value that names none of them.
   { id: "permissions.revoke-session", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
+  { id: "permissions.revoke-remembered", kind: "kernel-mutation", target: "entity", proof: "authority-effect" },
 
   { id: "tool.image-open", kind: "view", target: "none", proof: "interaction" },
   { id: "tool.image-close", kind: "view", target: "none", proof: "interaction" },
