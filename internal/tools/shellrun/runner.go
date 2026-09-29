@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	fileenc "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/base/proc"
@@ -115,6 +116,7 @@ func RunForeground(ctx context.Context, req Request) Result {
 		pw := newProgressWriter(req.Progress, progressOutputMaxBytes, progressOutputTruncated)
 		pw.suppress = req.SuppressLine
 		writers = append(writers, pw)
+		defer pw.Flush()
 	}
 	// Stdout and Stderr must stay the *same* writer value: os/exec then hands the
 	// child a single pipe, so the two streams interleave in the order the child
@@ -142,7 +144,6 @@ func RunForeground(ctx context.Context, req Request) Result {
 		ShellPath:       req.ShellPath,
 		CommandPreview:  req.CommandPreview,
 	})
-
 	out := Result{
 		Combined:   collector.combinedString(),
 		OutputTail: collector.tailString(),
@@ -360,6 +361,7 @@ type progressWriter struct {
 	emit      func(string)
 	limit     int
 	forwarded int
+	accepted  int
 	marker    string
 	truncated bool
 	// suppress is a line the host appended to the command for its own use. The
@@ -367,6 +369,7 @@ type progressWriter struct {
 	// here rather than only from the finished output.
 	suppress string
 	held     []byte
+	pending  []byte
 }
 
 func newProgressWriter(emit func(string), limit int, marker string) *progressWriter {
@@ -389,19 +392,91 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 			return written, nil
 		}
 	}
-	remaining := max(0, w.limit-w.forwarded)
+	remaining := max(0, w.limit-w.accepted)
 	forward := min(len(p), remaining)
 	if forward > 0 {
-		w.emit(string(p[:forward]))
-		w.forwarded += forward
+		w.accepted += forward
+		w.writeDecoded(p[:forward])
 	}
-	if forward < len(p) {
-		w.truncated = true
-		if w.marker != "" {
-			w.emit(w.marker)
-		}
+	if forward < len(p) && !w.truncated {
+		w.flushPending(fileenc.Cut{Tail: true})
+		w.truncate()
 	}
 	return written, nil
+}
+
+// Flush releases the last line after the child exits. Until then, non-ASCII
+// bytes stay together so a code-page character split across pipe reads is not
+// mistaken for invalid UTF-8 and permanently recorded as a replacement rune.
+func (w *progressWriter) Flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.truncated {
+		w.flushPending(fileenc.Cut{})
+	}
+}
+
+func (w *progressWriter) writeDecoded(p []byte) {
+	w.pending = append(w.pending, p...)
+	for !w.truncated {
+		end := bytes.IndexByte(w.pending, '\n')
+		if end < 0 {
+			break
+		}
+		w.emitDecoded(w.pending[:end+1], fileenc.Cut{})
+		w.pending = w.pending[end+1:]
+	}
+	if w.truncated {
+		w.pending = nil
+		return
+	}
+	// ASCII has the same meaning in UTF-8 and the Windows code pages. Forward
+	// it immediately so progress without a newline (dots, prompts) stays live.
+	safe := 0
+	for safe < len(w.pending) && w.pending[safe] < utf8.RuneSelf {
+		safe++
+	}
+	if safe > 0 {
+		w.emitDecoded(w.pending[:safe], fileenc.Cut{})
+		w.pending = w.pending[safe:]
+	}
+}
+
+func (w *progressWriter) flushPending(cut fileenc.Cut) {
+	if len(w.pending) > 0 {
+		w.emitDecoded(w.pending, cut)
+		w.pending = nil
+	}
+}
+
+func (w *progressWriter) emitDecoded(data []byte, cut fileenc.Cut) {
+	decoded := decodeShellOutput(data, cut)
+	remaining := max(0, w.limit-w.forwarded)
+	clipped := len(decoded) > remaining
+	if clipped {
+		end := remaining
+		for end > 0 && !utf8.RuneStart(decoded[end]) {
+			end--
+		}
+		decoded = decoded[:end]
+	}
+	if decoded != "" {
+		w.forwarded += len(decoded)
+		w.emit(decoded)
+	}
+	if clipped {
+		w.truncate()
+	}
+}
+
+func (w *progressWriter) truncate() {
+	if w.truncated {
+		return
+	}
+	w.truncated = true
+	if w.marker != "" {
+		w.emit(w.marker)
+	}
 }
 
 // withoutSuppressed drops whole lines carrying the suppressed text and holds
