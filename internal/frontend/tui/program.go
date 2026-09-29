@@ -389,10 +389,11 @@ func (m *model) commit() tea.Cmd {
 	return m.publish(out)
 }
 
-// hidden is a row the configuration keeps off the screen. It still folds into
-// the transcript: a later frame of the same request restates it in place.
+// hidden is a row kept off the screen: one the configuration hides, or task
+// bookkeeping that settled cleanly. It still folds into the transcript: a later
+// frame of the same request restates it in place.
 func (m *model) hidden(it *Item) bool {
-	return it.Kind == ItemUsage && m.opts.HideTurnUsage
+	return (it.Kind == ItemUsage && m.opts.HideTurnUsage) || (it.bookkeeping() && !it.Running)
 }
 
 // settledChunk draws the part of a streaming answer that has become final

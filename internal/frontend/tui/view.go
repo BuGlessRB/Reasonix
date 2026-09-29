@@ -98,7 +98,7 @@ func (m *model) liveLinesRail(hideRail bool) []string {
 				out = append(out, strings.Split(renderSayPart(rest, shown == 0, m.width, hideRail), "\n")...)
 			}
 		case (it.Kind == ItemApproval || it.Kind == ItemAsk) && it.Verdict == "":
-		case m.hidden(it):
+		case m.hidden(it) || it.bookkeeping():
 		default:
 			if r := renderItem(it, m.width, 0, hideRail); r != "" {
 				out = append(out, strings.Split(r, "\n")...)
