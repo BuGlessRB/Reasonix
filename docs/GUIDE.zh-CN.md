@@ -615,6 +615,7 @@ CLI/TUI 文本输入可通过 `[ui].cursor_shape` 设置光标形状，支持 `u
 | `Ctrl+Y` | 切换 YOLO 开/关 | 关闭 YOLO 时会尽量恢复之前的 Ask/Auto 基底。终端若能转发 Command/Super，也可能识别 `Cmd+Y`，但稳定可用的是 `Ctrl+Y`。 |
 | `--yolo`、`--dangerously-skip-permissions` | 启动时进入 YOLO | 和 `Ctrl+Y` 是同一个运行时模式。 |
 | `[ui].commandmode = "vi"` | 让输入框进入 vi 命令模式 | 仅限用户全局配置；项目 `reasonix.toml` 无法设置，克隆的仓库因此不会改写用户的按键。无论回合是否在运行，`Esc` 都进入命令模式；只有 `Ctrl+C` 会中断。`Ctrl+C` 在提示符非空时会清空输入框并退出 shell 模式，vi 模式与默认模式一致；vi 模式下会先把去掉首尾空白的草稿存入提示历史，可用 `Up` 召回。未设置或 `""` 保持默认，即 `Esc` 中止正在运行的回合。页脚会显示当前的输入模式：命令模式为 `NORMAL`，否则为 `INSERT`。 |
+| `auto_submit = true` | 最后一题作答后直接提交多题问询 | 顶层配置；仅限用户全局，项目 `reasonix.toml` 无法设置；默认 `false`。问询卡片会隐藏 Submit 标签页：作答一题后跳到下一道未作答的问题；作答最后一题且再无未作答时立即提交整批；若有问题被跳过则跳回该题。未设置时保留 Submit 标签页及其显式 `Enter`。 |
 | `/preset [light|balanced|delivery]` | 查看或切换当前会话的执行设定 | `/work-mode` 与 `/profile` 是兼容别名（`economy` → `light`）。切换就地更新执行设定、不重建 Controller；有回合、审批或后台任务时会拒绝。 |
 | `/theme [auto|light|dark|style]` | 查看或切换 CLI 主题 | 不带参数会列出背景模式和命名配色。选择会保存到用户配置；单次运行可用 `REASONIX_THEME` 和 `REASONIX_THEME_STYLE` 覆盖。 |
 | `Ctrl+O` | 切换详细 reasoning 显示 | 也可通过 `/verbose` 使用。 |

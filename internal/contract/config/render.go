@@ -51,6 +51,9 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		b.WriteString("# language      = \"zh\"   # ui/model language; empty = auto-detect from $LANG / $REASONIX_LANG\n")
 	}
 	if scope != RenderScopeProject {
+		if c.AutoSubmit {
+			b.WriteString("auto_submit = true   # CLI ask: commit a multi-question batch once its last question is answered; user/global only\n")
+		}
 		fmt.Fprintf(&b, "credentials_store = %q   # legacy compatibility; provider keys are saved in Reasonix's global .env\n", normalizeCredentialsStore(c.CredentialsStore))
 	}
 	b.WriteString("\n")

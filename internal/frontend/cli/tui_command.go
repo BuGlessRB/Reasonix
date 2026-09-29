@@ -123,6 +123,7 @@ func runTUI(args []string, version string) int {
 		PickAmong:     ambiguousSessionPaths(ambiguous),
 		Inline:        *f.inline,
 		HideTurnUsage: cfg != nil && !cfg.UI.ShowTurnUsage,
+		AutoSubmit:    cfg != nil && cfg.AutoSubmit,
 		CommandMode:   cfg != nil && cfg.UICommandMode(),
 		Statusline:    statuslineRunner(cfg),
 		YoloConfirmed: config.YoloAcknowledged(home),

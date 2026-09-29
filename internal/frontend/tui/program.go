@@ -34,6 +34,9 @@ type Options struct {
 	Inline bool
 	// HideTurnUsage keeps each request's token and cost receipt off the transcript.
 	HideTurnUsage bool
+	// AutoSubmit commits a multi-question ask once its last question is
+	// answered, instead of showing the Submit tab.
+	AutoSubmit bool
 	// CommandMode gives the composer a vi command mode: Esc enters command
 	// mode, a running turn or not, and only Ctrl+C interrupts.
 	CommandMode bool

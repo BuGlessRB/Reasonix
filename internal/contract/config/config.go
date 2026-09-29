@@ -49,6 +49,9 @@ type Config struct {
 	Serve            ServeConfig         `toml:"serve"`
 	Secrets          SecretsConfig       `toml:"secrets"`
 	Remote           RemoteConfig        `toml:"remote"`
+	// AutoSubmit commits a multi-question ask once its last question is answered,
+	// instead of showing the Submit tab. User/global only; a repo cannot set it.
+	AutoSubmit bool `toml:"auto_submit"`
 	// Storage relocates the movable roots, keyed by RootID. User/global only.
 	Storage map[string]string `toml:"storage"`
 
