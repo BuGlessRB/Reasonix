@@ -651,6 +651,9 @@ func displayPath(p string) string {
 // Project memory is a separate concern — the in-session `/init` skill generates
 // AGENTS.md (see initHint).
 func setupConfig(args []string) int {
+	if code, ok := setupArgsVerdict(args, os.Stdout, os.Stderr); !ok {
+		return code
+	}
 	t := resolveSetupTargets(args)
 	path := t.config
 	if _, err := os.Stat(path); err == nil {
