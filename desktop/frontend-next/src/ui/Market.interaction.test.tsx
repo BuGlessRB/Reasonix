@@ -93,6 +93,19 @@ describe("market list", () => {
     expect(onViewInstalled).toHaveBeenCalledWith("plugin", "manifest-kit");
   });
 
+  it("opens an installed theme package from the market outcome", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    const onViewInstalled = vi.fn();
+    render(<Market port={port} onInstalled={() => {}} onViewInstalled={onViewInstalled} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /dusk-harbor/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "查看将安装的内容" }));
+    await userEvent.click(screen.getByRole("button", { name: "安装" }));
+    await userEvent.click(await screen.findByRole("button", { name: "查看已安装能力" }));
+
+    expect(onViewInstalled).toHaveBeenCalledWith("plugin", "dusk-harbor");
+  });
+
   it("installs an unpinned package only on trust, through the same preview", async () => {
     const port = new MockPort() as unknown as AgentPort;
     const plan = vi.spyOn(port, "planMarket");
