@@ -331,6 +331,7 @@ type SessionPersistence interface {
 // resolving @-references before submission — including what the composer can
 // still offer to complete while the line is being typed.
 type Input interface {
+	SubmitHTTPOptions(input string, opts SubmitOptions)
 	Compose(text string) string
 	ComposeSynthetic(text string) string
 	ResolveRefs(ctx context.Context, line string) (block string, errs []string)

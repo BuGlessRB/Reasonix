@@ -193,7 +193,7 @@ func TestEnterSubmitsWhenIdleAndQueuesWhileRunning(t *testing.T) {
 	run(m, press(m, "ctrl+s"))
 	calls := strings.Join(k.seen(), "\n")
 	for _, want := range []string{
-		`POST /submit {"input":"hello"}`,
+		`POST /submit {"input":"hello","refuseUnknownSlash":true}`,
 		`POST /inbox/items {"input":"and tests","intent":"followup"}`,
 		`POST /inbox/items {"input":"stop, use make","intent":"steer"}`,
 	} {
@@ -253,7 +253,7 @@ func TestLargePasteFoldsAndExpandsOnSend(t *testing.T) {
 	}
 	run(m, press(m, "enter"))
 	raw, _ := json.Marshal(map[string]string{"input": big})
-	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, string(raw)) {
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, strings.TrimSuffix(string(raw), "}")) {
 		t.Fatalf("the paste did not go whole:\n%s", calls)
 	}
 }
@@ -455,7 +455,7 @@ func TestPastedImageSendsItsReference(t *testing.T) {
 		t.Fatalf("composer = %q", got)
 	}
 	run(m, press(m, "enter"))
-	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, `{"input":"what is this @.reasonix/attachments/shot.png"}`) {
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, `{"input":"what is this @.reasonix/attachments/shot.png",`) {
 		t.Fatalf("submit missing the reference:\n%s", calls)
 	}
 }

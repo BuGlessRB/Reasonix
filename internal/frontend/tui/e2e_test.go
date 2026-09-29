@@ -187,3 +187,45 @@ func dump(tr *tui.Transcript) string {
 	}
 	return b.String()
 }
+
+// A slash command no registry answers stays on this screen: the kernel names
+// it unknown and the model never sees the line.
+func TestUnknownSlashCommandNeverReachesTheModel(t *testing.T) {
+	c := inProcessKernel(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	updates := c.Subscribe(ctx)
+	if err := c.Submit(ctx, "/definitely-not-a-command"); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	for {
+		var u tui.Update
+		select {
+		case u = <-updates:
+		case <-ctx.Done():
+			t.Fatal("no unknown-command notice arrived")
+		}
+		if u.Event.Kind == "turn_started" {
+			t.Fatalf("an unknown slash command started a turn: %+v", u.Event)
+		}
+		if u.Event.Kind == "notice" && u.Event.Code == "unknown_command" {
+			if !strings.Contains(u.Event.Text, "/definitely-not-a-command") {
+				t.Fatalf("notice %q does not name the command", u.Event.Text)
+			}
+			break
+		}
+	}
+	s, err := c.Status(ctx)
+	if err != nil || s.Running {
+		t.Fatalf("Status running=%v err=%v", s.Running, err)
+	}
+	history, err := c.History(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range history {
+		if strings.Contains(m.Content, "definitely-not-a-command") {
+			t.Fatalf("the line reached the conversation: %+v", m)
+		}
+	}
+}
