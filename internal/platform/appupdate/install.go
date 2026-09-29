@@ -14,10 +14,17 @@ import (
 	"reasonix/internal/platform/update"
 )
 
-// installTimeout bounds the whole move. It is generous because the artifact is
-// large and a CN route to the CDN can be slow; a caller that gives up leaves a
-// verified cache to resume from.
+// installTimeout bounds installing a release that is already verified.
 const installTimeout = 30 * time.Minute
+
+// prepareTimeout bounds fetching one. A dead connection is caught far sooner by
+// the stall timeout, so this only ends a download still making progress, and
+// what it received stays on disk for the next attempt to resume.
+const prepareTimeout = 2 * time.Hour
+
+// stallTimeout is how long a full download may receive nothing before its
+// connection is dropped and the download resumed on a new one.
+const stallTimeout = 30 * time.Second
 
 // What a caller tells apart. Each is a different thing to do about it: name a
 // version, install this build somewhere the updater recognizes, wait, or start
@@ -123,7 +130,7 @@ func (c *capability) StartInstall(install update.Install, target string) error {
 }
 
 func (c *capability) prepare(install update.Install, target string) {
-	ctx, cancel := context.WithTimeout(context.Background(), installTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), prepareTimeout)
 	defer cancel()
 	mv, err := c.stage(ctx, install, target)
 	if err != nil {
@@ -191,7 +198,11 @@ func (c *capability) pinFor(target string) (func(), error) {
 }
 
 func failed(target string, err error) update.Progress {
-	return update.Progress{Version: target, Phase: update.PhaseFailed, Err: err.Error(), Code: failureCode(err)}
+	p := update.Progress{Version: target, Phase: update.PhaseFailed, Err: err.Error(), Code: failureCode(err)}
+	if full := (*fullDownloadError)(nil); errors.As(err, &full) {
+		p.DeltaSkipped = full.skipped
+	}
+	return p
 }
 
 // stage fetches and verifies target and returns the act that installs it.
@@ -220,7 +231,8 @@ func (c *capability) stage(ctx context.Context, install update.Install, target s
 	if _, ok := m.Asset(); !ok {
 		return nil, failAs(FailNoPackage, fmt.Errorf("appupdate: %s has no installable package for %s; download it from %s", target, update.CurrentPlatform(), m.DownloadPage))
 	}
-	if h, ok := c.tryDelta(ctx, install, target, dir, m); ok {
+	h, err := c.tryDelta(ctx, install, target, dir, m)
+	if err == nil {
 		mv.apply = func(context.Context) error {
 			self, err := os.Executable()
 			if err != nil {
@@ -230,9 +242,13 @@ func (c *capability) stage(ctx context.Context, install update.Install, target s
 		}
 		return mv, nil
 	}
-	cached, err := u.DownloadManifest(ctx, m, c.report(target))
+	skipped := ""
+	if !errors.Is(err, errNoDelta) {
+		skipped = deltaCode(err)
+	}
+	cached, err := u.DownloadManifest(ctx, m, c.report(target, skipped))
 	if err != nil {
-		return nil, err
+		return nil, &fullDownloadError{skipped: skipped, err: err}
 	}
 	mv.apply = func(ctx context.Context) error {
 		return c.applyDownloaded(ctx, install, target, dir, cached)
@@ -249,7 +265,7 @@ func (c *capability) stageNativePackage(ctx context.Context, cacheDir, target st
 	if err != nil {
 		return nil, failAs(FailDownload, err)
 	}
-	cached, err := u.DownloadManifest(ctx, m, c.report(target))
+	cached, err := u.DownloadManifest(ctx, m, c.report(target, ""))
 	if err != nil {
 		return nil, err
 	}
@@ -273,20 +289,32 @@ func (c *capability) handOver(ctx context.Context) {
 	c.opts.Owner.EndApplication(ctx)
 }
 
-func (c *capability) report(target string) update.Report {
+// report narrates a full download; deltaSkipped is why an offered delta was
+// not used, carried on every frame so a panel opened mid-download can say so.
+func (c *capability) report(target, deltaSkipped string) update.Report {
 	var total int64
 	return update.Report{
 		Bytes: func(received, size int64) {
 			total = size
-			c.install.set(update.Progress{Version: target, Phase: update.PhaseDownloading, Received: received, Total: size})
+			c.install.set(update.Progress{Version: target, Phase: update.PhaseDownloading, Received: received, Total: size, DeltaSkipped: deltaSkipped})
 		},
 		Phase: func(phase string) {
 			if phase != update.PhaseDownloading {
-				c.install.set(update.Progress{Version: target, Phase: phase, Received: total, Total: total})
+				c.install.set(update.Progress{Version: target, Phase: phase, Received: total, Total: total, DeltaSkipped: deltaSkipped})
 			}
 		},
 	}
 }
+
+// fullDownloadError is a full download that failed after a delta was
+// abandoned, so the failure still says why the delta was not used.
+type fullDownloadError struct {
+	skipped string
+	err     error
+}
+
+func (e *fullDownloadError) Error() string { return e.err.Error() }
+func (e *fullDownloadError) Unwrap() error { return e.err }
 
 // updater names which artifact this install can apply. An empty kind resolves
 // the portable asset; KindDeb resolves the package channel.
@@ -309,5 +337,6 @@ func (c *capability) updater(target, cacheDir, kind string) (*update.Updater, er
 		// worst (#6005), and a 403 there looks like "no versions" to the panel.
 		UserAgent:      fmt.Sprintf("Reasonix-Studio/%s (%s/%s)", c.opts.Running, goruntime.GOOS, goruntime.GOARCH),
 		AttemptTimeout: 5 * time.Second,
+		StallTimeout:   stallTimeout,
 	}), nil
 }

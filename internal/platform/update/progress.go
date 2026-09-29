@@ -26,6 +26,9 @@ type Progress struct {
 	Total    int64  `json:"total"`
 	Err      string `json:"err,omitempty"`
 	Code     string `json:"code,omitempty"` // why a failed move failed, as a dotted code
+	// DeltaSkipped is why an offered chunked update was abandoned for the full
+	// package, as a dotted code; empty when none was offered or it was used.
+	DeltaSkipped string `json:"delta_skipped,omitempty"`
 }
 
 // Running reports whether an install is under way, which is the one thing a

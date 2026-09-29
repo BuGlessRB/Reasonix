@@ -64,6 +64,23 @@ describe("the version panel", () => {
     expect(port.restartToVersion).toHaveBeenCalledWith("2.21.0", false);
   });
 
+  it("says a move is fetching the full package, and why, when the delta was given up", async () => {
+    const port = portAt({ version: "2.21.0", phase: "downloading", received: 1024, total: 4096, delta_skipped: "update.delta.not_swappable" });
+    render(<Versions port={port} />);
+    const line = await screen.findByText(/^下载完整安装包/);
+    expect(line.getAttribute("title")).toBe("安装目录无法就地替换文件，本次改为下载完整安装包。");
+    const described = document.getElementById(line.getAttribute("aria-describedby") ?? "");
+    expect(described?.textContent).toBe("安装目录无法就地替换文件，本次改为下载完整安装包。");
+  });
+
+  it("keeps the plain download line when no delta was given up", async () => {
+    const port = portAt({ version: "2.21.0", phase: "downloading", received: 1024, total: 4096 });
+    render(<Versions port={port} />);
+    const line = await screen.findByText(/^下载中/);
+    expect(line.getAttribute("title")).toBeNull();
+    expect(line.getAttribute("aria-describedby")).toBeNull();
+  });
+
   it("explains a move that did not land by its code, with the way out", async () => {
     const port = portAt({ version: "2.21.0", phase: "error", received: 0, total: 0, code: "update.not_applied", err: "update: set aside app.exe: access denied" });
     render(<Versions port={port} />);

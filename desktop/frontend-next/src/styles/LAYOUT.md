@@ -779,6 +779,26 @@ what exists.
 - Remove is the one irreversible action in a row, so it does not look like the
   other buttons and appears only on hover.
 
+## Version list
+
+- The list is one grid and each row a subgrid of it, so version, description,
+  date and action are columns every row shares: a date lines up with the dates
+  around it however long the status beside it is.
+- Measuring in script would lag a frame behind every progress update.
+- The action column is the only one that shrinks below its content: a long
+  action ellipsizes rather than pushing the date or overflowing the card.
+- Below 600px of list there is no action column. A status that stays on screen
+  (`data-keep`: downloading, ready) takes a second line of its own: a progress
+  figure cut to "Download…" says nothing.
+- A hover-only action is transparent but still has a width; as a column it
+  starved the description to nothing. Below 600px it is laid over the row's end
+  and hides the description and date while shown, on hover or keyboard focus.
+- Without hover such an action is always visible, so it takes the second line.
+- Below 600px the version column drops its 104px floor for its content's width,
+  and the description keeps at least its longest word and wraps.
+- A phone's settings sheet is the screen's width; a description cut to one
+  glyph and an ellipsis reads as nothing.
+
 ## Adding a source
 
 - Paste, confirm, then the result. Three stages share one place through

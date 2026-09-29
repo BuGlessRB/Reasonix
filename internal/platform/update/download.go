@@ -2,8 +2,12 @@ package update
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // Why a download did not produce a verified cache, told apart because each asks
@@ -97,7 +101,7 @@ func (u *Updater) DownloadManifest(ctx context.Context, m *Manifest, r Report) (
 	}
 	t := u.transport()
 	r.phase(PhaseDownloading)
-	data, err := t.DownloadFrom(ctx, asset.Sources(), asset.Size, r.Bytes)
+	data, err := u.fetchArtifact(ctx, t, asset, r.Bytes)
 	if err != nil {
 		return Cached{}, fmt.Errorf("%w: %w", ErrFetch, err)
 	}
@@ -147,5 +151,60 @@ func (u *Updater) transport() Transport {
 		Fallback:       u.opts.Fallback,
 		UserAgent:      u.opts.UserAgent,
 		AttemptTimeout: u.opts.AttemptTimeout,
+		StallTimeout:   u.opts.StallTimeout,
 	}
+}
+
+// fetchArtifact downloads through a partial file in the cache, so an attempt
+// that times out, or a process that restarts, resumes rather than starting
+// over. The partial is named by the digest it must end with, so one left by
+// another release is never resumed into this one, and it is removed once
+// complete: from then on the cache, not the partial, holds the release.
+func (u *Updater) fetchArtifact(ctx context.Context, t Transport, asset Asset, onProgress ProgressFunc) ([]byte, error) {
+	if u.opts.CacheDir == "" || !isSHA256Hex(asset.SHA256) {
+		return t.DownloadFrom(ctx, asset.Sources(), asset.Size, onProgress)
+	}
+	if err := os.MkdirAll(u.opts.CacheDir, 0o700); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrStore, err)
+	}
+	name := partialPrefix + strings.ToLower(asset.SHA256) + partialSuffix
+	clearPartials(u.opts.CacheDir, name)
+	partial := filepath.Join(u.opts.CacheDir, name)
+	if err := t.DownloadFile(ctx, asset.Sources(), asset.Size, partial, onProgress); err != nil {
+		return nil, err
+	}
+	defer os.Remove(partial)
+	data, err := os.ReadFile(partial)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrStore, err)
+	}
+	return data, nil
+}
+
+const (
+	partialPrefix = "partial-"
+	partialSuffix = ".download"
+)
+
+// clearPartials removes every partial download but keep: only one release is
+// ever being fetched, and an abandoned one is dead weight on the disk.
+func clearPartials(dir, keep string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		n := e.Name()
+		if n != keep && strings.HasPrefix(n, partialPrefix) && strings.HasSuffix(n, partialSuffix) {
+			_ = os.Remove(filepath.Join(dir, n))
+		}
+	}
+}
+
+func isSHA256Hex(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(s)
+	return err == nil
 }

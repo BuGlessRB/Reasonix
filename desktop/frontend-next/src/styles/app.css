@@ -3916,7 +3916,7 @@
     padding: 11px 14px; border: 1px solid var(--hair); border-radius: var(--r-md); background: var(--overlay);
   }
 
-  .vers { display: flex; flex-direction: column; gap: 11px }
+  .vers { display: flex; flex-direction: column; gap: 11px; container: versions / inline-size }
   .vnow { display: flex; align-items: baseline; gap: 9px }
   .vnow .cur { font: var(--w-semi) var(--fs-display)/1 var(--mono); letter-spacing: .01em; color: var(--text) }
 
@@ -3927,27 +3927,44 @@
   }
 
   .vers .find .acts { display: flex; gap: 8px; margin: 8px 0 0; align-items: center }
-  .vlist { display: flex; flex-direction: column; margin-top: 3px }
+  .vlist {
+    display: grid; margin-top: 3px; column-gap: 10px;
+    grid-template-columns: minmax(104px, max-content) minmax(0, 1fr) max-content minmax(0, max-content);
+  }
 
   .vrow {
-    display: flex; align-items: baseline; gap: 10px; padding: 9px 12px;
-    border-top: 1px solid var(--hair);
+    grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline;
+    padding: 9px 12px; border-top: 1px solid var(--hair);
     animation: card var(--t-card) var(--ease-out) both;
   }
   .vrow:last-of-type { border-bottom: 1px solid var(--hair) }
   .vrow[data-on] { box-shadow: inset 2px 0 0 var(--accent); background: var(--accent-wash) }
-  .vrow .nm { flex: none; min-width: 104px; font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--muted) }
+  .vrow .nm { grid-column: 1; font: var(--w-reg) var(--fs-ui) var(--mono); color: var(--muted) }
 
   .vrow[data-on] .nm { font-weight: var(--w-med); color: var(--text) }
   .vrow[data-on] .sc { color: var(--muted) }
   .vrow[data-side="ahead"] .nm { color: var(--text) }
   .vrow[data-side="past"] .nm, .vrow[data-side="past"] .ds { color: var(--faint) }
-  .vrow .ds { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  .vrow .ds { grid-column: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--muted) }
-  .vrow .sc { margin-left: auto; flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
+  .vrow .sc { grid-column: 3; justify-self: end; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
 
-  .vrow .sa { margin-left: 10px; flex: none; opacity: 0; transition: opacity var(--t-line) var(--ease-out) }
+  .vrow .sa {
+    grid-column: 4; justify-self: start; max-width: 100%; margin-left: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    opacity: 0; transition: opacity var(--t-line) var(--ease-out);
+  }
   .vrow:hover .sa, .vrow .sa:focus-visible, .vrow .sa[data-keep] { opacity: 1 }
+  @container versions (max-width: 600px) {
+    .vlist { grid-template-columns: max-content minmax(min-content, 1fr) max-content }
+    .vrow { position: relative }
+    .vrow .ds { white-space: normal }
+    .vrow .sa { grid-column: 1 / -1; grid-row: 2; margin-top: 4px }
+    @media (hover: hover) {
+      .vrow .sa:not([data-keep]) { grid-area: auto; position: absolute; right: 12px; top: 50%; translate: 0 -50%; margin: 0; max-width: 62% }
+      .vrow:has(> .sa:not([data-keep])):is(:hover, :focus-within) :is(.ds, .sc) { visibility: hidden }
+    }
+  }
   @media (hover: none) { .vrow .sa { opacity: 1 } }
 
   .find .lnk { margin-left: 6px }

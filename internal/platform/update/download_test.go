@@ -1,6 +1,7 @@
 package update
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"aead.dev/minisign"
 
@@ -86,8 +88,11 @@ func serveJSON(t *testing.T, v any) http.HandlerFunc {
 	return serveBytes(body)
 }
 
+// serveBytes honours Range, as the mirror and GitHub both do.
 func serveBytes(body []byte) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(body) }
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(body))
+	}
 }
 
 func (rs *releaseServer) updater(t *testing.T, current string) *Updater {

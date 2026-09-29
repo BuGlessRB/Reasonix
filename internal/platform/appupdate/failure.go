@@ -21,6 +21,17 @@ const (
 	FailUnknown    = "update.failed"
 )
 
+// Why an offered chunked update was abandoned for the full package. None is a
+// failure of the move; each names what would let the next one take the delta.
+const (
+	DeltaNotSwappable = "update.delta.not_swappable"
+	DeltaFetchFailed  = "update.delta.fetch_failed"
+	DeltaTimedOut     = "update.delta.timed_out"
+	DeltaMismatch     = "update.delta.mismatch"
+	DeltaDisk         = "update.delta.disk"
+	DeltaFailed       = "update.delta.failed"
+)
+
 type stepError struct {
 	code string
 	err  error
