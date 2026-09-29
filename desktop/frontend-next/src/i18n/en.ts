@@ -909,7 +909,7 @@ export const EN: Record<string, string> = {
 
   // ── 卡片 ─────────────────────────────────────────────────────────
   "将工作区与对话回退至该消息之前": "Take the workspace and the conversation back to before this message",
-  "↩ 回到这里": "↩ Back to here",
+  "回到这里": "Back to here",
   "按技能 {name} 的设定运行的子代理": "A subagent running under the {name} skill's settings",
   "外部服务 {name} 提供的工具": "A tool provided by the external service {name}",
   "这次调用解析到的能力目录条目": "The capability catalogue entry this call resolved to",

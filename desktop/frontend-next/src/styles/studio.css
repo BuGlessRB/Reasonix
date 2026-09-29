@@ -857,11 +857,11 @@ body { background: var(--page) !important; }
 .flow .call[data-k="me"]:hover { background: transparent; border-color: transparent; }
 .flow .call[data-k="me"]::before { display: none; }
 .flow .call[data-k="me"] > .c { width: auto; max-width: 70%; padding: 0; }
-.flow .call[data-k="me"] .user-hl { min-height: 0; margin: 0 3px 4px; justify-content: flex-end; }
+.flow .call[data-k="me"] .user-hl { min-height: 0; margin: 0 3px 4px; justify-content: flex-end; flex-wrap: nowrap; contain: inline-size; }
 .flow .call[data-k="me"] .user-hl > .nm { display: none; }
 .flow .call[data-k="me"] .out { margin-top: 0; }
 .flow .call[data-k="me"] .out .txt {
-  padding: 12px 15px; border: 1px solid var(--border); border-radius: 12px;
+  margin-inline-start: auto; padding: 12px 15px; border: 1px solid var(--border); border-radius: 12px;
   background: var(--raised); box-shadow: inset 0 1px rgb(255 255 255 / .024);
   color: var(--text); font-family: var(--ui); font-size: var(--read); font-weight: var(--w-reg); line-height: 1.72;
   letter-spacing: 0; -webkit-font-smoothing: antialiased;

@@ -404,6 +404,14 @@ rules are written in.
 - `[data-k="me"]` opens a turn. Scrolling back, it is the only anchor, and it
   used to be as light as a tool call's header. The turn number is deliberately
   absent: the rewind entry is on the card, so there is no number to match by eye.
+- The bubble sizes the card; the controls row above it does not.
+  `contain: inline-size` keeps the row out of the card's width, and
+  `margin-inline-start: auto` holds the bubble's right edge on the column's.
+- When the labels need more room than the bubble, the controls drop to icons
+  and keep their names, hints and focus. Fit is measured (`labelfit.ts`).
+- No container-query breakpoint decides it: the labels' width moves with the
+  language and the marks beside them, so any fixed width is wrong for a row.
+- Icons wider than the bubble overflow to the left, where the free space is.
 - `[data-k="host"]` is what the host did itself. A transcript has three authors —
   you, the model, the host — and `data-k` only knows tool names, so the host's
   cards landed on the default grey beside an uncategorised tool. A dashed line is
