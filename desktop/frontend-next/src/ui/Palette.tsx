@@ -11,6 +11,8 @@ export interface Command {
   label: string;
   icon: StudioIconName;
   keywords: string;
+  // The shortcut that does the same thing, printed where "操作" would be.
+  keys?: string;
   run: () => void;
 }
 
@@ -66,7 +68,7 @@ export function Palette({ open, onClose, commands, tree, onOpenSession }: Props)
       }
     }
     return [
-      { label: t("快捷操作"), hits: matched.map((c) => ({ key: `c:${c.id}`, label: c.label, icon: c.icon, note: t("操作"), run: c.run })) },
+      { label: t("快捷操作"), hits: matched.map((c) => ({ key: `c:${c.id}`, label: c.label, icon: c.icon, note: c.keys ?? t("操作"), run: c.run })) },
       { label: t("会话"), hits: sessions },
     ].filter((g) => g.hits.length > 0);
   }, [commands, tree, query, onOpenSession]);
