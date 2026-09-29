@@ -6,7 +6,7 @@ import { AskCard } from "./AskCard";
 
 afterEach(cleanup);
 
-it("formats the ask prompt while preserving its line breaks", async () => {
+it("formats Markdown in the ask prompt", async () => {
   const item = {
     t: "ask",
     id: "row",
@@ -15,7 +15,7 @@ it("formats the ask prompt while preserving its line breaks", async () => {
       questions: [{
         id: "q1",
         header: "选择",
-        prompt: "第一行\n第二行 **重点**",
+        prompt: "请选择 **重点** 方案\n\n- 方案 A\n- 方案 B",
         options: [{ label: "方案 A" }],
       }],
     },
@@ -23,5 +23,5 @@ it("formats the ask prompt while preserving its line breaks", async () => {
 
   const { container } = render(<AskCard item={item} onAnswer={vi.fn()} />);
   await waitFor(() => expect(container.querySelector(".ask-q strong")?.textContent).toBe("重点"));
-  expect(container.querySelector(".ask-q .md")?.textContent).toContain("第一行\n第二行");
+  expect([...container.querySelectorAll(".ask-q li")].map((li) => li.textContent)).toEqual(["方案 A", "方案 B"]);
 });

@@ -1475,7 +1475,6 @@
   .ask-pane { padding: 13px 13px 0; display: none }
   .ask-pane[data-on] { display: block }
   .ask-q { font: var(--w-med) var(--fs-ui)/1.5 var(--ui); color: var(--text); margin-bottom: 3px }
-  .ask-q .md { white-space: pre-wrap }
   .ask-hint { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint); margin-bottom: 10px }
 
   .opts { display: flex; flex-direction: column }
