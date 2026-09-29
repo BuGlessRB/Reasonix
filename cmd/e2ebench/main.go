@@ -11,11 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
-
-	"github.com/BurntSushi/toml"
 
 	fileencoding "reasonix/internal/base/fileutil/encoding"
 	"reasonix/internal/contract/ablation"
@@ -48,6 +45,7 @@ type task struct {
 	SeedCorrect string `toml:"seed_correct" json:"-"`
 	SeedWrong   string `toml:"seed_wrong" json:"-"`
 	dir         string
+	answerRoot  string
 }
 
 type runMetrics struct {
@@ -359,6 +357,10 @@ func runSuiteMode(cfg suiteConfig, suite, taskFilter, outMD, outJSON string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
+	if err := validateAnswerIsolation(tasks); err != nil {
+		fmt.Fprintln(os.Stderr, "load suite:", err)
+		os.Exit(2)
+	}
 
 	results := runSuite(cfg, tasks)
 
@@ -394,37 +396,6 @@ func emit(report, outMD, _ string) {
 		return
 	}
 	fmt.Print(report)
-}
-
-func loadTasks(suite string) ([]task, error) {
-	tasksDir := filepath.Join(suite, "tasks")
-	entries, err := os.ReadDir(tasksDir)
-	if err != nil {
-		return nil, err
-	}
-	var tasks []task
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		dir := filepath.Join(tasksDir, e.Name())
-		var t task
-		data, err := fileencoding.ReadFileUTF8(filepath.Join(dir, "task.toml"))
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", e.Name(), err)
-		}
-		if _, err := toml.Decode(string(data), &t); err != nil {
-			return nil, fmt.Errorf("%s: %w", e.Name(), err)
-		}
-		t.ID = e.Name()
-		t.dir = dir
-		if t.TimeoutSec == 0 {
-			t.TimeoutSec = 240
-		}
-		tasks = append(tasks, t)
-	}
-	sort.Slice(tasks, func(i, j int) bool { return tasks[i].ID < tasks[j].ID })
-	return tasks, nil
 }
 
 func exitNoTasks(suite string) {
@@ -570,7 +541,10 @@ func runTask(cfg suiteConfig, t task) result {
 		}
 		pinTapeTimes(cfg, work)
 	}
-
+	if err := stageAnswerIsolation(t.answerRoot, work); err != nil {
+		r.Note = "isolate answers: " + err.Error()
+		return r
+	}
 	extraEnv, dropState, seedNote := taskExperimentEnv(cfg, t, work)
 	defer dropState()
 	if seedNote != "" {
@@ -596,6 +570,10 @@ func runTask(cfg suiteConfig, t task) result {
 	var taken []checkpoint
 	if snap != nil {
 		taken = snap.halt()
+	}
+	if err := removeAnswerIsolation(t.answerRoot, work); err != nil {
+		r.Note = "remove answer isolation config: " + err.Error()
+		return r
 	}
 
 	mtr.record(&r)
