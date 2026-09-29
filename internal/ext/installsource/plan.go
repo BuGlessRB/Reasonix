@@ -32,7 +32,7 @@ func (t *Tool) plan(ctx context.Context, req request) ([]action, []string, error
 		return t.planLocal(req, path, info)
 	}
 	if req.Kind == "auto" || req.Kind == "mcp" {
-		if looksLikePackage(req.Source) {
+		if LooksLikePackage(req.Source) {
 			return []action{t.packageMCPAction(req)}, nil, nil
 		}
 	}

@@ -132,7 +132,11 @@ func (t *Tool) localExecutableMCPAction(req request, path string) action {
 func (t *Tool) packageMCPAction(req request) action {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		name = sanitizeName(strings.TrimPrefix(req.Source, "@"))
+		base, _, _ := SplitPackageSpec(req.Source)
+		if base == "" {
+			base = req.Source
+		}
+		name = sanitizeName(strings.TrimPrefix(base, "@"))
 		if i := strings.LastIndex(name, "/"); i >= 0 {
 			name = name[i+1:]
 		}

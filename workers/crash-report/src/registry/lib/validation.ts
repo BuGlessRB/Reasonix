@@ -26,13 +26,26 @@ function hasUnsafeSourceCharacters(source: string): boolean {
   return unsafeSourceCharacter.test(source);
 }
 
+// Exact semver only: no ranges, no dist-tags, no "v" prefix.
+const exactVersion =
+  /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/;
+
 function looksLikePackage(source: string): boolean {
-  if (/[\s\\]/.test(source) || source.startsWith(".") || source.startsWith("/")) return false;
-  if (source.startsWith("@")) {
-    const parts = source.split("/");
+  if (/[\s\\]/.test(source) || source.startsWith(".") || source.startsWith("/") || source.startsWith("-")) {
+    return false;
+  }
+  let name = source;
+  // An "@" past the first byte starts the version; a second one lands inside it and fails.
+  const at = source.indexOf("@", 1);
+  if (at >= 0) {
+    name = source.slice(0, at);
+    if (!exactVersion.test(source.slice(at + 1))) return false;
+  }
+  if (name.startsWith("@")) {
+    const parts = name.split("/");
     return parts.length === 2 && pkgSegment.test(parts[0].slice(1)) && pkgSegment.test(parts[1]);
   }
-  return pkgSegment.test(source);
+  return pkgSegment.test(name);
 }
 
 function isHttpUrl(source: string): boolean {
