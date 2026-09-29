@@ -729,7 +729,7 @@ export const EN_SETTINGS: Record<string, string> = {
   "只看已固定": "Pinned only",
   "未固定": "Not pinned",
   "固定状态未知": "Pin status unknown",
-  "已验证": "Verified",
+  "管理员标记可信": "Admin marked trusted",
   "可更新": "Update available",
   "{n} 次安装": "{n} installs",
   "加载更多": "Load more",
