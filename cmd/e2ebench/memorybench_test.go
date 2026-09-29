@@ -94,9 +94,10 @@ func TestSeedTaskMemoryBuildsIsolatedStateRoot(t *testing.T) {
 // its work dir, and one observed run found exactly that by grepping the store
 // for its own task id while looking for an answer it was not meant to have.
 func TestTaskExperimentEnvIsolatesEveryRun(t *testing.T) {
+	isolateStateBase(t)
 	roots := map[string]bool{}
 	for _, id := range []string{"nosol-absent-oracle", "fix-add-bug"} {
-		env, drop, note := taskExperimentEnv(suiteConfig{}, task{ID: id, dir: testenv.TempDir(t)}, testenv.TempDir(t))
+		env, drop, note := taskExperimentEnv(suiteConfig{}, task{ID: id, dir: testenv.TempDir(t)}, nestedWorkdir(t))
 		defer drop()
 		if note != "" {
 			t.Fatalf("%s: %s", id, note)
@@ -129,5 +130,150 @@ func TestTaskExperimentEnvIsolatesEveryRun(t *testing.T) {
 	// no-solution task find the dependency an earlier run compiled for itself.
 	if len(roots) != 4 {
 		t.Fatalf("two tasks did not get four distinct roots: %v", roots)
+	}
+}
+
+// isolateStateBase points state roots at a directory of the test's own, so the
+// suite never writes into the operator's user cache.
+func isolateStateBase(t *testing.T) string {
+	t.Helper()
+	base := testenv.TempDir(t)
+	prev := benchStateBase
+	benchStateBase = func() (string, error) { return base, nil }
+	t.Cleanup(func() { benchStateBase = prev })
+	return base
+}
+
+// nestedWorkdir is a workdir whose parent is private to the test, so a state
+// base made by isolateStateBase is not inside it.
+func nestedWorkdir(t *testing.T) string {
+	t.Helper()
+	work := filepath.Join(testenv.TempDir(t), "work")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return work
+}
+
+func stateHomeOf(env []string) string {
+	for _, e := range env {
+		if after, ok := strings.CutPrefix(e, "REASONIX_STATE_HOME="); ok {
+			return after
+		}
+	}
+	return ""
+}
+
+func seededTask(t *testing.T) task {
+	t.Helper()
+	dir := testenv.TempDir(t)
+	for _, seed := range []string{"project/fact.md", "global/pref.md"} {
+		p := filepath.Join(dir, "memory", seed)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("---\nname: x\ndescription: y\n---\n\nbody\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return task{ID: "mb-exact", dir: dir}
+}
+
+func memoryFilesUnder(t *testing.T, root string) []string {
+	t.Helper()
+	var found []string
+	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(p, ".md") {
+			found = append(found, p)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return found
+}
+
+// The off arm's treatment is that no memory exists, not that the memory tool
+// is hidden: a seeded store left on disk is one shell command away.
+func TestMemoryOffArmSeedsNoMemory(t *testing.T) {
+	isolateStateBase(t)
+	tk := seededTask(t)
+
+	env, drop, note := taskExperimentEnv(suiteConfig{policy: "memory-off"}, tk, nestedWorkdir(t))
+	defer drop()
+	if note != "" {
+		t.Fatal(note)
+	}
+	home := stateHomeOf(env)
+	if home == "" {
+		t.Fatal("memory-off arm ran against the operator's own store root")
+	}
+	if files := memoryFilesUnder(t, home); len(files) != 0 {
+		t.Fatalf("memory-off state root holds seeded memory: %v", files)
+	}
+
+	onEnv, onDrop, onNote := taskExperimentEnv(suiteConfig{}, tk, nestedWorkdir(t))
+	defer onDrop()
+	if onNote != "" {
+		t.Fatal(onNote)
+	}
+	if files := memoryFilesUnder(t, stateHomeOf(onEnv)); len(files) != 2 {
+		t.Fatalf("memory-on arm must carry both seeds, got %v", files)
+	}
+}
+
+// The state root must not sit beside the workdir: a run that walks up from its
+// workspace and searches the temp root would otherwise reach the seeded store.
+func TestStateHomeIsOutsideWorkdirParent(t *testing.T) {
+	work, err := taskWorkdir(suiteConfig{}, "mb-exact")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(work) })
+	env, drop, note := taskExperimentEnv(suiteConfig{}, seededTask(t), work)
+	defer drop()
+	if note != "" {
+		t.Fatal(note)
+	}
+	home := stateHomeOf(env)
+	if home == "" {
+		t.Fatal("no state root")
+	}
+	if within(resolvedPath(filepath.Dir(work)), resolvedPath(home)) {
+		t.Fatalf("state root %s is inside the workdir's parent %s", home, filepath.Dir(work))
+	}
+	if strings.Contains(filepath.Base(home), "e2ebench") || strings.Contains(home, "mb-exact") {
+		t.Errorf("state root %s is named after the workdir or task", home)
+	}
+}
+
+func TestMakeStateHomeRefusesWorkdirParent(t *testing.T) {
+	parent := testenv.TempDir(t)
+	prev := benchStateBase
+	benchStateBase = func() (string, error) { return filepath.Join(parent, "state"), nil }
+	t.Cleanup(func() { benchStateBase = prev })
+	if home, err := makeStateHome(filepath.Join(parent, "work")); err == nil {
+		t.Fatalf("state root %s accepted beside the workdir", home)
+	}
+}
+
+func TestAbsTrajectoryDirAnchorsRelativePaths(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := absTrajectoryDir("t-off"), filepath.Join(cwd, "t-off"); got != want {
+		t.Fatalf("relative -trajectories resolved to %q, want %q", got, want)
+	}
+	abs := filepath.Join(testenv.TempDir(t), "t-on")
+	if got := absTrajectoryDir(abs); got != abs {
+		t.Fatalf("absolute -trajectories changed: %q", got)
+	}
+	if got := absTrajectoryDir(""); got != "" {
+		t.Fatalf("unset -trajectories became %q", got)
 	}
 }
