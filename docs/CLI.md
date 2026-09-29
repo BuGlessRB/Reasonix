@@ -196,6 +196,10 @@ same care as a session transcript.
 reasonix run --metrics run.json --trajectory run.trajectory.jsonl "fix the failing test"
 ```
 
+A clean `run` or `-p` writes nothing to stderr except warnings the user has to
+act on. `--debug` adds diagnostic logs such as assembly timing and the resumed
+session's cache state.
+
 ### Output formats
 
 | Format | Behavior |
