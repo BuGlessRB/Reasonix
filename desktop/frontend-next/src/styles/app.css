@@ -1119,10 +1119,12 @@
   .stepctl { display: flex; gap: 5px; opacity: 0; transition: opacity var(--m-line); flex: none }
   .call > .c:hover .stepctl, .call > .c:focus-within .stepctl { opacity: 1 }
   .stepctl button {
-    position: relative; border: 0; background: var(--overlay); color: var(--faint); cursor: pointer;
+    position: relative; display: inline-flex; align-items: center; gap: 4px;
+    border: 0; background: var(--overlay); color: var(--faint); cursor: pointer;
     font: var(--w-med) var(--fs-micro) var(--ui); padding: 4px 9px; border-radius: var(--r-sm); white-space: nowrap;
   }
 .stepctl button::after { content: ""; position: absolute; inset: -5px -2px }
+  .stepctl button .studio-icon { width: 12px; height: 12px }
   .stepctl button:hover { background: var(--border); color: var(--text) }
   .stepctl button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }
 
