@@ -18,7 +18,10 @@ func TestEffectUnrecognizedApprovalModeOpensInAskWithANotice(t *testing.T) {
 		want   string
 		notice bool
 	}{
-		{"danger-full-access", control.ToolApprovalAsk, true},
+		{"future-mode", control.ToolApprovalAsk, true},
+		{"read-only", control.ToolApprovalAsk, false},
+		{"danger-full-access", control.ToolApprovalYolo, false},
+		{"workspace-write", control.ToolApprovalAsk, false},
 		{"auto", control.ToolApprovalAuto, false},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {

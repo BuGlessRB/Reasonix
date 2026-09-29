@@ -23,8 +23,8 @@ func withWindowPosture(ctrl *control.Controller, cfg *config.Config, src surface
 			Text:   "The config's default approval mode is not one this version knows, so new sessions ask before each tool call.",
 			Detail: fmt.Sprintf("[desktop] default_tool_approval_mode = %q is not ask, auto or yolo. Choosing a mode replaces it; until then the file keeps it as written.", raw)})
 	}
-	// A value the build does not know was still written by someone, so it is
-	// named, and it normalises to Ask: nothing here loosens unasked.
+	// An unknown value stays named and normalises to Ask; legacy workspace-write
+	// instead follows the sandbox and trust default.
 	if mode, ok := control.ParseToolApprovalMode(cfg.DesktopDefaultToolApprovalMode()); ok {
 		ctrl.SetToolApprovalMode(mode)
 		return ctrl

@@ -87,47 +87,53 @@ model = "x"
 	return run
 }
 
-// A window whose person never named a posture opens in the same default the
-// terminal does, and a trust decision made in the window moves it: a write in
+// A window using the derived posture opens in the same default the terminal
+// does, and a trust decision made in the window moves it: a write in
 // the workspace lands without asking only where the sandbox confines writes
 // and the folder is trusted. Everywhere else the write is put to the person.
 func TestEffectDesktopDefaultPostureFollowsSandboxAndTrust(t *testing.T) {
-	for _, bash := range []string{"off", "enforce"} {
-		t.Run(bash, func(t *testing.T) {
-			run := buildDesktopRun(t, "[sandbox]\nbash = \""+bash+"\"\n", writeCall("w", "notes.md"))
-			confined := bash == "enforce" && sandbox.Available()
-			if got := run.ctrl.WritesConfined(); got != confined {
-				t.Fatalf("WritesConfined = %v, want %v", got, confined)
-			}
-			before := run.ctrl.Posture()
-			if !before.Defaulted || before.Trust != config.WorkspaceTrustUndecided || !before.Trustable {
-				t.Fatalf("posture on open = %+v, want a defaulted, undecided, trustable folder", before)
-			}
-			if got := run.ctrl.ToolApprovalMode(); got != control.ToolApprovalAsk {
-				t.Fatalf("an undecided folder opens in %q, want ask", got)
-			}
-			if err := run.ctrl.DecideWorkspaceTrust(config.WorkspaceTrusted); err != nil {
-				t.Fatal(err)
-			}
-			want := control.ToolApprovalAsk
-			if confined {
-				want = control.ToolApprovalAuto
-			}
-			if got := run.ctrl.ToolApprovalMode(); got != want {
-				t.Fatalf("after trusting the folder the session is in %q, want %q", got, want)
-			}
-			if !run.ctrl.Posture().Defaulted {
-				t.Fatal("following the default must not turn it into a named posture")
-			}
-			_ = run.ctrl.Run(context.Background(), "do the task")
-			_, err := os.Stat(filepath.Join(run.dir, "notes.md"))
-			if landed := err == nil; landed != confined {
-				t.Fatalf("write landed = %v, want %v", landed, confined)
-			}
-			if asked := len(run.prompts()) > 0; asked == confined {
-				t.Fatalf("approval prompts %v; the write is put to the person exactly when it does not land", run.prompts())
-			}
-		})
+	for _, mode := range []string{"", "workspace-write"} {
+		for _, bash := range []string{"off", "enforce"} {
+			t.Run(mode+"/"+bash, func(t *testing.T) {
+				userConfig := "[sandbox]\nbash = \"" + bash + "\"\n"
+				if mode != "" {
+					userConfig += "[desktop]\ndefault_tool_approval_mode = \"" + mode + "\"\n"
+				}
+				run := buildDesktopRun(t, userConfig, writeCall("w", "notes.md"))
+				confined := bash == "enforce" && sandbox.Available()
+				if got := run.ctrl.WritesConfined(); got != confined {
+					t.Fatalf("WritesConfined = %v, want %v", got, confined)
+				}
+				before := run.ctrl.Posture()
+				if !before.Defaulted || before.Trust != config.WorkspaceTrustUndecided || !before.Trustable {
+					t.Fatalf("posture on open = %+v, want a defaulted, undecided, trustable folder", before)
+				}
+				if got := run.ctrl.ToolApprovalMode(); got != control.ToolApprovalAsk {
+					t.Fatalf("an undecided folder opens in %q, want ask", got)
+				}
+				if err := run.ctrl.DecideWorkspaceTrust(config.WorkspaceTrusted); err != nil {
+					t.Fatal(err)
+				}
+				want := control.ToolApprovalAsk
+				if confined {
+					want = control.ToolApprovalAuto
+				}
+				if got := run.ctrl.ToolApprovalMode(); got != want {
+					t.Fatalf("after trusting the folder the session is in %q, want %q", got, want)
+				}
+				if !run.ctrl.Posture().Defaulted {
+					t.Fatal("following the default must not turn it into a named posture")
+				}
+				_ = run.ctrl.Run(context.Background(), "do the task")
+				_, err := os.Stat(filepath.Join(run.dir, "notes.md"))
+				if landed := err == nil; landed != confined {
+					t.Fatalf("write landed = %v, want %v", landed, confined)
+				}
+				if asked := len(run.prompts()) > 0; asked == confined {
+					t.Fatalf("approval prompts %v; the write is put to the person exactly when it does not land", run.prompts())
+				}
+			})
+		}
 	}
 }
 
@@ -142,7 +148,7 @@ func TestEffectDesktopNamedPostureIgnoresTrust(t *testing.T) {
 		{control.ToolApprovalAsk, control.ToolApprovalAsk, config.WorkspaceTrusted},
 		// A value this build does not know was still written by someone: it
 		// opens in Ask and a trust answer does not promote it to Auto.
-		{"danger-full-access", control.ToolApprovalAsk, config.WorkspaceTrusted},
+		{"future-mode", control.ToolApprovalAsk, config.WorkspaceTrusted},
 	} {
 		t.Run(tc.written, func(t *testing.T) {
 			run := buildDesktopRun(t, "[sandbox]\nbash = \"enforce\"\n[desktop]\ndefault_tool_approval_mode = \""+tc.written+"\"\n")

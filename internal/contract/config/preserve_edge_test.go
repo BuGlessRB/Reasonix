@@ -153,11 +153,11 @@ func TestMultilineBasicStringDecodesToItsInput(t *testing.T) {
 }
 
 func TestChoosingAnApprovalModeReplacesOneThisBuildDoesNotKnow(t *testing.T) {
-	seed := "config_version = 12\n[desktop]\ndefault_tool_approval_mode = \"danger-full-access\"\nfuture = 1\n"
-	if got := LoadForEdit(seedUserConfigText(t, seed)).UnrecognizedDesktopToolApprovalMode(); got != "danger-full-access" {
-		t.Fatalf("unrecognized mode = %q, want danger-full-access", got)
+	seed := "config_version = 12\n[desktop]\ndefault_tool_approval_mode = \"future-mode\"\nfuture = 1\n"
+	if got := LoadForEdit(seedUserConfigText(t, seed)).UnrecognizedDesktopToolApprovalMode(); got != "future-mode" {
+		t.Fatalf("unrecognized mode = %q, want future-mode", got)
 	}
-	_, saved := saveInPlace(t, seed, darkTheme, "default_tool_approval_mode = \"danger-full-access\"")
+	_, saved := saveInPlace(t, seed, darkTheme, "default_tool_approval_mode = \"future-mode\"")
 	if strings.Contains(saved, "\"ask\"") {
 		t.Fatalf("an unrelated save chose a mode for the user:\n%s", saved)
 	}
@@ -165,7 +165,7 @@ func TestChoosingAnApprovalModeReplacesOneThisBuildDoesNotKnow(t *testing.T) {
 	if got.Desktop.DefaultToolApprovalMode != "ask" || got.UnrecognizedDesktopToolApprovalMode() != "" {
 		t.Fatalf("chosen mode = %q, want ask written to the file", got.Desktop.DefaultToolApprovalMode)
 	}
-	for _, known := range []string{"", "ask", "Auto", "yolo", "full-access"} {
+	for _, known := range []string{"", "ask", "Auto", "yolo", "full-access", "workspace-write", "danger-full-access", "read-only"} {
 		c := Default()
 		c.Desktop.DefaultToolApprovalMode = known
 		if got := c.UnrecognizedDesktopToolApprovalMode(); got != "" {

@@ -74,13 +74,40 @@ func TestDesktopPostureUpgradeRunsOnce(t *testing.T) {
 	}
 }
 
-// A first launch with no config records the release, so an "auto" the person
-// picks before the next launch is not taken for the shipped one.
+func TestDesktopPostureUpgradeLeavesMissingConfigHomeUntouched(t *testing.T) {
+	isolateUserConfigHome(t)
+	path := UserConfigPath()
+	if changed, err := ApplyUserConfigUpgradesOnStartup(path); err != nil || changed {
+		t.Fatalf("missing config upgrade = %v, %v; want no change or error", changed, err)
+	}
+	if _, err := os.Stat(filepath.Dir(path)); !os.IsNotExist(err) {
+		t.Fatalf("missing config created its directory: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Dir(path), 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filepath.Dir(path), 0o700) })
+	if changed, err := ApplyUserConfigUpgradesOnStartup(path); err != nil || changed {
+		t.Fatalf("read-only home upgrade = %v, %v; want no change or error", changed, err)
+	}
+	if desktopPostureReleased(path) {
+		t.Fatal("missing config in a read-only home recorded a release")
+	}
+}
+
+// A first launch with no config leaves no marker; saving a chosen Auto records
+// it so the next launch does not take that choice for the shipped value.
 func TestDesktopPostureUpgradeMarksAFreshInstall(t *testing.T) {
 	isolateUserConfigHome(t)
 	path := UserConfigPath()
 	if _, err := ApplyUserConfigUpgradesOnStartup(path); err != nil {
 		t.Fatal(err)
+	}
+	if desktopPostureReleased(path) {
+		t.Fatal("a missing config recorded a release")
 	}
 	cfg := Default()
 	if err := cfg.SetDesktopDefaultToolApprovalMode("auto"); err != nil {
@@ -89,11 +116,53 @@ func TestDesktopPostureUpgradeMarksAFreshInstall(t *testing.T) {
 	if err := cfg.SaveTo(path); err != nil {
 		t.Fatal(err)
 	}
+	if !desktopPostureReleased(path) {
+		t.Fatal("saving a chosen auto did not record the release")
+	}
 	if _, err := ApplyUserConfigUpgradesOnStartup(path); err != nil {
 		t.Fatal(err)
 	}
 	if got := LoadForEdit(path).DesktopDefaultToolApprovalMode(); got != "auto" {
 		t.Fatalf("an auto chosen on a fresh install became %q", got)
+	}
+}
+
+func TestDesktopPostureUpgradeKeepsAutoChosenAfterFirstSave(t *testing.T) {
+	isolateUserConfigHome(t)
+	path := UserConfigPath()
+	if _, err := ApplyUserConfigUpgradesOnStartup(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := Default().SaveTo(path); err != nil {
+		t.Fatal(err)
+	}
+	if !desktopPostureReleased(path) {
+		t.Fatal("first save without a named mode did not record the release")
+	}
+	if err := EditConfigFile(path, func(cfg *Config) error {
+		return cfg.SetDesktopDefaultToolApprovalMode("auto")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := ApplyUserConfigUpgradesOnStartup(path); err != nil || changed {
+		t.Fatalf("next startup = %v, %v; want chosen auto untouched", changed, err)
+	}
+	if got := LoadForEdit(path).DesktopDefaultToolApprovalMode(); got != "auto" {
+		t.Fatalf("chosen auto became %q", got)
+	}
+}
+
+func TestDesktopPostureMarkerFailureDoesNotFailFirstSave(t *testing.T) {
+	isolateUserConfigHome(t)
+	path := UserConfigPath()
+	if err := os.MkdirAll(filepath.Join(filepath.Dir(path), desktopPostureReleasedFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Default().SaveTo(path); err != nil {
+		t.Fatalf("config save landed but marker failure was returned: %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("config was not saved: %v", err)
 	}
 }
 
