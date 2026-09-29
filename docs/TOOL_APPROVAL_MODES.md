@@ -1,3 +1,10 @@
+---
+owner: @esengine
+backup: @SivanCola
+status: active
+reviewed: 2026-09-29
+---
+
 # Tool permissions: Ask, Auto, and Yolo
 
 The Ask / Auto / Yolo control under the desktop composer sets how Reasonix handles tool permission approvals. All three modes stay visible so you can switch directly without relying on a shortcut or settings page.
@@ -19,26 +26,23 @@ Tool permission is independent of collaboration mode:
 
 Ask is the most conservative tool-permission mode. When Reasonix needs approval for a tool call, an approval card appears so you can allow once, allow for the session, always allow, or deny.
 
-Dynamic Bash never inherits a broader Bash, prefix, or glob rule. Parameter/arithmetic expansions,
-assignments, redirects, heredocs, and globs still follow the normal mode
-fallback, while nested/indirect execution requires this human approval path in
-interactive Ask and Auto. Reusable choices save the identical complete command
-as `Bash=<literal>`.
+Dynamic Bash never inherits a broader Bash, prefix, or glob rule. Parameter/arithmetic expansions, assignments, redirects, heredocs, and globs still follow the normal mode fallback, while nested/indirect execution requires this human approval path in interactive Ask and Auto.
+
+Reusable choices save the identical complete command as `Bash=<literal>`.
 
 ### Approval card shortcuts
 
 - `←` / `→` cycle the highlighted action.
 - `Enter` confirms the highlighted ordinary tool-approval action, which defaults to “Allow once”.
 - `1` / `2` / `3` / `4` select the matching numbered ordinary tool-approval action.
-- Plan confirmation has three direct actions: **Start execution** / **Revise plan** / **Exit without executing**. On Desktop, use one click or the matching number key. On CLI, use the matching number key or select a row and press `Enter`; `n` / `Esc` keeps planning for compatibility. Exiting rejects the pending plan and returns to Normal without starting an execution turn.
+- Plan confirmation has three direct actions: **Start execution** / **Revise plan** / **Exit without executing**. On Desktop, use one click or the matching number key. On CLI, use the matching number key or select a row and press `Enter`; `n` / `Esc` keeps planning for compatibility.
+- Exiting rejects the pending plan and returns to Normal without starting an execution turn.
 - Outside a pending CLI Plan confirmation, `Esc` stops the current task.
 - If you `Tab` to a button and press `Enter`, that focused button runs (it is not overridden by the highlight).
 
-Headless `reasonix run` has no approval card to answer. Its default Ask posture
-therefore fails closed for writer fallback and explicit ask rules instead of
-adding prompts or silently approving them. Use the existing `--auto` / `-y`
-option when unattended automation should allow ordinary writer fallback; no
-additional safety setting is required.
+Headless `reasonix run` has no approval card to answer. Its default Ask posture therefore fails closed for writer fallback and explicit ask rules instead of adding prompts or silently approving them.
+
+Use the existing `--auto` / `-y` option when unattended automation should allow ordinary writer fallback; no additional safety setting is required.
 
 ## Auto mode
 
@@ -65,10 +69,15 @@ Auto is designed as a behavior, not another feature to configure:
 
 - Workspace reads/writes, commands, source/config/workflow edits, dependencies, tests, and external operations follow the existing permission policy. Auto Guard no longer adds risk-based prompts.
 - Consequently, default Auto does not ask merely because an operation is `git push`, publish, deploy, destructive, privileged, or global. Explicit `ask` / `deny`, sandbox, MCP, and tool-specific permission boundaries still apply.
-- Creating an initial ordinary task plan stays on the fast path. When an active structured plan is rewritten, the independent reviewer compares the old plan, proposed plan, and user task. Reasonable implementation refinement continues. A genuine product, strategy, or scope choice shows a neutral plan-decision card with the removed and added steps; **Adopt the new plan and continue** proceeds, while **Do not adopt; tell Auto how to adjust** opens an inline feedback field without submitting a decision.
-- A failure is an execution-reliability signal, not a task-wide permission boundary. Unrelated operations continue immediately without an Auto Guard confirmation or recovery-review call. Only a retry of the exact failed operation enters bounded recovery review; genuine structured plan choices remain the only recovery path that opens a human decision card.
+- Creating an initial ordinary task plan stays on the fast path. When an active structured plan is rewritten, the independent reviewer compares the old plan, proposed plan, and user task. Reasonable implementation refinement continues.
+- A genuine product, strategy, or scope choice shows a neutral plan-decision card with the removed and added steps; **Adopt the new plan and continue** proceeds, while **Do not adopt; tell Auto how to adjust** opens an inline feedback field without submitting a decision.
+- A failure is an execution-reliability signal, not a task-wide permission boundary. Unrelated operations continue immediately without an Auto Guard confirmation or recovery-review call.
+- Only a retry of the exact failed operation enters bounded recovery review; genuine structured plan choices remain the only recovery path that opens a human decision card.
 - Timeouts receive concise failure-path guidance to inspect current state and partial effects before retrying. They do not ask the user to reset Auto, switch modes, or restart the session.
-- Diagnosis and recovery continue automatically within a fixed host-owned Episode budget (no settings): the same exact operation stops after 3 failures; the Episode stops further mutation/verification after 6 execution failures without real progress, 3 cumulative reviewer rejections, or 3 re-submissions of already-stopped operations. Parameter or command changes cannot reset the Episode total. Successful mutations and host-recognized verification reset the no-progress budget; diagnostic reads do not.
+- Diagnosis and recovery continue automatically within a fixed host-owned Episode budget (no settings).
+- The same exact operation stops after 3 failures.
+- The Episode stops further mutation/verification after 6 execution failures without real progress, 3 cumulative reviewer rejections, or 3 re-submissions of already-stopped operations.
+- Parameter or command changes cannot reset the Episode total. Successful mutations and host-recognized verification reset the no-progress budget; diagnostic reads do not.
 - When an Episode hard-stops, host-proven read-only diagnosis remains available while further mutation and verification are quarantined. Auto then gets one summarize-only round and surfaces a calm `recovery_paused` status (not a send failure). The next user message opens a fresh Episode automatically.
 - **Try another approach**, Plan **Start execution**, a real tool-permission mode change, and a new ordinary user message each open a fresh Episode. Goal auto-continues and sub-agents inherit the current Episode. Explicit **Continue task** grants stay on TaskScope across Episode rotation.
 - Reviewer unavailability does not turn ordinary recovery into a prompt. A detected structured plan transition is handed to the user rather than silently decided by Auto.

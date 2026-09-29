@@ -7,11 +7,11 @@
     "commented-code": 0,
     "complexity": 759,
     "doc-language": 0,
-    "doc-owner": 40,
-    "doc-prose": 2276,
+    "doc-owner": 27,
+    "doc-prose": 2147,
     "error-text": 9,
     "essay": 2737,
-    "file-size": 20890,
+    "file-size": 20867,
     "flat-view": 0,
     "frontend-parity": 28,
     "function-size": 2946,
@@ -94,14 +94,6 @@
       "doc-owner": 1,
       "doc-prose": 2
     },
-    "docs/CAPABILITY_DIAGNOSTICS.md": {
-      "doc-owner": 1,
-      "doc-prose": 5
-    },
-    "docs/CHECKPOINTS.md": {
-      "doc-owner": 1,
-      "doc-prose": 4
-    },
     "docs/CLI.md": {
       "doc-owner": 1,
       "doc-prose": 50
@@ -120,21 +112,6 @@
     },
     "docs/EXTENSIONS.md": {
       "doc-prose": 16
-    },
-    "docs/EXTENSION_PROTOCOL.generated.md": {
-      "doc-owner": 1
-    },
-    "docs/EXTENSION_PROTOCOL.md": {
-      "doc-owner": 1,
-      "doc-prose": 20
-    },
-    "docs/EXTENSION_RUNTIME_V2.md": {
-      "doc-owner": 1,
-      "doc-prose": 13
-    },
-    "docs/EXTENSION_RUNTIME_V2_PERF.md": {
-      "doc-owner": 1,
-      "doc-prose": 9
     },
     "docs/GUIDE.md": {
       "doc-owner": 1,
@@ -163,29 +140,9 @@
       "doc-owner": 1,
       "doc-prose": 2
     },
-    "docs/SESSION_MEMORY_RETRIEVAL.md": {
-      "doc-owner": 1,
-      "doc-prose": 15
-    },
     "docs/SPEC.md": {
       "doc-owner": 1,
       "doc-prose": 339
-    },
-    "docs/STUDIO_SHELL_BOUNDARIES.md": {
-      "doc-owner": 1,
-      "doc-prose": 2
-    },
-    "docs/SUBAGENT_PROFILES.md": {
-      "doc-owner": 1,
-      "doc-prose": 4
-    },
-    "docs/SUBAGENT_PROGRESS.md": {
-      "doc-owner": 1,
-      "doc-prose": 5
-    },
-    "docs/TASK_CONTRACT.md": {
-      "doc-owner": 1,
-      "doc-prose": 1
     },
     "docs/THEME_ASSETS.md": {
       "doc-owner": 1,
@@ -194,14 +151,6 @@
     "docs/THEME_PACK.md": {
       "doc-owner": 1,
       "doc-prose": 5
-    },
-    "docs/TOOL_APPROVAL_MODES.md": {
-      "doc-owner": 1,
-      "doc-prose": 10
-    },
-    "docs/TOOL_CONTRACT.md": {
-      "doc-owner": 1,
-      "doc-prose": 41
     },
     "docs/USAGE_CATALOG.md": {
       "doc-owner": 1,
@@ -289,7 +238,7 @@
     },
     "internal/contract/config/config.go": {
       "essay": 30,
-      "file-size": 961
+      "file-size": 938
     },
     "internal/contract/config/credentials.go": {
       "essay": 1,

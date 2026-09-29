@@ -1,3 +1,10 @@
+---
+owner: @esengine
+backup: @SivanCola
+status: active
+reviewed: 2026-09-29
+---
+
 # Tool Contract
 
 This document records the provider-visible contract for Reasonix compile-time built-in tools. It is generated from the same canonical schema path used by the runtime registry.
@@ -48,80 +55,59 @@ The test checks that every registered built-in tool has a documented name, read-
 In a default full-token boot, Reasonix sends the built-in tools above plus the
 session, memory, skill, subagent, LSP, install, and slash-command tools below:
 
-Single-model Balanced uses this exact executor tool surface. Balanced with a
-distinct Planner and every Delivery session additionally expose one stable
-proxy, `use_capability`, so optional MCP servers (including `auto_start=false`)
-can be inspected and called without changing provider-visible schemas
-mid-session. Delivery also
-adds a stable execution contract enforced by the host: state-changing and
-verification commands need acceptance criteria; changed work cannot finalize
-without post-change review, verification, and an evidence-backed
-`complete_step` sign-off; Skill/MCP `require`/`prefer` routes are gated with
-host-proven evidence (including read-only answers — ordinary reads never skip
-a required capability); and medium/high-risk mutations force structured
-`review` / `security_review` results via the review-only `review_report` tool,
-whose `reviewed_paths` must be backed by host-observed read/diff receipts.
+Single-model Balanced uses this exact executor tool surface.
 
-The two-model Planner and all task/fleet sub-agents also use `use_capability`
-(and never direct `mcp__*` schemas). Planner and ordinary writer-capable
-sub-agents may call installed or project-configured MCP without
-`readOnlyHint`; Planner leaves `destructiveHint` tools for the Executor, while
-ordinary sub-agents use the trusted MCP path (live authorization plus explicit
-deny only). Writer/destructive calls are still serialized and recorded as
-mutations for evidence, workspace leases, and Delivery guards. Strict read-only sub-agents
-share the same proxy schema and Host connections but still require
-`readOnlyHint` and non-destructive at execution time. Balanced dual-model
-attaches independent proxy frontends to both Planner and Executor so a
-capability discovered during planning remains directly callable after handoff;
-their ledgers/audits are isolated while Host connections are shared. Economy
-remains single-model without an independent Planner.
+Balanced with a distinct Planner and every Delivery session additionally expose one stable proxy, `use_capability`, so optional MCP servers (including `auto_start=false`) can be inspected and called without changing provider-visible schemas mid-session.
 
-`use_capability` resolution is side-effect free: `action=list` returns sorted
-configured MCP servers without starting them; `action=call` on a
-not-yet-connected server resolves to a deferred target, Plan re-checks only an
-explicit phase opt-out on the real target, and the server process starts only
-after the permission gate and PreToolUse hooks approve the call. On-demand children
-share the session lifetime (they outlive the starting call and exit with the
-session); `action=inspect` lists live tools for connected servers and cached
-schemas otherwise, never starting a process. First discovery of a server with
-no schema cache goes through `action=call` on the `mcp-server:` id itself: it
-resolves to a gated connect (permission name = the server's dedicated
-`mcp_connect__<server>` identity, so an exact rule such as
-`deny = ["mcp_connect__github"]` blocks process startup) that connects after
-approval and returns the live tool directory. MCP tool rules remain exact;
-`mcp__github__*` is not a tool-name glob. Installing an MCP authorizes the
-Planner to use its non-destructive tools; third-party servers that omit
-`destructiveHint` are treated as user-install trust. Before every connect or
-`tools/call`, the frontend re-checks the current runtime enablement,
-authorization, and exact Host connection identity; another project/tab's
-same-name shared client is rejected without process, network, or tool dispatch.
+Delivery also adds a stable execution contract enforced by the host:
+
+- State-changing and verification commands need acceptance criteria.
+- Changed work cannot finalize without post-change review, verification, and an evidence-backed `complete_step` sign-off.
+- Skill/MCP `require`/`prefer` routes are gated with host-proven evidence (including read-only answers — ordinary reads never skip a required capability).
+- Medium/high-risk mutations force structured `review` / `security_review` results via the review-only `review_report` tool, whose `reviewed_paths` must be backed by host-observed read/diff receipts.
+
+The two-model Planner and all task/fleet sub-agents also use `use_capability` (and never direct `mcp__*` schemas).
+
+Planner and ordinary writer-capable sub-agents may call installed or project-configured MCP without `readOnlyHint`; Planner leaves `destructiveHint` tools for the Executor, while ordinary sub-agents use the trusted MCP path (live authorization plus explicit deny only).
+
+Writer/destructive calls are still serialized and recorded as mutations for evidence, workspace leases, and Delivery guards. Strict read-only sub-agents share the same proxy schema and Host connections but still require `readOnlyHint` and non-destructive at execution time.
+
+Balanced dual-model attaches independent proxy frontends to both Planner and Executor so a capability discovered during planning remains directly callable after handoff; their ledgers/audits are isolated while Host connections are shared. Economy remains single-model without an independent Planner.
+
+`use_capability` resolution is side-effect free:
+
+- `action=list` returns sorted configured MCP servers without starting them.
+- `action=call` on a not-yet-connected server resolves to a deferred target, and Plan re-checks only an explicit phase opt-out on the real target.
+- The server process starts only after the permission gate and PreToolUse hooks approve the call.
+
+On-demand children share the session lifetime (they outlive the starting call and exit with the session); `action=inspect` lists live tools for connected servers and cached schemas otherwise, never starting a process.
+
+First discovery of a server with no schema cache goes through `action=call` on the `mcp-server:` id itself.
+
+It resolves to a gated connect (permission name = the server's dedicated `mcp_connect__<server>` identity, so an exact rule such as `deny = ["mcp_connect__github"]` blocks process startup) that connects after approval and returns the live tool directory.
+
+MCP tool rules remain exact; `mcp__github__*` is not a tool-name glob. Installing an MCP authorizes the Planner to use its non-destructive tools; third-party servers that omit `destructiveHint` are treated as user-install trust.
+
+Before every connect or `tools/call`, the frontend re-checks the current runtime enablement, authorization, and exact Host connection identity; another project/tab's same-name shared client is rejected without process, network, or tool dispatch.
 
 The fixed proxy's provider-visible name, description, schema, and ordering do
 not change when MCP inventory changes. Balanced Executor deliberately retains
 its direct `mcp__*` tools, so its overall provider prefix may still change when
 those direct tools are installed, connected, or refreshed.
 
-`ask`, `await_user`, `docs`, `explore`, `fleet`, `forget`, `history`, `install_skill`,
-`install_source`,
-`list_sessions`, `list_subagents`, `lsp_definition`, `lsp_diagnostics`, `lsp_hover`,
-`lsp_references`, `memory`, `parallel_tasks`, `read_only_skill`,
-`read_only_task`, `read_session`, `read_skill`, `read_subagent_result`, `remember`, `research`,
-`review`, `run_skill`, `security_review`, `slash_command`, `task`.
+```text
+ask, await_user, docs, explore, fleet, forget, history, install_skill, install_source, list_sessions, list_subagents, lsp_definition, lsp_diagnostics, lsp_hover, lsp_references, memory, parallel_tasks, read_only_skill, read_only_task, read_session, read_skill, read_subagent_result, remember, research, review, run_skill, security_review, slash_command, task.
+```
 
-`parallel_tasks` and `fleet` keep their combined result below the single-tool
-output limit by returning a fair preview and a stable `Subagent reference` for
-every persisted child. `read_subagent_result` pages through one referenced
-final answer by UTF-8 byte offset, so long parallel research remains lossless
-without injecting every report into the parent context at once. `list_subagents`
-recovers the references themselves when the aggregate that carried them never
-arrived, which is what an interrupted background fleet leaves behind. References
-are restricted to the current conversation lineage and workspace.
+`parallel_tasks` and `fleet` keep their combined result below the single-tool output limit by returning a fair preview and a stable `Subagent reference` for every persisted child.
 
-`use_capability` (`action` = `list` | `inspect` | `call` | `decline`) is on the
-provider-visible surface for every execution setting (`light` | `balanced` |
-`delivery`). Optional tools stay registered for host dispatch but are not
-expanded into the top-level provider schema; the model reaches them through
-`use_capability` without cache-breaking schema churn.
+`read_subagent_result` pages through one referenced final answer by UTF-8 byte offset, so long parallel research remains lossless without injecting every report into the parent context at once.
+
+`list_subagents` recovers the references themselves when the aggregate that carried them never arrived, which is what an interrupted background fleet leaves behind. References are restricted to the current conversation lineage and workspace.
+
+`use_capability` (`action` = `list` | `inspect` | `call` | `decline`) is on the provider-visible surface for every execution setting (`light` | `balanced` | `delivery`).
+
+Optional tools stay registered for host dispatch but are not expanded into the top-level provider schema; the model reaches them through `use_capability` without cache-breaking schema churn.
 
 `internal/assembly/boot.TestBootToolContractMatchesProviderVisibleSurface` verifies the
 actual boot registry contract against the provider request, including read-only
@@ -136,16 +122,10 @@ coding tools, background-shell lifecycle tools, and the stable capability proxy:
 `write_file`, `compress`, `recall` and `context_budget` (when registered), and
 `use_capability`.
 
-The host-control tools ride the same surface at every setting: `todo_write` and
-`complete_step` for the task list, and `ask` and `await_user` for the turns that
-end on the model's terms. `conclude_blocked` is registered but not yet on this
-surface, so it is reachable only through `use_capability` even where the host
-names it as a way out of an unfinished turn.
+The host-control tools ride the same surface at every setting: `todo_write` and `complete_step` for the task list, and `ask` and `await_user` for the turns that end on the model's terms.
 
-Optional tools (`glob`, `grep`, `ls`, `web_fetch`, MCP, skills, subagents, docs,
-session history, memory mutation, workflow, and so on) remain in the host
-registry for dispatch. The model lists, inspects, calls, or declines them via
-`use_capability` without changing the provider tool list. Execution settings change
-host planning / verification / review policy, not which tools appear on the
-provider-visible surface. The retired `connect_tool_source` path is no longer
-registered.
+`conclude_blocked` is registered but not yet on this surface, so it is reachable only through `use_capability` even where the host names it as a way out of an unfinished turn.
+
+Optional tools (`glob`, `grep`, `ls`, `web_fetch`, MCP, skills, subagents, docs, session history, memory mutation, workflow, and so on) remain in the host registry for dispatch. The model lists, inspects, calls, or declines them via `use_capability` without changing the provider tool list.
+
+Execution settings change host planning / verification / review policy, not which tools appear on the provider-visible surface. The retired `connect_tool_source` path is no longer registered.
