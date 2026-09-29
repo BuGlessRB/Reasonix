@@ -78,7 +78,7 @@ type DesktopConfig struct {
 	DisplayMode             string           `toml:"display_mode"`               // standard|compact (legacy "minimal" maps to compact); transcript display mode
 	StatusBarStyle          string           `toml:"status_bar_style"`           // icon|text; desktop status bar metric labels
 	StatusBarItems          []string         `toml:"status_bar_items"`           // ordered visible desktop status bar items
-	DefaultToolApprovalMode string           `toml:"default_tool_approval_mode"` // ask|auto|yolo; defaults to auto for newly-created desktop sessions
+	DefaultToolApprovalMode string           `toml:"default_tool_approval_mode"` // ask|auto|yolo; empty follows the sandbox claim and folder trust
 	CheckUpdates            *bool            `toml:"check_updates"`              // startup update checks; nil keeps the default enabled
 	UpdateChannel           string           `toml:"update_channel"`             // legacy: read for compatibility, never written back
 	Telemetry               *bool            `toml:"telemetry"`                  // anonymous launch ping, scrubbed native crash diagnostics, per-package market install counts (anonymous, no content); nil = enabled

@@ -4,8 +4,7 @@ import { reason } from "../i18n/kernel";
 import { t } from "../i18n";
 import { hasPendingDecision, posture, runState } from "./decisions";
 import { createPortal } from "react-dom";
-import { HttpError } from "../port/port";
-import type { AgentPort, Checkpoint, ChipCall, ContextBreakdown, JobEntry, McpEntry, SessionStatus, WorkspaceChanges } from "../port/port";
+import { HttpError, type AgentPort, type Checkpoint, type ChipCall, type ContextBreakdown, type JobEntry, type McpEntry, type SessionStatus, type WorkspaceChanges } from "../port/port";
 import type { RuntimeView } from "../port/hub";
 import type { TrajectoryRead } from "../port/wire";
 import { currentStep, fromHistory, initialState, localId, quoteAmount, reduce, stepDone, stepLabel } from "../state/session";
@@ -46,8 +45,8 @@ import { refreshTodos } from "../state/restore";
 import { RMark } from "./RMark";
 import { speedOf } from "./speed";
 import { RuntimeBar } from "./RuntimeBar";
+import { PostureNote } from "./PostureNote";
 import { LiveWork, useLiveWork } from "../state/foldpref";
-
 
 // PaneReport is what the window's own chrome needs from whichever pane has
 // focus: everything else about a session stays inside the pane that owns it.
@@ -683,6 +682,7 @@ function PaneView({ port, rt, title, active, visible, sideHost, side, onFocus, o
             onRefresh={onQueueRefresh}
             onPause={onQueuePause}
           />
+          <PostureNote port={port} status={status} onChanged={refreshStatus} />
         {/* Views the user (or the extension) put next to the composer. They sit
             above it rather than inside it: the input box is the one thing an
             extension must never be able to crowd out. */}

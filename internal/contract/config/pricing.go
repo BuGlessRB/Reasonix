@@ -247,41 +247,41 @@ func ApplyUserConfigUpgradesOnStartup(path string) (bool, error) {
 		return false, err
 	}
 	if !exists {
-		return false, nil
+		return false, markDesktopPostureReleased(path)
 	}
 	var header Config
 	if _, err := decodeTOMLFile(path, &header); err != nil {
 		return false, fmt.Errorf("config %s: %w", path, err)
 	}
-	if header.ConfigVersion >= lastUpgradeConfigVersion {
+	upgraded, err := applyVersionedUpgrades(path, header.ConfigVersion)
+	if err != nil {
+		return upgraded, err
+	}
+	released, err := releaseShippedDesktopPosture(path)
+	return upgraded || released, err
+}
+
+func applyVersionedUpgrades(path string, from int) (bool, error) {
+	if from >= lastUpgradeConfigVersion {
 		return false, nil
 	}
 	cfg := LoadForEdit(path)
-	changed := false
-	if header.ConfigVersion < deepSeekPricingResetConfigVersion {
+	if from < deepSeekPricingResetConfigVersion {
 		resetOfficialProviderPricingDefaults(cfg)
-		changed = true
 	}
-	if shouldMarkWindowsBashSandboxDefaultUpgrade(header.ConfigVersion) {
+	// Marked even when the user was already on off, so a later manual enforce
+	// choice is not treated as the old template default.
+	if shouldMarkWindowsBashSandboxDefaultUpgrade(from) {
 		resetWindowsBashSandboxDefaultOnUpgrade(cfg)
-		// Mark the Windows v4 migration even when the user was already on off,
-		// so a later manual enforce choice is not treated as the old template default.
-		changed = true
 	}
-	if header.ConfigVersion < retiredAutoPlanConfigVersion {
+	// The v5 renderer removes both retired keys, so older binaries also observe
+	// the manual-only default after a downgrade.
+	if from < retiredAutoPlanConfigVersion {
 		normalizeRetiredAutoPlan(cfg)
-		// Mark every older config as migrated even when Auto Plan was already off;
-		// the v5 renderer removes both retired keys so older binaries also observe
-		// the manual-only default after a downgrade.
-		changed = true
 	}
-	if header.ConfigVersion < billingSplitConfigVersion {
+	if from < billingSplitConfigVersion {
 		migrateBillingDisplayCurrency(cfg)
 		freezeProviderBillingCurrencies(cfg)
-		changed = true
-	}
-	if !changed {
-		return false, nil
 	}
 	cfg.ConfigVersion = lastUpgradeConfigVersion
 	if err := cfg.SaveTo(path); err != nil {

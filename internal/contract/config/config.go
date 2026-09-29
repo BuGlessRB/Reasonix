@@ -474,12 +474,12 @@ func NormalizeToolApprovalMode(mode string) string {
 	}
 }
 
-// DesktopDefaultToolApprovalMode is the Ask/Auto/YOLO default used only when
-// creating a new desktop session. Existing tabs and restored sessions keep their
-// own persisted runtime state.
+// DesktopDefaultToolApprovalMode is the Ask/Auto/YOLO posture the person named
+// for new desktop sessions, or "" when they never named one and the session
+// follows the sandbox claim and folder trust instead.
 func (c *Config) DesktopDefaultToolApprovalMode() string {
-	if c == nil {
-		return "ask"
+	if c == nil || strings.TrimSpace(c.Desktop.DefaultToolApprovalMode) == "" {
+		return ""
 	}
 	return NormalizeToolApprovalMode(c.Desktop.DefaultToolApprovalMode)
 }
@@ -1554,7 +1554,7 @@ func Default() *Config {
 		DefaultModel:     "deepseek-flash",
 		CredentialsStore: CredentialsStoreAuto,
 		UI:               UIConfig{Theme: "auto", ShowTurnUsage: true},
-		Desktop:          DesktopConfig{DefaultToolApprovalMode: "auto", ConversationWidth: "standard"},
+		Desktop:          DesktopConfig{ConversationWidth: "standard"},
 		Billing:          BillingConfig{},
 		// Set here, not left to the zero value: an absent [secrets] still protects.
 		Secrets: SecretsConfig{ProtectCredentialFiles: true},
