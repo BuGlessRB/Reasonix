@@ -97,7 +97,11 @@ export class MockMarket extends MockLook {
     }
     return {
       ...base, planId: "low:sha256:mock",
-      actions: [{ kind: p.kind, action: "copy_skill", status: "planned", riskLevel: "low", name: p.name }],
+      actions: [{
+        kind: p.kind === "theme" ? "plugin" : p.kind,
+        action: p.kind === "theme" ? "install_plugin_package" : "copy_skill",
+        status: "planned", riskLevel: "low", name: p.name,
+      }],
     };
   }
 
