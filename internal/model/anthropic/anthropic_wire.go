@@ -19,6 +19,7 @@ type anthRequest struct {
 	Temperature   *float64             `json:"temperature,omitempty"`
 	Thinking      *thinkingConfig      `json:"thinking,omitempty"`
 	OutputConfig  *outputConfig        `json:"output_config,omitempty"`
+	Metadata      *metadataConfig      `json:"metadata,omitempty"`
 	Stream        bool                 `json:"stream"`
 	reasoningHint provider.RequestHint // host-side, never serialized: what this body left out
 }

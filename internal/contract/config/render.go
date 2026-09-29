@@ -419,15 +419,7 @@ func RenderTOMLProjectDelta(c *Config) string {
 	d := Default()
 	var b strings.Builder
 
-	if v := configVersion(c); v != d.ConfigVersion {
-		fmt.Fprintf(&b, "config_version = %d\n", v)
-	}
-	if c.DefaultModel != d.DefaultModel {
-		fmt.Fprintf(&b, "default_model = %q\n", c.DefaultModel)
-	}
-	if c.Language != "" && c.Language != d.Language {
-		fmt.Fprintf(&b, "language = %q\n", c.Language)
-	}
+	renderScalarDeltas(&b, c, d)
 
 	// [ui] section — whole-section comparison
 	if !reflect.DeepEqual(c.UI, d.UI) {

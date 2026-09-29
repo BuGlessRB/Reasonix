@@ -146,6 +146,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		webSearch:        webSearch,
 		headers:          requestHeaders{custom: cleanCustomHeaders(headers), openCodeSession: provider.NewOpenCodeSessionID()},
 		authHeader:       authHeader,
+		attribution:      provider.AttributionFromExtra(cfg.Extra),
 		defaultMaxTokens: maxOutputTokens,
 		http:             httpClient, // no overall timeout; lifecycle is ctx-driven
 		idleTimeout:      provider.IdleTimeoutFromExtra(cfg.Extra),
@@ -173,7 +174,8 @@ type client struct {
 	mimo             bool   // true for MiMo — upgrades legacy tuple schemas to Draft 2020-12
 	webSearch        bool   // enable server-side web_search tool (DeepSeek Anthropic API)
 	headers          requestHeaders
-	authHeader       bool // send Authorization: Bearer instead of Anthropic's x-api-key header
+	authHeader       bool                 // send Authorization: Bearer instead of Anthropic's x-api-key header
+	attribution      provider.Attribution // workspace id; user id sent as metadata.user_id
 	defaultMaxTokens int
 	http             *http.Client
 	idleTimeout      time.Duration // SSE stall watchdog window; per-provider idle_timeout_seconds, else defaultStreamIdleTimeout
@@ -345,6 +347,7 @@ func (c *client) buildRequest(_ context.Context, req provider.Request) anthReque
 	var system []textBlock
 	var msgs []anthMessage
 	var reasoningHint provider.RequestHint
+
 	// appendBlocks adds blocks under role, merging into the previous message when
 	// it shares the role (keeps user/assistant strictly alternating).
 	appendBlocks := func(role string, blocks ...contentBlock) {
@@ -449,9 +452,9 @@ func (c *client) buildRequest(_ context.Context, req provider.Request) anthReque
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = c.defaultMaxTokens
-	}
-	if maxTokens <= 0 {
-		maxTokens = defaultMaxTokens
+		if maxTokens <= 0 {
+			maxTokens = defaultMaxTokens
+		}
 	}
 	r := anthRequest{
 		Model:         c.model,
@@ -459,45 +462,11 @@ func (c *client) buildRequest(_ context.Context, req provider.Request) anthReque
 		System:        system,
 		Messages:      msgs,
 		Tools:         tools,
+		Metadata:      userMetadata(c.attribution.UserID),
 		Stream:        true,
 		reasoningHint: reasoningHint,
 	}
-	// Extended thinking is provider-specific. DeepSeek defaults to enabled and
-	// accepts output_config.effort alongside its binary toggle. Adaptive reaches
-	// here only for endpoints under Anthropic's contract (resolveReasoning);
-	// LongCat-style gateways take enabled|disabled and reject output_config.
-	if c.deepseek {
-		r.Temperature = req.Temperature
-		t := c.thinking
-		if t != "disabled" {
-			t = "enabled"
-		}
-		if c.effort == "disabled" {
-			t = "disabled"
-		}
-		r.Thinking = &thinkingConfig{Type: t}
-		if t != "disabled" {
-			effort := normalizeDeepSeekAnthropicEffort(c.model, c.effort)
-			switch effort {
-			case "low", "high", "max":
-				r.OutputConfig = &outputConfig{Effort: effort}
-			}
-		}
-	} else {
-		t := c.thinking
-		if c.effort == "enabled" || c.effort == "disabled" {
-			t = c.effort // on a binary endpoint /effort is the toggle itself
-		}
-		switch t {
-		case "adaptive":
-			r.Thinking = &thinkingConfig{Type: "adaptive", Display: "summarized"}
-			if c.effort != "" {
-				r.OutputConfig = &outputConfig{Effort: c.effort}
-			}
-		case "enabled", "disabled":
-			r.Thinking = &thinkingConfig{Type: t}
-		}
-	}
+	c.applyThinkingProfile(&r, req)
 	return r
 }
 

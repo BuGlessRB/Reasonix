@@ -199,6 +199,7 @@ func (r Roots) resolveProviderCredentialsForRoot(root string, cfg *Config) {
 	for i := range cfg.Providers {
 		resolveProviderCredentialWithResolver(&cfg.Providers[i], resolver)
 	}
+	stampAttribution(cfg, root)
 }
 
 func resolveProviderCredentialWithResolver(entry *ProviderEntry, resolver *CredentialResolver) {

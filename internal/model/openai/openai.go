@@ -86,19 +86,9 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	prefixChatURL := deepSeekPrefixChatURL(chatURL)
 	headers, _ := cfg.Extra["headers"].(map[string]string)
 	extraBody, _ := cfg.Extra["extra_body"].(map[string]any)
-	vision, _ := cfg.Extra["vision"].(bool)
+	visionRaw, _ := cfg.Extra["vision"].(bool)
 	officialDeepSeek := IsDeepSeek(cfg.BaseURL)
-	// DeepSeek's official chat API takes image parts only on the models that
-	// declare them, and the parts need no new serializer: DeepSeek documents the
-	// OpenAI image_url shape verbatim. Keep the guard here anyway — no persisted
-	// or extension-supplied capability flag may put pixels on a wire that will
-	// reject them, whatever config resolution decided upstream.
-	vision = vision && visionReachesModel(officialDeepSeek, cfg.Model)
-	visionDetail, _ := cfg.Extra["vision_detail"].(string)
-	visionDetail = strings.ToLower(strings.TrimSpace(visionDetail))
-	if !detailAccepted(visionDetail, officialDeepSeek) {
-		visionDetail = "" // auto — omit the field
-	}
+	vision, visionDetail := resolveVision(cfg, officialDeepSeek, visionRaw)
 	deepseek := protocol == "deepseek" || (protocol == "" && officialDeepSeek)
 	maxOutputTokens, _ := cfg.Extra["max_output_tokens"].(int)
 	deepseekV4Flash := strings.EqualFold(strings.TrimSpace(cfg.Model), "deepseek-v4-flash")
@@ -239,6 +229,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		prefixChatURL:      prefixChatURL,
 		headers:            cleanCustomHeaders(headers),
 		extraBody:          cleanExtraBody(extraBody),
+		attribution:        provider.AttributionFromExtra(cfg.Extra),
 		model:              normalizeModelID(cfg.BaseURL, cfg.Model),
 		deepseek:           deepseek,
 		minimax:            minimax,
@@ -279,6 +270,7 @@ type client struct {
 	prefixChatURL      string // official DeepSeek Beta endpoint; empty for custom gateways
 	headers            map[string]string
 	extraBody          map[string]any
+	attribution        provider.Attribution // workspace id pair; sent as the `user` and `session_id` body fields
 	model              string
 	http               *http.Client
 	deepseek           bool
@@ -764,6 +756,8 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 		Temperature:     req.Temperature,
 		MaxTokens:       maxOutputTokens,
 		ReasoningEffort: kimiK3ReasoningEffort(c.kimiK3, c.requestEffort(req)),
+		User:            c.attribution.UserID,
+		SessionID:       c.attribution.SessionID,
 		ExtraBody:       c.extraBody,
 		reasoningHint:   reasoningHint,
 	}
@@ -1078,6 +1072,8 @@ type chatRequest struct {
 	MaxCompletionTokens int                  `json:"max_completion_tokens,omitempty"`
 	ReasoningEffort     string               `json:"reasoning_effort,omitempty"`
 	Thinking            *thinkingMode        `json:"thinking,omitempty"`
+	User                string               `json:"user,omitempty"`
+	SessionID           string               `json:"session_id,omitempty"`
 	ExtraBody           map[string]any       `json:"-"`
 	reasoningHint       provider.RequestHint // host-side, never serialized: what this body left out
 }

@@ -25,6 +25,7 @@ type Config struct {
 	DefaultModel     string              `toml:"default_model"`
 	Language         string              `toml:"language"` // ui/model language tag (e.g. "zh"); empty = auto-detect from $LANG / $REASONIX_LANG
 	CredentialsStore string              `toml:"credentials_store"`
+	CacheContext     string              `toml:"cachecontext"` // per-workspace attribution id sent to providers; "auto" derives it from the workspace key
 	UI               UIConfig            `toml:"ui"`
 	CLI              CLIConfig           `toml:"cli"`
 	Desktop          DesktopConfig       `toml:"desktop"`
