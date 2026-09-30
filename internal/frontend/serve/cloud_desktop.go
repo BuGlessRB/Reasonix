@@ -60,7 +60,7 @@ func (h *Hub) CloudDesktop(ctx context.Context, input remotecloud.DesktopRequest
 		return remotecloud.DesktopResponse{}, ErrCloudDesktopRequest
 	}
 	req := httptest.NewRequestWithContext(ctx, method, target.RequestURI(), bytes.NewReader(input.Body))
-	if len(input.Body) > 0 {
+	if method != http.MethodGet {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req = req.WithContext(withDeviceReach(req.Context(), deviceID, input.Ordinal))
