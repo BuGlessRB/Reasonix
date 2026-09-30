@@ -3,12 +3,12 @@
 Two questions about long-horizon memory, and the harness that makes their
 answers trustworthy.
 
-    -mode=preflight     build all 12 tasks under every arm and check the contract
+    -mode=preflight     build all 18 tasks under every arm and check the contract
     -mode=snippet       does a rank-1 hit hand over the whole answer?
     -mode=adversarial   send a model after the answer through every host surface
     -mode=run-search    Experiment R: is searchable canonical a real capability?
-    -mode=run-boundary  Experiment I, paired: 6 tasks across their own cue boundary
-    -mode=run-index     Experiment I, full: 6 tasks x 4 index budgets
+    -mode=run-boundary  Experiment I, paired: the 6 efficiency tasks across their boundary
+    -mode=run-index     Experiment I, full: the 6 efficiency tasks x 4 budgets
     -mode=calibrate     find each index task's PlantAfterGen for its cue tier
 
 `-dry` drives any run mode with a scripted provider, for nothing. Real runs need
@@ -31,8 +31,8 @@ The most likely reason is that two of the six index tasks carry heavy-tail
 stopping behaviour that swamps the effect being measured.
 
 Existing evidence is not sufficient to tune the shipped 1% budget in either
-direction. Reopening this wants a new corpus, not more samples: see
-"Index corpus v2" below.
+direction. Reopening this wants a new corpus, not more samples: that substrate
+now exists, two qualifying tasks per cue tier — see "Index corpus v2" below.
 
 **Things that turned out not to be problems**, each after being measured rather
 than argued about:
@@ -74,11 +74,48 @@ scanned for answer literals before the first provider request and again after
 the turn. Any answer reaching the model through a tool that is not `recall`
 marks the run contaminated and takes it out of every statistic.
 
-## Index corpus v2, if this is reopened
+## Index corpus v2
 
-The present index tasks are not a fit substrate: two of six carry stopping
-behaviour that dominates the signal. A task should qualify only if a run-index
-run reports a `stopping_class` other than `PostSufficientRetrieval` or
+The substrate is being filled with two tasks per cue tier. These six are the
+current candidates, each authored to the bar below and screened three times per
+arm: `i09-lease-epoch` and `i10-shard-seal` (quarter), `i07-stream-latch` and
+`i08-quota-refill` (half), `i13-replica-tag` and `i14-tombstone-ttl` (default).
+
+Clean means a `stopping_class` that is neither `PostSufficientRetrieval` nor
+`PostSufficientRunaway`; three `-mode=run-index` passes (32 cells each) measured:
+
+| task | tier | cue present | cue absent | both arms |
+| --- | --- | ---: | ---: | --- |
+| `i09-lease-epoch` | quarter | 2/3 | 0/3 | no |
+| `i10-shard-seal` | quarter | 0/3 | 2/3 | no |
+| `i07-stream-latch` | half | 2/3 | 0/3 | no |
+| `i08-quota-refill` | half | 3/3 | 1/3 | no |
+| `i11-quorum-floor` | half | 1/3 | 1/3 | no |
+| `i12-flush-margin` | half | 1/3 | 1/3 | no |
+| `i13-replica-tag` | default | 2/3 | 1/3 | no |
+| `i14-tombstone-ttl` | default | 3/3 | 2/3 | no |
+
+No candidate is clean on both arms yet, so this corpus is not qualified:
+screening continues and a candidate that does not hold on both arms is replaced
+rather than promoted. The classification is also a rate rather than a property at
+this sample - which is the variance the freeze note said was unknown - so a
+screening batch is three passes per cell and a replacement is measured the same
+way. The full per-cell table (eight tasks x four budgets x three passes) is in
+the pull request.
+
+`i01`-`i06` are the frozen study's six tasks, kept as `roleStopping`. `i03`/`i04`
+are the heavy-tail pair the freeze note names; one screening pass over the other
+four showed post-sufficient behaviour in `i01`, `i02` and `i05` (one boundary arm
+or both), and `i06` came back clean on both arms. A single pass does not certify
+a task - that is what the rates above exist for - so `i06` stays with the frozen
+set rather than being drafted into the substrate. All six are excluded from
+`run-index` and `run-boundary` batches and stay measurable one at a time with
+`-task <id>`. A task added to the corpus declares a role, so it cannot arrive
+without one.
+
+A task qualifies only if it is clean on both of its boundary arms - the
+cue-present run and the cue-absent run - in every run of a screening batch. Clean
+means a `stopping_class` other than `PostSufficientRetrieval` or
 `PostSufficientRunaway`: `SnippetStop`, `SnippetThenRead` and `DefensiveRead`
 all qualify, and a defensive read is deliberately not counted as waste. The
 class comes from the three counts in that report — `searches_after_sufficient`,
@@ -86,8 +123,7 @@ class comes from the three counts in that report — `searches_after_sufficient`
 sufficiency was reached and how many rounds followed it. The remaining
 requirements still apply — successful tool call, answer in the output rather
 than the cue, rank 1, `FirstHitCoverage` complete, one or two simple values,
-nothing in the workspace. Keep i03 and i04 — as a stopping corpus, not an
-efficiency one.
+nothing in the workspace.
 
 `-mode=calibrate` is not a screening tool: it builds and reads back the
 fixtures, and reads nothing else, so its cue-visibility profile is the same for
