@@ -184,21 +184,21 @@ func (s *Store) pruneResults(keep string) {
 }
 
 // sessionPathOrEmpty keeps a session path the child reported only when it names a
-// file inside the state root the store lives under, so a reader that opens it
-// cannot be pointed anywhere else.
+// transcript file in a sessions directory under the state root, so a reader that
+// opens it cannot be pointed at credentials, trusted state or anything else.
 func (s *Store) sessionPathOrEmpty(p string) string {
-	if p == "" || !filepath.IsAbs(p) {
+	if p == "" || !filepath.IsAbs(p) || filepath.Ext(p) != ".jsonl" {
 		return ""
 	}
 	root, err := filepath.EvalSymlinks(filepath.Dir(s.dir))
 	if err != nil {
 		return ""
 	}
-	real, err := filepath.EvalSymlinks(filepath.Dir(p))
-	if err != nil {
+	dir, err := filepath.EvalSymlinks(filepath.Dir(p))
+	if err != nil || filepath.Base(dir) != "sessions" {
 		return ""
 	}
-	rel, err := filepath.Rel(root, filepath.Join(real, filepath.Base(p)))
+	rel, err := filepath.Rel(root, dir)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return ""
 	}

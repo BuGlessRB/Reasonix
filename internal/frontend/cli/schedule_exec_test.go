@@ -343,3 +343,30 @@ func TestTheScheduleChildReadsNoConfigFromItsWorkingDirectory(t *testing.T) {
 		t.Fatal("ordinary commands changed")
 	}
 }
+
+func TestWatchSupervisorCancelsAndForcesTheProcessOut(t *testing.T) {
+	gone := make(chan struct{})
+	cancelled := make(chan struct{})
+	exited := make(chan int, 1)
+	orphan := watchSupervisor(gone, func() { close(cancelled) }, 50*time.Millisecond, func(c int) { exited <- c })
+	if orphan.Load() {
+		t.Fatal("orphaned while the supervisor is alive")
+	}
+	close(gone)
+	select {
+	case <-cancelled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the run was not cancelled")
+	}
+	select {
+	case c := <-exited:
+		if c != execExitParentGone {
+			t.Fatalf("exit code %d", c)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the process was not forced out")
+	}
+	if !orphan.Load() {
+		t.Fatal("the flag did not record the supervisor leaving")
+	}
+}

@@ -15,6 +15,7 @@ import (
 type Governor struct {
 	tokens     atomic.Int64
 	usages     atomic.Int64
+	metered    atomic.Int64
 	requests   atomic.Int64
 	unmetered  atomic.Bool
 	ceiling    int64
@@ -33,9 +34,15 @@ func NewGovernor(ceiling int64, stop func()) *Governor {
 
 func (g *Governor) SetStop(stop func()) { g.stop = stop }
 
-// AddUsage records one usage report and returns the new total.
-func (g *Governor) AddUsage(tokens int64) int64 {
+// AddUsage records one usage report and returns the new total. A report counts
+// toward the requests' metering only when it is the model's own count for one of
+// them (metered); an estimate or a side call's usage adds tokens but cannot stand
+// in for a request that reported nothing.
+func (g *Governor) AddUsage(tokens int64, metered bool) int64 {
 	g.usages.Add(1)
+	if metered {
+		g.metered.Add(1)
+	}
 	total := g.tokens.Add(max(tokens, 0))
 	if g.ceiling > 0 && total >= g.ceiling {
 		g.overBudget.Store(true)
@@ -50,7 +57,7 @@ func (g *Governor) AddUsage(tokens int64) int64 {
 // it spends is not being counted.
 func (g *Governor) Committed() {
 	n := g.requests.Add(1)
-	if g.usages.Load() < n-1 {
+	if g.metered.Load() < n-1 {
 		g.unmetered.Store(true)
 		g.halt()
 	}
@@ -58,7 +65,7 @@ func (g *Governor) Committed() {
 
 // Unmetered reports whether some request completed with no usage report.
 func (g *Governor) Unmetered() bool {
-	return g.unmetered.Load() || g.usages.Load() < g.requests.Load()
+	return g.unmetered.Load() || g.metered.Load() < g.requests.Load()
 }
 
 func (g *Governor) halt() {

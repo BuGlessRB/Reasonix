@@ -154,14 +154,17 @@ func (s *Supervisor) awaitReady(ctx context.Context, c *child) error {
 	case <-c.ready:
 		return nil
 	case <-c.done:
+		c.job.Finish()
 		return ErrExecutorRefused
 	case <-timer.C:
 		c.kill()
 		c.reap(killWait)
+		c.job.Finish()
 		return ErrStartTimeout
 	case <-ctx.Done():
 		c.kill()
 		c.reap(killWait)
+		c.job.Finish()
 		return ErrCancelled
 	}
 }

@@ -15,13 +15,13 @@ import (
 func TestGovernorStopsOnceAtTheCeiling(t *testing.T) {
 	var stops atomic.Int32
 	g := NewGovernor(1000, func() { stops.Add(1) })
-	g.AddUsage(600)
+	g.AddUsage(600, true)
 	if stops.Load() != 0 || g.OverBudget() {
 		t.Fatal("stopped below the ceiling")
 	}
-	g.AddUsage(-5000)
-	g.AddUsage(400)
-	g.AddUsage(400)
+	g.AddUsage(-5000, true)
+	g.AddUsage(400, true)
+	g.AddUsage(400, true)
 	if stops.Load() != 1 || !g.OverBudget() || g.Tokens() != 1400 || g.Usages() != 4 {
 		t.Fatalf("stops=%d over=%v tokens=%d usages=%d", stops.Load(), g.OverBudget(), g.Tokens(), g.Usages())
 	}
@@ -134,9 +134,9 @@ func TestGovernorStopsARunWhoseRequestsReportNoUsage(t *testing.T) {
 	}
 	ok := NewGovernor(0, func() { t.Fatal("stopped") })
 	ok.Committed()
-	ok.AddUsage(10)
+	ok.AddUsage(10, true)
 	ok.Committed()
-	ok.AddUsage(10)
+	ok.AddUsage(10, true)
 	if ok.Unmetered() {
 		t.Fatal("a metered run reads as unmetered")
 	}
@@ -159,5 +159,18 @@ func TestExitWhenGoneForcesTheProcessOut(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("never exited")
+	}
+}
+
+func TestEstimatesAndSideCallsDoNotStandInForAMeteredRequest(t *testing.T) {
+	var stops atomic.Int32
+	g := NewGovernor(0, func() { stops.Add(1) })
+	for range 5 {
+		g.AddUsage(100, false)
+	}
+	g.Committed()
+	g.Committed()
+	if stops.Load() != 1 || !g.Unmetered() {
+		t.Fatalf("stops=%d unmetered=%v: unmetered requests slipped past on the strength of other usage", stops.Load(), g.Unmetered())
 	}
 }

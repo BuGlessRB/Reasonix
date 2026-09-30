@@ -172,6 +172,9 @@ func TestACleanRunChargesWhatItUsedAndStoresACleanResult(t *testing.T) {
 	if res.Posture.RemoteContent {
 		t.Fatal("a stored report must not claim remote content is rendered")
 	}
+	if !res.ReportUntrusted {
+		t.Fatal("a stored report is model text and must be marked untrusted")
+	}
 }
 
 func TestACrashedChildIsChargedTheWholeCap(t *testing.T) {
@@ -426,5 +429,13 @@ func TestASupervisedRunIsNeverReapedBeforeItIsSettled(t *testing.T) {
 	}
 	if got := f.settled(t); got.State != schedule.RunSucceeded {
 		t.Fatalf("state = %s", got.State)
+	}
+}
+
+func TestTheStderrTailIsSanitized(t *testing.T) {
+	f := newFixture(t)
+	rep, _ := f.supervisor("noisy", "").Run(f.ctx(t), f.run.TriggerID)
+	if !strings.Contains(rep.StderrTail, "boom") || strings.ContainsAny(rep.StderrTail, "\x1b\u202e\x00") {
+		t.Fatalf("stderr tail = %q", rep.StderrTail)
 	}
 }
