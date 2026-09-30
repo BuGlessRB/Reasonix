@@ -32,6 +32,7 @@ export interface FeedbackLimits {
   images: number;
   imageBytes: number;
   uploadBytes: number;
+  replyBytes: number;
 }
 
 export interface FeedbackEnv {
@@ -54,6 +55,8 @@ export interface FeedbackRequest {
   // The UI language tag, so the issue can be triaged in the reporter's language.
   locale?: string;
   images: FeedbackImage[];
+  // Answer to a feedback.challenge_required refusal.
+  turnstileToken?: string;
 }
 
 export interface FeedbackReceipt {
@@ -61,6 +64,16 @@ export interface FeedbackReceipt {
   status: FeedbackStatus;
   createdAt: string;
   redacted: boolean;
+}
+
+export type FeedbackAuthor = "maintainer" | "user";
+
+// Plain text only: never linked, formatted or interpreted.
+export interface FeedbackReply {
+  id: number;
+  author: FeedbackAuthor;
+  body: string;
+  createdAt: string;
 }
 
 export interface FeedbackItem {
@@ -75,15 +88,24 @@ export interface FeedbackItem {
   duplicateOf?: number;
   // The report was filed under an install identity this machine no longer holds.
   statusUnavailable?: boolean;
+  // The maintainers are waiting for the reporter's answer.
+  needsInput: boolean;
+  // Oldest first.
+  replies: FeedbackReply[];
+  // Maintainer replies newer than the last one the kernel was told was seen.
+  unreadReplies: number;
   createdAt: string;
   updatedAt: string;
 }
 
 // offline: the service was unreachable, so items are the receipts remembered
 // on this machine and their statuses may be stale.
+// unread counts the reports wanting attention; hasNew is unread > 0.
 export interface FeedbackMine {
   items: FeedbackItem[];
   offline: boolean;
+  unread: number;
+  hasNew: boolean;
 }
 
 export const FEEDBACK_REPO_ISSUES = "https://github.com/esengine/DeepSeek-Reasonix/issues/";

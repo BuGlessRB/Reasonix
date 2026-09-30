@@ -2,7 +2,7 @@ import { HttpError } from "./http_error";
 import { MockBackup } from "./mock_backup";
 import { FEEDBACK_CODE, type FeedbackEnv, type FeedbackItem, type FeedbackMine, type FeedbackReceipt, type FeedbackRequest } from "./feedback";
 
-const LIMITS = { bodyBytes: 8192, nameChars: 40, contactChars: 120, images: 3, imageBytes: 2 << 20, uploadBytes: 10 << 20 };
+const LIMITS = { bodyBytes: 8192, nameChars: 40, contactChars: 120, images: 3, imageBytes: 2 << 20, uploadBytes: 10 << 20, replyBytes: 4096 };
 
 const ENV = {
   version: "v2.24.0", commit: "7ee4bbb", surface: "studio", os: "windows", osVersion: "10.0.19045",
@@ -13,7 +13,9 @@ const DAY = 86_400_000;
 const ago = (days: number) => new Date(Date.now() - days * DAY).toISOString();
 
 // One row per status, so the list is never drawn from a fixture that skips one.
-const SEEDED: FeedbackItem[] = [
+type Seed = Omit<FeedbackItem, "needsInput" | "replies" | "unreadReplies">;
+
+const SEEDED: Seed[] = [
   { receipt: "FB-7K3M-9QX2", category: "bug", titleSnippet: "Sidebar loses its selection after a resize", status: "fixed", issueNumber: 11350, issueUrl: "https://github.com/esengine/DeepSeek-Reasonix/issues/11350", resolvedVersion: "v2.21.0", createdAt: ago(6), updatedAt: ago(1) },
   { receipt: "FB-2H8P-4WD7", category: "idea", titleSnippet: "Export a session as markdown", status: "recorded", issueNumber: 11302, issueUrl: "https://github.com/esengine/DeepSeek-Reasonix/issues/11302", createdAt: ago(4), updatedAt: ago(3) },
   { receipt: "FB-5N1C-8RT3", category: "bug", titleSnippet: "Paste of a long log freezes the composer", status: "in_progress", issueNumber: 11377, issueUrl: "https://github.com/esengine/DeepSeek-Reasonix/issues/11377", createdAt: ago(3), updatedAt: ago(1) },
@@ -42,7 +44,7 @@ const STATUS: Record<string, number> = {
 };
 
 export class MockFeedback extends MockBackup {
-  private filed: FeedbackItem[] = [];
+  private filed: Seed[] = [];
   private name = "";
 
   async feedbackEnv(): Promise<FeedbackEnv> {
@@ -67,7 +69,8 @@ export class MockFeedback extends MockBackup {
   async myFeedback(): Promise<FeedbackMine> {
     const code = fault();
     if (code === "mine_error") throw new HttpError(502, "unavailable", { code: FEEDBACK_CODE.unavailable, error: "unavailable" });
-    return { items: [...this.filed, ...SEEDED], offline: code === "mine_offline" };
+    const items = [...this.filed, ...SEEDED].map((i) => ({ ...i, needsInput: false, replies: [], unreadReplies: 0 }));
+    return { items, offline: code === "mine_offline", unread: 0, hasNew: false };
   }
 
 }

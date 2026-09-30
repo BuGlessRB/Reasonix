@@ -4,6 +4,9 @@
 
 export const EN_KERNEL: Record<string, string> = {
   "反馈通道今日已满，请明天再试": "Feedback is at capacity for today - try again tomorrow",
+  "这份反馈的回复次数已到上限，或回复太频繁了，请稍后再试": "This report has reached its reply limit, or you replied too often - try again later",
+  "这份反馈现在不接收回复": "This report takes no reply right now",
+  "反馈服务要求额外验证，请稍后再试": "The feedback service asks for extra verification - try again later",
   "截图无法清除其中的元数据，请换一张或先用截图工具重新导出": "An image could not be cleaned of its metadata - pick another or re-export it",
   "反馈内容不符合要求，请检查后重试": "That feedback could not be accepted - check the fields and try again",
   "反馈内容过大，请缩短文字或减少截图": "That feedback is too large - shorten the text or attach fewer screenshots",

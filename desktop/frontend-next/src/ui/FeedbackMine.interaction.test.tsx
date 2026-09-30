@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 const item = (over: Partial<FeedbackItem>): FeedbackItem => ({
-  receipt: "FB-AAAA-0001", category: "bug", titleSnippet: "snippet", status: "received", createdAt: "2026-09-20T00:00:00Z", updatedAt: "2026-09-21T00:00:00Z", ...over,
+  receipt: "FB-AAAA-0001", category: "bug", titleSnippet: "snippet", status: "received", needsInput: false, replies: [], unreadReplies: 0, createdAt: "2026-09-20T00:00:00Z", updatedAt: "2026-09-21T00:00:00Z", ...over,
 });
 
 function portWith(answer: Mine | Error) {
@@ -56,7 +56,7 @@ describe("my feedback", () => {
   });
 
   it("names every status through its label, not through colour alone", async () => {
-    const port = portWith({ offline: false, items: FEEDBACK_STATUSES.map((status, i) => item({ receipt: `FB-AAAA-000${i}`, status })) });
+    const port = portWith({ offline: false, unread: 0, hasNew: false, items: FEEDBACK_STATUSES.map((status, i) => item({ receipt: `FB-AAAA-000${i}`, status })) });
     render(<FeedbackMine port={port} onFile={() => {}} />);
     await screen.findByText("FB-AAAA-0000");
     for (const [status, label] of [["received", "已收到"], ["recorded", "已登记"], ["in_progress", "处理中"], ["fixed", "已修复"], ["wontfix", "不予修复"], ["duplicate", "重复"]]) {
@@ -74,7 +74,7 @@ describe("my feedback", () => {
   });
 
   it("says so when nothing was ever sent", async () => {
-    render(<FeedbackMine port={portWith({ items: [], offline: false })} onFile={() => {}} />);
+    render(<FeedbackMine port={portWith({ items: [], offline: false, unread: 0, hasNew: false })} onFile={() => {}} />);
     expect(await screen.findByText(/还没有提交过反馈/)).toBeTruthy();
     expect(document.querySelector(".fbk-list")).toBeNull();
   });
@@ -84,7 +84,7 @@ describe("my feedback", () => {
     const port = new MockPort() as unknown as AgentPort;
     port.myFeedback = vi.fn(async () => {
       if (fail) throw new HttpError(502, "x", { code: FEEDBACK_CODE.unavailable, error: "x" });
-      return { items: [item({})], offline: false };
+      return { items: [item({})], offline: false, unread: 0, hasNew: false };
     });
     render(<FeedbackMine port={port} onFile={() => {}} />);
     expect(screen.getByText("正在读取你的反馈…")).toBeTruthy();
@@ -96,7 +96,7 @@ describe("my feedback", () => {
   });
 
   it("keeps the remembered list under a gentle banner when the service is offline", async () => {
-    render(<FeedbackMine port={portWith({ items: [item({})], offline: true })} onFile={() => {}} />);
+    render(<FeedbackMine port={portWith({ items: [item({})], offline: true, unread: 0, hasNew: false })} onFile={() => {}} />);
     await screen.findByText("FB-AAAA-0001");
     const banner = screen.getByRole("status", { name: "" , hidden: false } as never);
     expect(banner.textContent).toMatch(/连不上反馈服务/);
@@ -104,7 +104,7 @@ describe("my feedback", () => {
   });
 
   it("dims a row whose status can no longer be read and says so once", async () => {
-    render(<FeedbackMine port={portWith({ items: [item({ statusUnavailable: true }), item({ receipt: "FB-AAAA-0002", statusUnavailable: true })], offline: false })} onFile={() => {}} />);
+    render(<FeedbackMine port={portWith({ items: [item({ statusUnavailable: true }), item({ receipt: "FB-AAAA-0002", statusUnavailable: true })], offline: false, unread: 0, hasNew: false })} onFile={() => {}} />);
     await screen.findByText("FB-AAAA-0001");
     expect(screen.getAllByText(/已经查不到它们的最新状态/)).toHaveLength(1);
     expect(screen.getAllByText("状态已无法追踪")).toHaveLength(2);
@@ -142,7 +142,7 @@ describe("refreshing", () => {
 
   it("builds every issue link from the number alone and ignores the server's URL", async () => {
     const onFile = vi.fn();
-    const port = portWith({ offline: false, items: [item({ status: "recorded", issueNumber: 11350, issueUrl: "https://evil.example/phish?x=1" }), item({ receipt: "FB-AAAA-0002", status: "duplicate", issueNumber: 1, duplicateOf: 11302, issueUrl: "javascript:alert(1)" })] });
+    const port = portWith({ offline: false, unread: 0, hasNew: false, items: [item({ status: "recorded", issueNumber: 11350, issueUrl: "https://evil.example/phish?x=1" }), item({ receipt: "FB-AAAA-0002", status: "duplicate", issueNumber: 1, duplicateOf: 11302, issueUrl: "javascript:alert(1)" })] });
     render(<FeedbackMine port={port} onFile={onFile} />);
     await screen.findByText("FB-AAAA-0001");
     const links = [...document.querySelectorAll<HTMLAnchorElement>("a[data-action='feedback.link']")];
@@ -158,14 +158,14 @@ describe("refreshing", () => {
   });
 
   it("does not link an issue number that is not a positive integer", async () => {
-    const port = portWith({ offline: false, items: [item({ status: "recorded", issueNumber: -3 }), item({ receipt: "FB-AAAA-0002", status: "recorded", issueNumber: 1.5 })] });
+    const port = portWith({ offline: false, unread: 0, hasNew: false, items: [item({ status: "recorded", issueNumber: -3 }), item({ receipt: "FB-AAAA-0002", status: "recorded", issueNumber: 1.5 })] });
     render(<FeedbackMine port={port} onFile={() => {}} />);
     await screen.findByText("FB-AAAA-0001");
     expect(document.querySelectorAll("a[data-action='feedback.link']")).toHaveLength(0);
   });
 
   it("says each timeline step's state in words as well as by its dot", async () => {
-    const port = portWith({ offline: false, items: [item({ status: "in_progress", issueNumber: 11377 })] });
+    const port = portWith({ offline: false, unread: 0, hasNew: false, items: [item({ status: "in_progress", issueNumber: 11377 })] });
     render(<FeedbackMine port={port} onFile={() => {}} />);
     await screen.findByText("FB-AAAA-0001");
     const steps = [...document.querySelectorAll(".fbk-tl li")].map((li) => [li.getAttribute("data-state"), li.querySelector(".sr-only")?.textContent]);
@@ -174,7 +174,7 @@ describe("refreshing", () => {
 
   it("marks a snippet the server cut at 80 characters and leaves shorter ones alone", async () => {
     const cut = "x".repeat(80);
-    const port = portWith({ offline: false, items: [item({ titleSnippet: cut }), item({ receipt: "FB-AAAA-0002", titleSnippet: "short" })] });
+    const port = portWith({ offline: false, unread: 0, hasNew: false, items: [item({ titleSnippet: cut }), item({ receipt: "FB-AAAA-0002", titleSnippet: "short" })] });
     render(<FeedbackMine port={port} onFile={() => {}} />);
     await screen.findByText("FB-AAAA-0001");
     expect(row("FB-AAAA-0001").querySelector(".fbk-snippet")!.textContent).toBe(cut + "…");

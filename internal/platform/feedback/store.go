@@ -29,6 +29,8 @@ type state struct {
 	DisplayName  string   `json:"displayName,omitempty"`
 	Items        []Item   `json:"items,omitempty"`
 	Pending      *pending `json:"pending,omitempty"`
+	// Seen is, per receipt, the newest reply id the person has been shown.
+	Seen map[string]ReplyID `json:"seen,omitempty"`
 }
 
 // pending is the idempotency key of a send whose outcome this machine never
@@ -149,6 +151,7 @@ func (st *state) mint() error {
 func (st *state) remember(items ...Item) {
 	byReceipt := map[string]Item{}
 	for _, it := range append(append([]Item{}, st.Items...), items...) {
+		it.UnreadReplies = 0
 		byReceipt[it.Receipt] = it
 	}
 	merged := make([]Item, 0, len(byReceipt))
@@ -157,6 +160,15 @@ func (st *state) remember(items ...Item) {
 	}
 	sort.Slice(merged, func(i, j int) bool { return merged[i].CreatedAt.After(merged[j].CreatedAt) })
 	st.Items = merged[:min(len(merged), maxLocalItems)]
+	kept := map[string]bool{}
+	for _, it := range st.Items {
+		kept[it.Receipt] = true
+	}
+	for receipt := range st.Seen {
+		if !kept[receipt] {
+			delete(st.Seen, receipt)
+		}
+	}
 }
 
 // retire drops the install identity a service no longer recognises. Reports

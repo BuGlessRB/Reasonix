@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"reasonix/internal/safety/redirectguard"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ type wireSubmit struct {
 	Contact        string           `json:"contact,omitempty"`
 	Env            Env              `json:"env"`
 	Attachments    []wireAttachment `json:"attachments,omitempty"`
+	TurnstileToken string           `json:"turnstileToken,omitempty"`
 }
 
 type wireReceipt struct {
@@ -50,14 +52,17 @@ type wireError struct {
 }
 
 var codeSentinels = map[string]error{
-	"feedback.too_large":      ErrTooLarge,
-	"feedback.rate_limited":   ErrRateLimited,
-	"feedback.invalid":        ErrInvalid,
-	"feedback.disabled":       ErrDisabled,
-	"feedback.duplicate":      ErrDuplicate,
-	"feedback.bad_token":      ErrBadToken,
-	"feedback.busy":           ErrBusy,
-	"feedback.image_metadata": ErrImageMetadata,
+	"feedback.too_large":          ErrTooLarge,
+	"feedback.rate_limited":       ErrRateLimited,
+	"feedback.invalid":            ErrInvalid,
+	"feedback.disabled":           ErrDisabled,
+	"feedback.duplicate":          ErrDuplicate,
+	"feedback.bad_token":          ErrBadToken,
+	"feedback.busy":               ErrBusy,
+	"feedback.image_metadata":     ErrImageMetadata,
+	"feedback.reply_limit":        ErrReplyLimit,
+	"feedback.not_replyable":      ErrNotReplyable,
+	"feedback.challenge_required": ErrChallengeRequired,
 }
 
 func (s *Service) post(ctx context.Context, body wireSubmit, token string) (wireReceipt, error) {
@@ -91,6 +96,27 @@ func (s *Service) get(ctx context.Context, id, token string, out any) error {
 		req.Header.Set("X-Install-Token", token)
 		return s.do(req, out)
 	})
+}
+
+// postReply sends one reply. It is never retried: replies carry no idempotency
+// key, so a request that may have arrived must not be sent twice.
+func (s *Service) postReply(ctx context.Context, id, token, receipt, body string) (ReplyReceipt, error) {
+	raw, err := json.Marshal(struct {
+		Body string `json:"body"`
+	}{body})
+	if err != nil {
+		return ReplyReceipt{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.base+"/v1/feedback/"+url.PathEscape(receipt)+"/reply", bytes.NewReader(raw))
+	if err != nil {
+		return ReplyReceipt{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Install-Id", id)
+	req.Header.Set("X-Install-Token", token)
+	var out ReplyReceipt
+	err = s.do(req, &out)
+	return out, err
 }
 
 // do performs one request and turns whatever came back into a sentinel.

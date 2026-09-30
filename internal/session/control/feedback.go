@@ -16,6 +16,8 @@ type Feedback interface {
 	SetFeedbackDisplayName(name string) error
 	SubmitFeedback(ctx context.Context, d feedback.Draft) (feedback.Receipt, error)
 	ListFeedback(ctx context.Context) (feedback.Mine, error)
+	ReplyFeedback(ctx context.Context, receipt, body string) (feedback.ReplyReceipt, error)
+	MarkFeedbackSeen(receipt string, upTo feedback.ReplyID) error
 }
 
 // FeedbackOptions is what assembly hands the controller for Feedback: the
@@ -62,4 +64,18 @@ func (c *Controller) ListFeedback(ctx context.Context) (feedback.Mine, error) {
 		return feedback.Mine{}, feedback.ErrDisabled
 	}
 	return c.feedback.Service.ListMine(ctx)
+}
+
+func (c *Controller) ReplyFeedback(ctx context.Context, receipt, body string) (feedback.ReplyReceipt, error) {
+	if c.feedback.Service == nil {
+		return feedback.ReplyReceipt{}, feedback.ErrDisabled
+	}
+	return c.feedback.Service.Reply(ctx, receipt, body)
+}
+
+func (c *Controller) MarkFeedbackSeen(receipt string, upTo feedback.ReplyID) error {
+	if c.feedback.Service == nil {
+		return feedback.ErrDisabled
+	}
+	return c.feedback.Service.MarkSeen(receipt, upTo)
 }
