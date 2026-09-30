@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"reasonix/internal/base/testenv"
@@ -54,6 +55,38 @@ func TestCloudDesktopRejectsLiveStreamsAndOversizedWrites(t *testing.T) {
 	} {
 		if _, err := hub.CloudDesktop(t.Context(), request, "phone"); !errors.Is(err, ErrCloudDesktopRequest) {
 			t.Errorf("CloudDesktop(%+v) = %v, want refused", request, err)
+		}
+	}
+}
+
+func TestCloudDesktopBodylessPostReachesTheBackendAsJSON(t *testing.T) {
+	t.Setenv("REASONIX_HOME", testenv.TempDir(t))
+	hub := NewHub(HubOptions{})
+	runtime := hubRuntime(t, hub, testenv.TempDir(t))
+
+	response, err := hub.CloudDesktop(t.Context(), remotecloud.DesktopRequest{
+		Method: http.MethodPost, Path: "/runtimes/" + runtime.ID + "/close",
+	}, "phone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != http.StatusNoContent {
+		t.Fatalf("bodyless close status = %d, want 204; body %s", response.Status, response.Body)
+	}
+}
+
+func TestCSRFGuardStillRefusesPostWithoutJSONType(t *testing.T) {
+	reached := false
+	guarded := csrfGuard(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { reached = true }))
+	for _, contentType := range []string{"", "text/plain", "application/x-www-form-urlencoded"} {
+		req := httptest.NewRequest(http.MethodPost, "/runtimes/x/close", nil)
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
+		rec := httptest.NewRecorder()
+		guarded.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnsupportedMediaType || reached {
+			t.Fatalf("content type %q: status = %d, reached = %v", contentType, rec.Code, reached)
 		}
 	}
 }
