@@ -16,9 +16,6 @@ const (
 	Subagent   Module = "subagent"
 	Retrieval  Module = "retrieval"
 	Compaction Module = "compaction"
-	// FullFold off means a fold reads the previous projection instead of
-	// re-deriving its digest from the canonical transcript.
-	FullFold Module = "full-fold"
 	// Upstream off means a fleet dependency edge orders its endpoints without
 	// delivering the dependency's answer, so a dependent must re-derive it.
 	Upstream Module = "upstream"
@@ -73,7 +70,7 @@ func ParseFoldIndexScale(spec string) (FoldIndexScale, error) {
 
 // Modules returns every switchable module in the order arm names use.
 func Modules() []Module {
-	return []Module{Evidence, Planner, Subagent, Retrieval, Compaction, FullFold, Upstream, RecallSearch}
+	return []Module{Evidence, Planner, Subagent, Retrieval, Compaction, Upstream, RecallSearch}
 }
 
 // Set is the group of modules disabled for a run. The zero value is the
