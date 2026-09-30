@@ -33,6 +33,7 @@ func TestResolveProjectCannotLoosenAnyLimit(t *testing.T) {
 		GlobalTokensDay: new(d.GlobalTokensDay + 1), GlobalTokensWeek: new(d.GlobalTokensWeek + 1),
 		LifetimeTokens: new(d.LifetimeTokens + 1), ExpiryDays: new(d.ExpiryDays + 1),
 		MaxSchedules: new(d.MaxSchedules + 1), MaxConsecutiveFails: new(d.MaxConsecutiveFails + 1),
+		MaxRepeatParks: new(d.MaxRepeatParks + 1),
 	}
 	p, ign, err := Resolve(Overrides{}, loose)
 	if err != nil {
@@ -41,7 +42,7 @@ func TestResolveProjectCannotLoosenAnyLimit(t *testing.T) {
 	if p != d {
 		t.Fatalf("project layer loosened policy:\n got %+v\nwant %+v", p, d)
 	}
-	if len(ign) != 12 {
+	if len(ign) != 13 {
 		t.Fatalf("every loosening must be reported, got %d: %v", len(ign), ign)
 	}
 }

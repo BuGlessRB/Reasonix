@@ -362,3 +362,20 @@ func TestSessionDataGuardDeniesTrustedState(t *testing.T) {
 		t.Errorf("a sibling that only shares the prefix is not trusted state: %v", err)
 	}
 }
+
+func TestSessionDataGuardDeniesTheScheduleStore(t *testing.T) {
+	root, _, _ := stateRootFor(t)
+	store := filepath.Join(root, ScheduleStateDir)
+	for _, target := range []string{filepath.Join(store, "schedules.json"), filepath.Join(store, "results", "x.json"), store} {
+		var refusal tool.Refusal
+		if err := NewSessionDataGuard(root, nil).Check(target); !errors.As(err, &refusal) || refusal.Code != CodeScheduleStateWrite {
+			t.Errorf("Check(%q) = %v, want a %s refusal", target, err, CodeScheduleStateWrite)
+		}
+	}
+	if err := NewSessionDataGuard(root, []string{store}).Check(filepath.Join(store, "x")); err != nil {
+		t.Errorf("an explicit allow_write root keeps raw access: %v", err)
+	}
+	if err := NewSessionDataGuard(root, nil).Check(filepath.Join(root, "schedules-notes.md")); err != nil {
+		t.Errorf("a sibling that only shares the prefix is not the store: %v", err)
+	}
+}

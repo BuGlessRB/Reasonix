@@ -606,3 +606,22 @@ func TestBuildRefusesToRebuildAnObservedRunWithoutTheirPosture(t *testing.T) {
 		t.Fatal("the rebuilt controller lost the posture")
 	}
 }
+
+func TestEffectObserveGrantNarrowsReadToolsButKeepsHostControl(t *testing.T) {
+	root := observeProject(t)
+	prov := testutil.NewMock("narrow", testutil.Turn{Text: "done"})
+	setBootTokenProfileTestProvider(t, prov)
+	ctrl, err := Build(context.Background(), Options{Sink: event.Discard, WorkspaceRoot: root,
+		Observe: &ObserveOptions{Pending: observe.NewLedger(nil), Run: observe.RunContext{ScheduleID: "s", TriggerID: "t"}, Tools: []string{"read_file", "bash"}}})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	t.Cleanup(ctrl.Close)
+	if err := ctrl.Run(context.Background(), "look"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	want := []string{"ask", "conclude_blocked", "read_file"}
+	if got := toolNameList(agentRequests(prov.Requests())[0]); !slices.Equal(got, want) {
+		t.Fatalf("offered %v, want %v: a name the grant lists but the ceiling refuses (bash) must not appear", got, want)
+	}
+}

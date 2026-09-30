@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -49,7 +50,7 @@ func reopen(t *testing.T, dir string, clk *fakeClock) *Store {
 func everyReq() CreateRequest {
 	return CreateRequest{
 		Trigger:     Trigger{Kind: TriggerEvery, EverySec: 3600},
-		Target:      Target{Workspace: filepath.Join(string(filepath.Separator), "work", "repo")},
+		Target:      Target{Workspace: filepath.Join(os.TempDir(), "work", "repo")},
 		Prompt:      "summarize open TODOs",
 		Model:       Model{Provider: "deepseek", Model: "deepseek-chat"},
 		Grant:       Grant{Tools: []string{"read_file", "grep"}},

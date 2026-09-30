@@ -70,7 +70,7 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 	if shouldMigrateLegacyConfigForCLI(cmd) && !doctorRepair {
 		migrateLegacyConfigForCLI()
 	}
-	if !doctorRepair {
+	if readsLanguageFromConfig(cmd, doctorRepair) {
 		if cfg, err := config.Load(); err == nil {
 			if cfg.Language != "" {
 				i18n.DetectLanguage(cfg.Language)
@@ -162,9 +162,7 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 		usage()
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, i18n.M.UnknownCommandFmt+"\n\n", cmd)
-		usage()
-		return 2
+		return unknownCommand(cmd, rest, version)
 	}
 }
 

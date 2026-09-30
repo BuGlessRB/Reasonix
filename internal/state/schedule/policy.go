@@ -24,6 +24,7 @@ type Policy struct {
 	ExpiryDays            int64
 	MaxSchedules          int64
 	MaxConsecutiveFails   int64
+	MaxRepeatParks        int64
 }
 
 func DefaultPolicy() Policy {
@@ -40,6 +41,7 @@ func DefaultPolicy() Policy {
 		ExpiryDays:            30,
 		MaxSchedules:          8,
 		MaxConsecutiveFails:   3,
+		MaxRepeatParks:        3,
 	}
 }
 
@@ -58,6 +60,7 @@ type Overrides struct {
 	ExpiryDays            *int64 `toml:"expiry_days" json:"expiry_days,omitempty"`
 	MaxSchedules          *int64 `toml:"max_schedules" json:"max_schedules,omitempty"`
 	MaxConsecutiveFails   *int64 `toml:"max_consecutive_failures" json:"max_consecutive_failures,omitempty"`
+	MaxRepeatParks        *int64 `toml:"max_repeat_parks" json:"max_repeat_parks,omitempty"`
 }
 
 // Ignored names a project-layer key that was dropped and why.
@@ -88,6 +91,7 @@ func (p *Policy) fields(user, project Overrides) []field {
 		{"expiry_days", false, &p.ExpiryDays, user.ExpiryDays, project.ExpiryDays},
 		{"max_schedules", false, &p.MaxSchedules, user.MaxSchedules, project.MaxSchedules},
 		{"max_consecutive_failures", false, &p.MaxConsecutiveFails, user.MaxConsecutiveFails, project.MaxConsecutiveFails},
+		{"max_repeat_parks", false, &p.MaxRepeatParks, user.MaxRepeatParks, project.MaxRepeatParks},
 	}
 }
 

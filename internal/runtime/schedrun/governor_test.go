@@ -1,0 +1,122 @@
+package schedrun
+
+import (
+	"errors"
+	"io"
+	"os"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"reasonix/internal/contract/observe"
+)
+
+func TestGovernorStopsOnceAtTheCeiling(t *testing.T) {
+	var stops atomic.Int32
+	g := NewGovernor(1000, func() { stops.Add(1) })
+	g.AddUsage(600)
+	if stops.Load() != 0 || g.OverBudget() {
+		t.Fatal("stopped below the ceiling")
+	}
+	g.AddUsage(-5000)
+	g.AddUsage(400)
+	g.AddUsage(400)
+	if stops.Load() != 1 || !g.OverBudget() || g.Tokens() != 1400 || g.Usages() != 4 {
+		t.Fatalf("stops=%d over=%v tokens=%d usages=%d", stops.Load(), g.OverBudget(), g.Tokens(), g.Usages())
+	}
+}
+
+func TestRepeatedParksOfOneClassEndTheRun(t *testing.T) {
+	var stops atomic.Int32
+	g := NewGovernor(0, func() { stops.Add(1) })
+	sink := g.Sink(observe.NewLedger(nil), 3)
+	park := func(kind observe.Kind, source, digest string) {
+		t.Helper()
+		if _, err := sink.Park(observe.Pending{Kind: kind, Source: source, Digest: digest}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	park(observe.KindApproval, "read_file", "a")
+	park(observe.KindApproval, "grep", "b")
+	park(observe.KindAsk, "ask", "c")
+	park(observe.KindApproval, "read_file", "d")
+	if stops.Load() != 0 || g.RepeatParked() {
+		t.Fatal("different classes were counted as one")
+	}
+	park(observe.KindApproval, "read_file", "a")
+	if stops.Load() != 1 || !g.RepeatParked() {
+		t.Fatalf("the third request of one class did not end the run: stops=%d", stops.Load())
+	}
+}
+
+func TestRepeatLimitBelowOneIsOff(t *testing.T) {
+	g := NewGovernor(0, func() { t.Fatal("stopped") })
+	sink := g.Sink(observe.NewLedger(nil), 0)
+	for range 10 {
+		_, _ = sink.Park(observe.Pending{Kind: observe.KindAsk, Source: "ask", Digest: "x"})
+	}
+}
+
+func TestRepeatSinkPassesTheStoreRefusalOn(t *testing.T) {
+	g := NewGovernor(0, nil)
+	sink := g.Sink(observe.NewLedger(nil), 3)
+	for i := range observe.MaxPending {
+		if _, err := sink.Park(observe.Pending{Kind: observe.KindApproval, Source: "s" + string(rune('a'+i)), Digest: string(rune('a' + i))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := sink.Park(observe.Pending{Kind: observe.KindApproval, Source: "zz", Digest: "zz"}); !errors.Is(err, observe.ErrParkLimit) {
+		t.Fatalf("err = %v, want the store's own park limit", err)
+	}
+}
+
+func TestAwaitGoReleasesOnTheLineAndReportsTheSupervisorLeaving(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	go func() { _, _ = io.WriteString(w, "go\n") }()
+	gone, err := AwaitGo(r, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-gone:
+		t.Fatal("reported gone while the supervisor still holds the pipe")
+	case <-time.After(100 * time.Millisecond):
+	}
+	_ = w.Close()
+	select {
+	case <-gone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the end of the stream was not reported")
+	}
+}
+
+func TestAwaitGoRefusesAnythingButGoAndGivesUp(t *testing.T) {
+	if _, err := AwaitGo(strings.NewReader("run\n"), time.Second); !errors.Is(err, ErrParentGone) {
+		t.Fatalf("wrong line: %v", err)
+	}
+	if _, err := AwaitGo(strings.NewReader(""), time.Second); !errors.Is(err, ErrParentGone) {
+		t.Fatalf("closed before go: %v", err)
+	}
+	r, w, _ := os.Pipe()
+	defer r.Close()
+	defer w.Close()
+	if _, err := AwaitGo(r, 100*time.Millisecond); !errors.Is(err, ErrStartTimeout) {
+		t.Fatalf("no line: %v", err)
+	}
+}
+
+func TestReadLinesSkipsStrayOutputAndBoundsLines(t *testing.T) {
+	var got []Line
+	err := readLines(strings.NewReader("warning: hi\n{\"kind\":\"usage\",\"tokens\":7}\n{\"kind\":\"nope\"}\n"), func(l Line) { got = append(got, l) })
+	if err != nil || len(got) != 1 || got[0].Tokens != 7 {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if err := readLines(strings.NewReader(strings.Repeat("x", MaxLineBytes+1)+"\n"), func(Line) {}); !errors.Is(err, ErrProtocol) {
+		t.Fatalf("oversize: %v", err)
+	}
+}
