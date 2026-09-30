@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "./testkit";
 import { MarketGroup } from "./Market";
 import { MockPort } from "../port/mock";
 import { HttpError } from "../port/port";
-import type { AgentPort } from "../port/port";
+import type { AgentPort, MarketPackage, MarketPlan } from "../port/port";
 
 afterEach(cleanup);
 
@@ -19,6 +19,64 @@ async function openMine(port: AgentPort, onInstalled = () => {}) {
 }
 
 describe("the account's own packages", () => {
+  it("retries a failed list read without leaving My Packages", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    const rows = await port.myMarket();
+    let finish!: (rows: MarketPackage[]) => void;
+    const read = vi.spyOn(port, "myMarket")
+      .mockRejectedValueOnce(new Error("list unavailable"))
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await openMine(port);
+    await screen.findByText("list unavailable");
+    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(screen.queryByText("list unavailable")).toBeNull();
+    expect(screen.getByText("正在读取…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
+
+    await act(async () => finish(rows));
+    expect(await screen.findByText("ship-notes")).toBeTruthy();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("无法读取我的发布")).toBeNull();
+  });
+
+  it("shows an empty account after a successful retry", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    vi.spyOn(port, "myMarket").mockRejectedValueOnce(new Error("list unavailable")).mockResolvedValueOnce([]);
+    await openMine(port);
+    await screen.findByText("list unavailable");
+    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+
+    expect(await screen.findByText("还没有发布过。")).toBeTruthy();
+    expect(screen.queryByText("无法读取我的发布")).toBeNull();
+  });
+
+  it("retries an own-package preview and requires confirmation of the recovered plan", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    const shown = await port.planOwnMarket({ slug: "demo/ship-notes" });
+    let finish!: (plan: MarketPlan) => void;
+    const preview = vi.spyOn(port, "planOwnMarket")
+      .mockRejectedValueOnce(new Error("preview unavailable"))
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const install = vi.spyOn(port, "installOwnMarket");
+    await openMine(port);
+    const row = (await screen.findByText("ship-notes")).closest("li")!;
+    await userEvent.click(row.querySelector<HTMLButtonElement>('[data-action="market.own-inspect"]')!);
+    await screen.findByText("preview unavailable");
+    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(screen.queryByText("preview unavailable")).toBeNull();
+    expect(screen.getByText("正在预览将安装的内容…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "安装" })).toBeNull();
+    expect(preview.mock.calls).toEqual([[{ slug: "demo/ship-notes", replace: false }], [{ slug: "demo/ship-notes", replace: false }]]);
+
+    await act(async () => finish(shown));
+    const confirm = await screen.findByRole("button", { name: "安装" });
+    expect(install).not.toHaveBeenCalled();
+    await userEvent.click(confirm);
+    expect(install.mock.calls[0]![0]).toEqual({
+      slug: "demo/ship-notes", version: shown.version, planId: shown.planId, replace: false, digest: shown.contentDigest,
+    });
+  });
+
   it("saves a private package out of review and shows it as private", async () => {
     const port = new MockPort() as unknown as AgentPort;
     const publish = vi.spyOn(port, "publishMarket");

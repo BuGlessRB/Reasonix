@@ -20,10 +20,14 @@ export function OwnInstall({ port, pkg, onBack, onInstalled }: Props) {
   const [done, setDone] = useState<MarketPlan | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
   const replace = !!pkg.installed && pkg.installed.version !== pkg.latestVersion;
 
   useEffect(() => {
     let live = true;
+    setBusy(true);
+    setError("");
+    setPlan(null);
     port
       .planOwnMarket({ slug: pkg.slug, replace })
       .then((p) => live && setPlan(p))
@@ -32,7 +36,7 @@ export function OwnInstall({ port, pkg, onBack, onInstalled }: Props) {
     return () => {
       live = false;
     };
-  }, [port, pkg.slug, replace]);
+  }, [port, pkg.slug, replace, attempt]);
 
   const install = async () => {
     if (!plan) return;
@@ -78,7 +82,10 @@ export function OwnInstall({ port, pkg, onBack, onInstalled }: Props) {
       ) : (
         <div className="empty">{t("正在预览将安装的内容…")}</div>
       )}
-      <div className="acts">{back}</div>
+      <div className="acts">
+        {back}
+        {error && !busy && <button className="act" data-action="market.own-retry" onClick={() => setAttempt((n) => n + 1)}>{t("重试")}</button>}
+      </div>
     </div>
   );
 }

@@ -215,6 +215,8 @@ export const ACTIONS: UIAction[] = [
   // The account's own packages: a preview, an install pinned to that preview's
   // digest, and sending a private one to review.
   { id: "market.own-inspect", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  { id: "market.own-retry", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  { id: "market.mine-retry", kind: "view", target: "none", proof: "interaction" },
   { id: "market.submit", kind: "kernel-mutation", target: "none", proof: "interaction" },
   { id: "market.vote", kind: "kernel-mutation", target: "none", proof: "interaction" },
   // Taking back the innermost open thing: a popover, an inline form. One
