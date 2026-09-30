@@ -763,8 +763,8 @@ export class MockPort extends MockBackup implements AgentPort {
   async setPreset(preset: Preset) {
     this.state.preset = preset;
   }
-  async storage() {
-    return mockStorage();
+  async storage(query?: Parameters<typeof mockStorage>[0]) {
+    return mockStorage(query);
   }
 
   async planStorageMove(root: string, dir: string) {

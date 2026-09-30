@@ -15,6 +15,10 @@ export interface StorageRoot {
   pinnedBy?: string;
   // Never written yet. Not a failure — a fresh install has no worktrees.
   missing?: boolean;
+  // The walk reached its time limit: bytes and files are a lower bound.
+  truncated?: boolean;
+  // Described but not measured yet; bytes and files mean nothing until it is.
+  pending?: boolean;
   err?: string;
   volume?: string;
   volumeFree?: number;
@@ -39,6 +43,13 @@ export interface StoragePending {
   root: string;
   to: string;
   phase: string;
+}
+
+// layout answers at once with every root unmeasured; root measures just that
+// one, so a slow root never holds up the rest.
+export interface StorageQuery {
+  layout?: boolean;
+  root?: string;
 }
 
 export interface StorageState {

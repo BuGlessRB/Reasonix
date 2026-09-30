@@ -20,6 +20,27 @@ const NAMED: Record<string, [string, string]> = {
   locks: ["进程锁", "用于多实例互斥，必须保留在本机固定位置。每个均为空文件；删除会破坏互斥，因此只保留不清理"],
 };
 
+const LAYOUT_LIMIT_MS = 10_000;
+// Longer than the kernel's own per-root budget, so a root the kernel gave up on
+// arrives as a partial count and this limit only fires when the kernel is silent.
+const MEASURE_LIMIT_MS = 20_000;
+
+function within<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    work.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 export function Storage({ port, hub, workspace, onRecovered }: { port: AgentPort; hub: HubPort; workspace: string; onRecovered: () => void }) {
   const [state, setState] = useState<StorageState | null>(null);
   const [error, setError] = useState("");
@@ -31,23 +52,62 @@ export function Storage({ port, hub, workspace, onRecovered }: { port: AgentPort
   const [recovery, setRecovery] = useState<{ imported: number; warnings: number } | null>(null);
   const [recoveryError, setRecoveryError] = useState("");
 
+  const [stalled, setStalled] = useState<ReadonlySet<string>>(new Set());
+  const generation = useRef(0);
+
+  // Rows appear as soon as the kernel has laid them out; each root's size then
+  // arrives on its own, so one slow directory cannot hold the others back.
   const read = useCallback(() => {
-    port
-      .storage()
-      .then(setState)
-      .catch(() => setError(t("无法读取存储占用。")));
+    const mine = ++generation.current;
+    setError("");
+    setStalled(new Set());
+    within(port.storage({ layout: true }), LAYOUT_LIMIT_MS)
+      .then((layout) => {
+        if (mine !== generation.current) return;
+        setState(layout);
+        for (const root of layout.roots) {
+          if (!root.pending) continue;
+          within(port.storage({ root: root.id }), MEASURE_LIMIT_MS)
+            .then((answer) => {
+              if (mine !== generation.current) return;
+              const measured = answer.roots[0];
+              if (!measured) return;
+              setState((prev) => (prev ? { ...prev, roots: prev.roots.map((r) => (r.id === measured.id ? measured : r)) } : prev));
+            })
+            .catch(() => {
+              if (mine === generation.current) setStalled((prev) => new Set(prev).add(root.id));
+            });
+        }
+      })
+      .catch(() => {
+        if (mine === generation.current) setError(t("无法读取存储占用。"));
+      });
   }, [port]);
 
   useEffect(read, [read]);
 
   // A move outlives the request that started it, so the panel follows it the
   // way it follows a running turn: by asking again until it says it is done.
+  // The poll carries the move and leaves the sizes already measured in place.
   const running = state?.move && !state.move.done;
+  const wasRunning = useRef(false);
   useEffect(() => {
-    if (!running) return;
-    const timer = setInterval(read, 500);
+    if (!running) {
+      if (wasRunning.current) read();
+      wasRunning.current = false;
+      return;
+    }
+    wasRunning.current = true;
+    const timer = setInterval(() => {
+      port
+        .storage({ layout: true })
+        .then((layout) =>
+          setState((prev) => (prev ? { ...layout, roots: prev.roots } : layout)),
+        )
+        .catch(() => setError(t("无法读取存储占用。")));
+    }, 500);
     return () => clearInterval(timer);
-  }, [running, read]);
+  }, [running, read, port]);
 
   useEffect(() => {
     if (picking) input.current?.focus();
@@ -101,7 +161,7 @@ export function Storage({ port, hub, workspace, onRecovered }: { port: AgentPort
   if (!state) return <div className="empty">{t("正在统计…")}</div>;
 
   const measured = state.roots.filter((r) => !r.missing || r.relocatable);
-  const largest = Math.max(1, ...measured.map((r) => r.bytes));
+  const largest = Math.max(1, ...measured.filter((r) => !r.pending).map((r) => r.bytes));
 
   return (
     <div className="storage">
@@ -130,7 +190,7 @@ export function Storage({ port, hub, workspace, onRecovered }: { port: AgentPort
       <section className="grp">
         <h3 className="lbl">{t("占用")}</h3>
         {measured.map((root) => (
-          <Bar key={root.id} root={root} largest={largest} />
+          <Bar key={root.id} root={root} largest={largest} stalled={stalled.has(root.id)} />
         ))}
         <Drives roots={state.roots} />
       </section>
@@ -177,10 +237,11 @@ export function Storage({ port, hub, workspace, onRecovered }: { port: AgentPort
   );
 }
 
-function Bar({ root, largest }: { root: StorageRoot; largest: number }) {
+function Bar({ root, largest, stalled }: { root: StorageRoot; largest: number; stalled: boolean }) {
   const [name] = NAMED[root.id] ?? [root.id, ""];
+  const unknown = root.pending || stalled;
   return (
-    <div className="vol">
+    <div className="vol" data-state={stalled ? "stalled" : root.pending ? "measuring" : root.truncated ? "partial" : "done"}>
       <div className="row">
         <span className="nm">{t(name)}</span>
         {/* The count breaks down the size, so it goes where there is a size to
@@ -188,13 +249,20 @@ function Bar({ root, largest }: { root: StorageRoot; largest: number }) {
             them read as an occupancy nobody could find, next to a meter bar
             drawn at its 1% floor. */}
         <span className="sz">
-          {bytes(root.bytes)}
-          {root.bytes > 0 && root.files > 0 && ` · ${t("{n} 个文件", { n: root.files })}`}
+          {stalled
+            ? t("统计超时")
+            : root.pending
+              ? t("正在统计…")
+              : (root.truncated ? "≥ " : "") + bytes(root.bytes)}
+          {!unknown && root.bytes > 0 && root.files > 0 && ` · ${t("{n} 个文件", { n: root.files })}`}
         </span>
       </div>
-      <div className="meter">
-        <i style={{ width: `${Math.max(1, Math.round((root.bytes / largest) * 100))}%` }} />
-      </div>
+      {root.truncated && !unknown && <p className="note">{t("目录过大，已统计到时间上限，实际占用不小于此数")}</p>}
+      {!unknown && (
+        <div className="meter">
+          <i style={{ width: `${Math.max(1, Math.round((root.bytes / largest) * 100))}%` }} />
+        </div>
+      )}
     </div>
   );
 }

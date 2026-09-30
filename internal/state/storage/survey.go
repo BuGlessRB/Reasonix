@@ -9,7 +9,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"reasonix/internal/contract/config"
 )
@@ -30,6 +34,11 @@ type Root struct {
 	// Missing is a root that has never been written. It is not an error: a
 	// fresh install has no worktrees, and reporting zero is the honest answer.
 	Missing bool
+	// Truncated is a walk that hit Budget before finishing: Bytes and Files
+	// are a lower bound, not the total.
+	Truncated bool
+	// Pending is a root Layout described but nobody has measured yet.
+	Pending bool
 	// Err is set when the walk could not finish. Bytes and Files then describe
 	// what was reachable, so a permission-denied subtree understates rather
 	// than blanks the report.
@@ -48,82 +57,180 @@ type Volume struct {
 	Total int64
 }
 
-// Survey measures every declared root. It never fails as a whole: a root that
-// cannot be read carries its own Err, because a single unreadable directory
-// must not deny the user the numbers for the rest.
-func Survey(ctx context.Context) []Root {
+// Budget is how long one root may be walked. A root that exceeds it reports
+// what was counted so far with Truncated set, so a huge or stalled directory
+// costs the user one row's precision rather than the whole panel.
+var Budget = 10 * time.Second
+
+// walkDir is the directory walk, held in a variable so a test can stand a slow
+// or unbounded filesystem in its place. A walk reads it once, when it starts.
+var walkDir = filepath.WalkDir
+
+// Layout resolves every declared root without reading any of them: where each
+// lives, whether it may move, and what volume it sits on. Sizes are left at
+// zero with Pending set, so a caller can draw the rows now and fill them in as
+// each root is measured.
+func Layout() []Root {
 	ids := config.RootIDs()
 	out := make([]Root, 0, len(ids))
 	volumes := map[string]Volume{}
 	for _, id := range ids {
-		root := Root{
-			ID:          id,
-			Dir:         config.RootDir(id),
-			Relocatable: config.RootRelocatable(id),
-			PinnedBy:    config.RootPinnedBy(id),
+		root := describe(id)
+		if root.Dir != "" {
+			root.Volume = volumeFor(volumes, root.Dir)
+			root.Pending = true
 		}
-		if root.Dir == "" {
-			root.Missing = true
-			out = append(out, root)
-			continue
-		}
-		root.Bytes, root.Files, root.Missing, root.Err = measureRoot(ctx, id, root.Dir)
-		key := volumeKey(root.Dir)
-		vol, ok := volumes[key]
-		if !ok {
-			vol = readVolume(root.Dir)
-			volumes[key] = vol
-		}
-		root.Volume = vol
 		out = append(out, root)
 	}
 	return out
 }
 
-// measureRoot sizes what a root actually owns. A root sharing its directory
-// with another counts only its declared entries, or the report would credit
-// state with the configuration sitting beside it.
-func measureRoot(ctx context.Context, id config.RootID, dir string) (bytes, files int64, missing bool, errText string) {
-	owned := config.RootOwns(id)
-	if len(owned) == 0 {
-		return measure(ctx, dir)
-	}
-	missing = true
-	for _, name := range owned {
-		b, f, miss, err := measure(ctx, filepath.Join(dir, name))
-		bytes += b
-		files += f
-		if !miss {
-			missing = false
+// Survey measures every declared root, each within Budget. It never fails as a
+// whole: a root that cannot be read carries its own Err, because a single
+// unreadable directory must not deny the user the numbers for the rest.
+func Survey(ctx context.Context) []Root {
+	ids := config.RootIDs()
+	out := make([]Root, 0, len(ids))
+	volumes := map[string]Volume{}
+	for _, id := range ids {
+		root := measured(ctx, describe(id), Budget)
+		if root.Dir != "" {
+			root.Volume = volumeFor(volumes, root.Dir)
 		}
-		if err != "" && errText == "" {
-			errText = err
-		}
+		out = append(out, root)
 	}
-	return bytes, files, missing, errText
+	return out
 }
 
-// measure walks dir. It counts what it can reach and reports the first refusal
-// rather than aborting: an unreadable subtree is a smaller number plus a
-// reason, which is more use than no number at all.
-func measure(ctx context.Context, dir string) (bytes, files int64, missing bool, errText string) {
+// SurveyRoot measures one root, so a slow root never holds back the others.
+// ok is false when id is not a declared root.
+func SurveyRoot(ctx context.Context, id config.RootID) (Root, bool) {
+	if !slices.Contains(config.RootIDs(), id) {
+		return Root{}, false
+	}
+	root := measured(ctx, describe(id), Budget)
+	if root.Dir != "" {
+		root.Volume = readVolume(root.Dir)
+	}
+	return root, true
+}
+
+func describe(id config.RootID) Root {
+	return Root{
+		ID:          id,
+		Dir:         config.RootDir(id),
+		Relocatable: config.RootRelocatable(id),
+		PinnedBy:    config.RootPinnedBy(id),
+	}
+}
+
+func volumeFor(cache map[string]Volume, dir string) Volume {
+	key := volumeKey(dir)
+	vol, ok := cache[key]
+	if !ok {
+		vol = readVolume(dir)
+		cache[key] = vol
+	}
+	return vol
+}
+
+func measured(ctx context.Context, root Root, budget time.Duration) Root {
+	if root.Dir == "" {
+		root.Missing = true
+		return root
+	}
+	root.Bytes, root.Files, root.Missing, root.Truncated, root.Err = measureRoot(ctx, root.ID, root.Dir, budget)
+	return root
+}
+
+// tally is the running count of one walk. It is read by whoever gave up
+// waiting, while the walk may still be inside a call that cannot be interrupted.
+type tally struct {
+	walk         func(string, fs.WalkDirFunc) error
+	bytes, files atomic.Int64
+	mu           sync.Mutex
+	err          string
+}
+
+func (t *tally) fail(text string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.err == "" {
+		t.err = text
+	}
+}
+
+func (t *tally) firstErr() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.err
+}
+
+// measureRoot sizes what a root owns within budget (zero: unlimited, which a
+// move plan needs). The walk runs off to the side so a filesystem call that
+// never returns still lets the caller answer with what was counted.
+func measureRoot(ctx context.Context, id config.RootID, dir string, budget time.Duration) (bytes, files int64, missing, truncated bool, errText string) {
+	bctx, cancel := ctx, context.CancelFunc(func() {})
+	if budget > 0 {
+		bctx, cancel = context.WithTimeout(ctx, budget)
+	}
+	defer cancel()
+	count := tally{walk: walkDir}
+	done := make(chan bool, 1)
+	go func() { done <- measureOwned(bctx, id, dir, &count) }()
+	select {
+	case missing = <-done:
+	case <-bctx.Done():
+		missing = false
+	}
+	errText = count.firstErr()
+	switch {
+	case ctx.Err() != nil:
+		if errText == "" {
+			errText = ctx.Err().Error()
+		}
+	case bctx.Err() != nil:
+		truncated = true
+	}
+	return count.bytes.Load(), count.files.Load(), missing && !truncated, truncated, errText
+}
+
+// A root sharing its directory with another counts only its declared entries,
+// or the report would credit state with the configuration sitting beside it.
+func measureOwned(ctx context.Context, id config.RootID, dir string, count *tally) bool {
+	owned := config.RootOwns(id)
+	if len(owned) == 0 {
+		return measure(ctx, dir, count)
+	}
+	missing := true
+	for _, name := range owned {
+		if !measure(ctx, filepath.Join(dir, name), count) {
+			missing = false
+		}
+	}
+	return missing
+}
+
+// measure walks dir into count. It counts what it can reach and records the
+// first refusal rather than aborting: an unreadable subtree is a smaller number
+// plus a reason, which is more use than no number at all.
+func measure(ctx context.Context, dir string, count *tally) (missing bool) {
 	// Asked before the walk rather than inferred from it: a root nothing has
 	// written yet and a root that refused to be read are different answers,
 	// and the walk reports both as the same first callback error.
 	if _, err := os.Stat(dir); err != nil {
 		if os.IsNotExist(err) {
-			return 0, 0, true, ""
+			return true
 		}
-		return 0, 0, false, err.Error()
+		count.fail(err.Error())
+		return false
 	}
-	walkErr := filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, err error) error {
+	walkErr := count.walk(dir, func(_ string, entry fs.DirEntry, err error) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
 		if err != nil {
-			if errText == "" {
-				errText = err.Error()
-			}
+			count.fail(err.Error())
 			return nil
 		}
 		if entry.IsDir() {
@@ -131,19 +238,17 @@ func measure(ctx context.Context, dir string) (bytes, files int64, missing bool,
 		}
 		info, infoErr := entry.Info()
 		if infoErr != nil {
-			if errText == "" {
-				errText = infoErr.Error()
-			}
+			count.fail(infoErr.Error())
 			return nil
 		}
-		files++
-		bytes += info.Size()
+		count.files.Add(1)
+		count.bytes.Add(info.Size())
 		return nil
 	})
-	if walkErr != nil && errText == "" {
-		errText = walkErr.Error()
+	if walkErr != nil {
+		count.fail(walkErr.Error())
 	}
-	return bytes, files, false, errText
+	return false
 }
 
 // volumeKey groups roots that sit on one filesystem, so the free-space probe

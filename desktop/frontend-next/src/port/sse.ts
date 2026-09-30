@@ -2,7 +2,7 @@ import { PLAN_ACTIONS, type PlanAction } from "./session";
 import type { AccountState, AgentPort, Appearance, ChipCall, CompactionSettings, Completion, DeviceGrant, ProviderProbe, UpdateProgress, VersionHub, ApprovalMode, ApprovalVerdict, Checkpoint, RewindPlan, RewindResult, RewindScope, HistoryMessage, HostTodo, BrowserTab, ModelEntry, Preset, ProviderSetup, RoleAssignments, SessionEntry, SessionStatus, WalletReading, HookDryRun, HookEntry, MemoryCatalog, MemoryEdit, MemoryEntry, UsageReport, McpDraft, PluginExport, Queue, Queued, NotifyPrefs, TrayPrefs, WorkspaceInfo } from "./port";
 import { HttpError, type Attachment, type ChangeDiff, type DroppedRef, type WorkspaceFile, type WorkspaceFiles, type WorkspaceChanges } from "./port";
 import { SseBackup } from "./sse_backup";
-import type { StoragePlan, StorageState } from "./storage";
+import type { StoragePlan, StorageQuery, StorageState } from "./storage";
 import type { ExecutionGraphRead, TrajectoryRead, WireEvent } from "./wire";
 import { host } from "./host";
 import { current } from "../i18n";
@@ -179,8 +179,9 @@ export class SsePort extends SseBackup implements AgentPort {
     return this.post("/roles", { role, ref });
   }
 
-  storage() {
-    return this.get<StorageState>("/storage");
+  storage(query?: StorageQuery) {
+    const q = query?.layout ? "?layout=1" : query?.root ? "?root=" + encodeURIComponent(query.root) : "";
+    return this.get<StorageState>("/storage" + q);
   }
 
   // Both answer with a plan: a refused move is reported in the body rather

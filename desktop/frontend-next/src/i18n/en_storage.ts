@@ -17,6 +17,8 @@ export const EN_STORAGE: Record<string, string> = {
     "Where the data is written and how much space it uses. Sessions and indexes keep growing while configuration and credentials do not, so only the former can be moved. A move takes effect after a restart.",
   "无法读取存储占用。": "Cannot read what is on disk.",
   "正在统计…": "Measuring…",
+  "统计超时": "Measuring timed out",
+  "目录过大，已统计到时间上限，实际占用不小于此数": "This folder is too large to finish measuring in time; the real size is at least this much.",
   占用: "Space used",
   原位置仍有残留数据: "Data remains in the previous location",
   "以下内容仍位于 {dir}：{names}。迁移存储位置时未一并迁移，因此本机的壁纸、主题包或更新回滚备份可能显示为缺失。手动将这些目录复制到当前位置即可恢复。":
