@@ -115,10 +115,11 @@ func registerSkillTools(reg *tool.Registry, set ablation.Set, store *skill.Store
 		reg.Add(skill.NewReadSkillTool(store))
 		reg.Add(skill.NewInstallSkillTool(store, nil))
 		addTools(reg, builtinSubagentTools(set, store, runners.run, runners.profile))
-		for _, sk := range store.SlashList() {
+		for _, sk := range skill.ModelInvocable(store.SlashList()) {
 			entries = append(entries, command.SlashEntry{
 				Name:        sk.SlashName(),
 				Description: sk.Description,
+				ArgHint:     sk.ArgumentHint,
 				Render: func(args []string) string {
 					return skill.RenderInvocation(store.Prepare(sk), strings.Join(args, " "))
 				},
@@ -171,7 +172,7 @@ func newCapabilitySurface(ctx context.Context, cfg *config.Config, root string, 
 		}
 		catOpts := capability.CatalogOptions{
 			Tools:       reg.AllContractEntries(),
-			Skills:      skills.List(),
+			Skills:      skill.ModelInvocable(skills.List()),
 			Plugins:     cfg.Plugins,
 			Profile:     profile,
 			Connected:   conn,

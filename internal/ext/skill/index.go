@@ -60,7 +60,7 @@ const namesOnlyNote = "This project has %d skills, more than this listing can de
 func modelListed(skills []Skill) []Skill {
 	out := make([]Skill, 0, len(skills))
 	for _, sk := range skills {
-		if sk.Invocation != "manual" {
+		if sk.Invocation != "manual" && !sk.DisableModelInvocation {
 			out = append(out, sk)
 		}
 	}

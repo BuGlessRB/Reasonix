@@ -1331,7 +1331,7 @@ func availableCommandsFor(ctrl acpController) []AvailableCommand {
 		byName[name] = AvailableCommand{
 			Name:        name,
 			Description: desc,
-			Input:       &AvailableCommandInput{Hint: "instructions"},
+			Input:       &AvailableCommandInput{Hint: skillInputHint(sk)},
 		}
 	}
 	if host := ctrl.Host(); host != nil {

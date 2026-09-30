@@ -105,6 +105,7 @@ type Skill struct {
 	// invisible to model-initiated discovery — for user-authored subagent
 	// profiles meant to be triggered deliberately, not autonomously.
 	Invocation string // auto | manual (frontmatter `invocation:`)
+	InvocationFlags
 	// Routing metadata is intentionally kept out of the cache-stable Skills
 	// index; it feeds per-turn capability hints only.
 	Triggers         []string
@@ -366,6 +367,9 @@ func bindAllowedTools(refs []string, bindings []tool.MCPBinding) []string {
 // Skill profiles frontmatter is diagnostic-only: it never blocks invocation.
 // Required capabilities still gate execution.
 func (s *Store) ValidateInvocation(sk Skill) error {
+	if err := sk.modelCallError(); err != nil {
+		return err
+	}
 	if s == nil {
 		return nil
 	}
@@ -631,7 +635,9 @@ func VisibleSlashSkills(skills []Skill) []Skill {
 	}
 	out := make([]Skill, 0, len(byName))
 	for _, sk := range byName {
-		out = append(out, sk)
+		if !sk.DisableUserInvocation {
+			out = append(out, sk)
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].SlashName() < out[j].SlashName() })
 	return out
@@ -641,6 +647,11 @@ func VisibleSlashSkills(skills []Skill) []Skill {
 // short name. A short plugin name is rejected when multiple plugin packages
 // contribute it; a higher-priority non-plugin winner keeps its short name.
 func ResolveSlashSkill(skills []Skill, name string) (Skill, bool) {
+	sk, ok := resolveSlashSkill(skills, name)
+	return sk, ok && !sk.DisableUserInvocation
+}
+
+func resolveSlashSkill(skills []Skill, name string) (Skill, bool) {
 	name = norm.NFC.String(strings.TrimPrefix(strings.TrimSpace(name), "/"))
 	if name == "" {
 		return Skill{}, false
@@ -857,12 +868,13 @@ func (s *Store) parseSkill(path, stem string, scope Scope, requireSkillMarker bo
 		NegativeTriggers: parseCSVFrontmatter(
 			fm[skillFrontmatterNegativeTriggers],
 		),
-		AutoUse:    parseAutoUse(fm[skillFrontmatterAutoUse]),
-		Cost:       parseCost(fm[skillFrontmatterCost]),
-		Color:      strings.TrimSpace(fm[skillFrontmatterColor]),
-		Invocation: parseInvocation(fm[skillFrontmatterInvocation]),
-		Requires:   parseCSVFrontmatter(fm[skillFrontmatterRequires]),
-		Delivery:   delivery,
+		AutoUse:         parseAutoUse(fm[skillFrontmatterAutoUse]),
+		Cost:            parseCost(fm[skillFrontmatterCost]),
+		Color:           strings.TrimSpace(fm[skillFrontmatterColor]),
+		Invocation:      parseInvocation(fm[skillFrontmatterInvocation]),
+		InvocationFlags: parseInvocationFlags(fm),
+		Requires:        parseCSVFrontmatter(fm[skillFrontmatterRequires]),
+		Delivery:        delivery,
 	}
 	sk.Profiles, sk.InvalidProfiles = parseProfilesFrontmatter(fm[skillFrontmatterProfiles])
 	return sk, true
@@ -1217,15 +1229,6 @@ func parseCSVFrontmatter(raw string) []string {
 	return out
 }
 
-func parseAutoUse(raw string) string {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "off", "suggest", "prefer", "require":
-		return strings.ToLower(strings.TrimSpace(raw))
-	default:
-		return ""
-	}
-}
-
 // parseProfilesFrontmatter keeps only economy|balanced|delivery values and
 // returns the rejected ones separately so doctor can surface typos instead of
 // the parser hiding them.
@@ -1248,33 +1251,6 @@ func parseProfilesFrontmatter(raw string) (valid, invalid []string) {
 		}
 	}
 	return valid, invalid
-}
-
-func parseBoolFrontmatter(raw string) bool {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "true", "yes", "1", "on":
-		return true
-	default:
-		return false
-	}
-}
-
-func parseCost(raw string) string {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "low", "medium", "high":
-		return strings.ToLower(strings.TrimSpace(raw))
-	default:
-		return ""
-	}
-}
-
-// parseInvocation maps frontmatter to an invocation mode. Anything other than
-// "manual" (including absent) is "auto" — the existing, universal behavior.
-func parseInvocation(raw string) string {
-	if strings.EqualFold(strings.TrimSpace(raw), "manual") {
-		return "manual"
-	}
-	return "auto"
 }
 
 // parseRunAs maps frontmatter to a run mode. An unknown value defaults to the

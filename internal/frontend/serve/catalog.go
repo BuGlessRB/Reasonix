@@ -54,7 +54,7 @@ func (s *Server) slash(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[name] = true
 		out = append(out, slashEntry{
-			Name: name, Kind: "skill", Description: sk.Description,
+			Name: name, Kind: "skill", Description: sk.Description, ArgHint: sk.ArgumentHint,
 			Scope: string(sk.Scope), Plugin: sk.Plugin,
 			Subagent: sk.RunAs == skill.RunSubagent,
 		})

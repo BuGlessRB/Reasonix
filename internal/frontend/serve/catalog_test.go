@@ -328,6 +328,32 @@ func TestSlashOmitsHiddenCommands(t *testing.T) {
 	}
 }
 
+// A user-invocable:false skill is not typeable, so the menu must not offer it;
+// argument-hint reaches the menu as the completion hint.
+func TestSlashHonoursUserInvocableAndArgumentHint(t *testing.T) {
+	ctrl := control.New(control.Options{
+		Skills: []skill.Skill{
+			{Name: "deploy", Scope: skill.ScopeProject, InvocationFlags: skill.InvocationFlags{ArgumentHint: "[env]"}},
+			{Name: "ctx", Scope: skill.ScopeProject, InvocationFlags: skill.InvocationFlags{DisableUserInvocation: true}},
+		},
+	})
+	defer ctrl.Close()
+
+	var deploy *slashEntry
+	got := fetchSlash(t, ctrl)
+	for i, e := range got {
+		if e.Name == "ctx" {
+			t.Fatal("a user-invocable:false skill reached the slash listing")
+		}
+		if e.Name == "deploy" {
+			deploy = &got[i]
+		}
+	}
+	if deploy == nil || deploy.ArgHint != "[env]" {
+		t.Fatalf("deploy entry = %+v, want argHint [env]", deploy)
+	}
+}
+
 // The picker's whole point: manage a folder the session is not sitting in.
 // The runtime must not move, and the other project's switch must land under
 // its own identity rather than the running one's.

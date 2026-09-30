@@ -1086,7 +1086,7 @@ func (c *Controller) ReloadCommands(ctx context.Context) error {
 	cmds, loadErr := command.LoadRoots(config.CommandRootsForRoot(c.workspaceRoot)...)
 	var cmdSkills []skill.Skill
 	if !c.skills.noImplicitInvocation {
-		cmdSkills = c.SlashSkills()
+		cmdSkills = skill.ModelInvocable(c.SlashSkills())
 	}
 
 	entries := make([]command.SlashEntry, 0, len(cmdSkills)+len(cmds))
@@ -1095,6 +1095,7 @@ func (c *Controller) ReloadCommands(ctx context.Context) error {
 		entries = append(entries, command.SlashEntry{
 			Name:        sk.SlashName(),
 			Description: sk.Description,
+			ArgHint:     sk.ArgumentHint,
 			Render:      func(args []string) string { return c.skills.renderInvocation(sk, strings.Join(args, " ")) },
 		})
 	}
