@@ -2,7 +2,7 @@
 owner: @esengine
 backup: @SivanCola
 status: active
-reviewed: 2026-09-27
+reviewed: 2026-09-30
 ---
 
 # Studio release runbook
@@ -60,8 +60,33 @@ Jobs in the run:
 | `windows-sign-installer` | Requires both packages to hash to the checked values, signs the installer, verifies its signature, and outputs the signed installer's SHA-256. Opens no archive. | shared concurrency group `certum-signing`, environment `studio-release` |
 | `cli` | Builds `reasonix` archives for six OS/arch targets plus `SHA256SUMS`. | fails on a missing archive |
 | `publish` | Renders the notes with their authors, minisigns, writes `latest.json`, creates the GitHub prerelease, mirrors to R2. | environment `studio-release`; skipped unless all four Windows signing jobs succeeded or signing is off; an unresolved `#N` stops it before signing |
+| `cli-channels` | Only with `STUDIO_PUBLISHES_CLI=true` (unset today; 1.x owns the channels). Publishes `reasonix` and `@reasonix/cli-*` to npm with `--provenance`, then updates the Homebrew cask (not for a candidate). | environment `studio-cli-channels`, verified to have a required reviewer at run time; `id-token: write` on this job only; runs after `publish` |
 
 The `studio-release` environment allows the `studio-v*` tag and the `studio` branch. It has no required reviewer.
+
+The `studio-cli-channels` environment guards `cli-channels`. Create it and its secrets before setting `STUDIO_PUBLISHES_CLI`:
+
+| Setting | Value |
+| --- | --- |
+| Required reviewers | @esengine and @SivanCola |
+| Deployment branches and tags | the `studio-v*` tag and the `studio` branch, as in `studio-release` |
+| Environment secrets | `STUDIO_NPM_TOKEN` and `STUDIO_HOMEBREW_TAP_TOKEN`, values copied from the existing `NPM_TOKEN` and `HOMEBREW_TAP_TOKEN` |
+
+Leave the repository-level `NPM_TOKEN` and `HOMEBREW_TAP_TOKEN` alone: the 1.x release line still reads them. Delete them after 1.x stops publishing.
+
+The two `STUDIO_*` names exist only in that environment, so a missing environment yields no token and the publish fails. The job's first step reads the environment through the API before any step that runs a command or holds a credential.
+
+It fails when the environment does not exist (404), when it has no required reviewer or the rules cannot be read as a count, and on any other status.
+
+The last failure is reported with the acting identity.
+
+Turn off "Allow administrators to bypass configured protection rules" on the environment: with `can_admins_bypass` on, an administrator can skip the approval.
+
+Each release then waits for one approval before npm or the tap is touched. The `studio` branch is admitted for the `workflow_dispatch` recovery run; there the provenance records the branch head commit while the build is the tag's commit. The 1.x line behaves the same.
+
+No other job requests `id-token` or references these two secrets, and no workflow file reads them but `release-studio.yml`'s `cli-channels`; `cmd/signpath-contract` tests this over the parsed YAML of every workflow.
+
+Verify a published package with `npm view reasonix dist.attestations`: the attestation is present and names this repository.
 
 ## 4. Verification
 
@@ -216,6 +241,8 @@ Studio and 1.x signing jobs and smoke tests share the concurrency group `certum-
 | `APPLE_CERT_P12`, `APPLE_CERT_PASSWORD`, `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID` | secret | macOS signing and notarization |
 | `CERTUM_USERNAME`, `CERTUM_OTP_URI`, `CERTUM_KEY_ID` | repository secret | Windows Authenticode signing shared with 1.x (section 7) |
 | `STUDIO_SIGNING_ENABLED` | variable | Windows signing switch |
+| `STUDIO_PUBLISHES_CLI` | variable | hands the CLI's npm and Homebrew channels to this workflow; set it only after the `studio-cli-channels` environment and its secrets exist and 1.x has stopped publishing them |
+| `STUDIO_NPM_TOKEN`, `STUDIO_HOMEBREW_TAP_TOKEN` | environment secret (`studio-cli-channels`) | `cli-channels` only |
 | `STUDIO_SIGNING_SUBJECT` | variable | the signer subject every signed executable must carry; required when signing is on |
 | `MINISIGN_PRIVATE_KEY`, `MINISIGN_PASSWORD` | secret | detached signatures verified by the updater |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, `R2_BUCKET` | secret | artifact mirror and catalog |

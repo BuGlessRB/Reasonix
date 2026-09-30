@@ -1118,9 +1118,39 @@ jobs:
     needs: [resolve, publish]
     if: vars.STUDIO_PUBLISHES_CLI == 'true'
     runs-on: ubuntu-latest
+    # Owner approval before anything reaches npm or the tap: the switch alone
+    # would otherwise publish on every studio tag.
+    environment: studio-cli-channels
+    # id-token lets npm publish --provenance attach a Sigstore attestation; the
+    # registry token still authenticates the publish itself.
     permissions:
       contents: read
+      id-token: write
     steps:
+      # A job naming a missing environment gets an unprotected one, so the
+      # gate is verified rather than assumed; the tokens below exist only in it.
+      - name: Require the approval gate on studio-cli-channels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          resp="$(gh api -i "repos/$REPO/environments/studio-cli-channels" 2>&1)"
+          status="$(printf '%s\n' "$resp" | sed -n '1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p')"
+          case "$status" in
+            200) ;;
+            404)
+              echo "::error::environment studio-cli-channels does not exist"
+              exit 1 ;;
+            *)
+              echo "::error::reading environment studio-cli-channels as ${GITHUB_ACTOR} failed with HTTP ${status:-unknown}"
+              exit 1 ;;
+          esac
+          reviewers="$(printf '%s\n' "$resp" | sed '1,/^\r\{0,1\}$/d' | jq '[.protection_rules[] | select(.type == "required_reviewers") | .reviewers | length] | add // 0')"
+          if ! [[ "$reviewers" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::environment studio-cli-channels has no required reviewers (or its protection rules were unreadable: '${reviewers}'); refusing to publish"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.resolve.outputs.sha }}
@@ -1134,7 +1164,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - name: Publish to npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.STUDIO_NPM_TOKEN }}
           VERSION: ${{ needs.resolve.outputs.version }}
         run: node npm/build.mjs "$VERSION" --publish
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1145,7 +1175,7 @@ jobs:
       - name: Update the Homebrew cask
         if: needs.resolve.outputs.candidate != 'true'
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAP_TOKEN: ${{ secrets.STUDIO_HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.resolve.outputs.version }}
           TAG: ${{ needs.resolve.outputs.tag }}
         run: |
