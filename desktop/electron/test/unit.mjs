@@ -314,6 +314,79 @@ test("a kernel that cannot be started says so, rather than going quiet", async (
   });
 });
 
+test("a launch failure carries a typed cause, and a slow kernel is waited for, not restarted", async () => {
+  const { start } = require("../src/host.js");
+  const node = process.execPath;
+  let slow = 0;
+  const silent = start(node, ["-e", "setTimeout(()=>{},5000)"], { timeoutMs: 400, onSlow: () => slow++ });
+  await assert.rejects(silent.ready, (err) => {
+    assert.equal(err.code, "timeout");
+    assert.match(err.message, /still running/);
+    return true;
+  });
+  silent.child.kill();
+  assert.equal(slow, 1, "the slow state was not reported once");
+
+  const quick = start(node, ["-e", "process.exit(7)"]);
+  await assert.rejects(quick.ready, (err) => err.code === "exited" && err.exitCode === 7 && /exited with 7/.test(err.message));
+
+  const missing = start(path.join(os.tmpdir(), "reasonix-no-such-kernel-c9"), []);
+  await assert.rejects(missing.ready, (err) => err.code === "spawn");
+
+  const handshake = JSON.stringify({ version: 1, origin: "http://127.0.0.1:1", token: "x".repeat(32) });
+  const fine = start(node, ["-e", `console.log(${JSON.stringify(handshake)});setTimeout(()=>{},300)`], { timeoutMs: 400 });
+  assert.equal((await fine.ready).origin, "http://127.0.0.1:1");
+});
+
+test("a retry needs an early stop, is capped at one, and never follows a timeout", () => {
+  const { shouldRetry } = require("../src/host.js");
+  const exited = { code: "exited" };
+  assert.equal(shouldRetry(exited, 1, 500), true);
+  assert.equal(shouldRetry({ code: "spawn" }, 1, 500), true);
+  assert.equal(shouldRetry(exited, 1, 10001), false, "an exit after the early window was retried");
+  assert.equal(shouldRetry(exited, 2, 500), false, "a second retry was allowed");
+  assert.equal(shouldRetry({ code: "timeout" }, 1, 500), false);
+  assert.equal(shouldRetry(new Error("x"), 1, 500), false);
+});
+
+test("a handshake that does not parse is a typed failure", async () => {
+  const { start } = require("../src/host.js");
+  const bad = start(process.execPath, ["-e", "console.log('hello')"]);
+  await assert.rejects(bad.ready, (err) => err.code === "malformed");
+});
+
+test("a kernel that never answers is started once and not retried", { skip: process.platform === "win32" }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reasonix-silent-"));
+  const host = path.join(dir, "host.sh");
+  fs.writeFileSync(host, "#!/bin/sh\nexec sleep 5\n", { mode: 0o755 });
+  process.env.REASONIX_STUDIO_HANDSHAKE_TIMEOUT_MS = "400";
+  const shell = loadShell({ lock: true, host });
+  try {
+    await shell.quitted;
+    const log = shell.shellLog();
+    assert.equal((log.match(/host: starting /g) || []).length, 1);
+    assert.doesNotMatch(log, /retrying once/);
+    assert.match(shell.calls[0][2], /still running/);
+  } finally {
+    delete process.env.REASONIX_STUDIO_HANDSHAKE_TIMEOUT_MS;
+    shell.cleanup();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("each failure cause gets its own explanation in both languages", () => {
+  const { startupFailure } = require("../src/shelllog.js");
+  const seen = new Set();
+  for (const code of ["timeout", "exited", "spawn"]) {
+    for (const locale of ["en", "zh-CN"]) {
+      const { detail } = startupFailure(locale, "r", "/logs", code);
+      assert.ok(!seen.has(detail), `${code}/${locale} repeated another cause's text`);
+      seen.add(detail);
+    }
+  }
+  assert.equal(startupFailure("en", "r", "/logs", "overflow").detail, "r\n\nLogs are in:\n/logs");
+});
+
 // A fake child: only the stdout half readActs touches, and a way to push bytes
 // through it in whatever chunks the test wants -- which is the point, since the
 // bug this guards is a line split across two of them.
@@ -1163,7 +1236,11 @@ test("a host that exits before its handshake is logged and shown, not swallowed"
     assert.match(shell.hostLog(), /bad option/, "the host's stderr never reached host.log");
     const log = shell.shellLog();
     assert.match(log, /host: exited code=9 signal=null before its handshake/);
-    assert.match(log, /startup failed: Error: /);
+    assert.match(log, /startup failed: HostStartError: /);
+    assert.equal((log.match(/host: starting /g) || []).length, 2, "an early exit was not retried exactly once");
+    assert.match(log, /retrying once/);
+    assert.match(detail, /after 2 attempts/);
+    assert.match(detail, /stopped before it was ready/, "no cause was given for an early exit");
   } finally {
     shell.cleanup();
   }

@@ -159,17 +159,29 @@ function openLogs(userData, options = {}) {
   };
 }
 
-function startupFailure(locale, reason, logDir) {
-  if (String(locale).toLowerCase().startsWith("zh")) {
-    return {
-      title: "Reasonix Studio 无法启动",
-      detail: `${reason}\n\n日志位于：\n${logDir}`,
-    };
+const HINTS = {
+  timeout: [
+    "The kernel started but did not finish starting in time. Security software scanning a new or updated install is a common cause; starting Studio again usually works.",
+    "内核已启动，但没有在限定时间内完成启动。安全软件扫描新安装或刚更新的程序是常见原因；再次启动通常可以。",
+  ],
+  exited: [
+    "The kernel process stopped before it was ready. Anything it printed is above; host.log has the rest.",
+    "内核进程在就绪前就停止了。它输出过的内容在上面，host.log 里有更多。",
+  ],
+  spawn: [
+    "The kernel program could not be run. Security software blocking or locking it is a common cause.",
+    "无法运行内核程序。安全软件拦截或占用它是常见原因。",
+  ],
+};
+
+function startupFailure(locale, reason, logDir, code) {
+  const zh = String(locale).toLowerCase().startsWith("zh");
+  const hint = HINTS[code]?.[zh ? 1 : 0];
+  const body = hint ? `${reason}\n\n${hint}` : reason;
+  if (zh) {
+    return { title: "Reasonix Studio 无法启动", detail: `${body}\n\n日志位于：\n${logDir}` };
   }
-  return {
-    title: "Reasonix Studio could not start",
-    detail: `${reason}\n\nLogs are in:\n${logDir}`,
-  };
+  return { title: "Reasonix Studio could not start", detail: `${body}\n\nLogs are in:\n${logDir}` };
 }
 
 // failStartup is the one way a launch that cannot come up ends: recorded, told
@@ -177,8 +189,9 @@ function startupFailure(locale, reason, logDir) {
 // words when it never finished its handshake, and is already redacted.
 function failStartup({ app, dialog, logs, locale }, err, hostOutput = "") {
   logs.shell.line(`startup failed: ${err?.stack || err}`);
-  const reason = [String(err?.message || err), hostOutput].filter(Boolean).join("\n\n");
-  const text = startupFailure(locale, logs.redact(reason), logs.dir);
+  const tried = err?.attempts > 1 ? ` (after ${err.attempts} attempts)` : "";
+  const reason = [`${String(err?.message || err)}${tried}`, hostOutput].filter(Boolean).join("\n\n");
+  const text = startupFailure(locale, logs.redact(reason), logs.dir, err?.code);
   try {
     dialog.showErrorBox(text.title, text.detail);
   } catch (e) {
