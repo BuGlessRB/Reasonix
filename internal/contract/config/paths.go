@@ -300,6 +300,16 @@ func RemoteStateDir() string { return processRoots().RemoteStateDir() }
 
 // RemoteStateDir is <home>/remote under these roots. A serve launched over SSH
 // keeps its launch token there, so runtime sandboxes deny reading it.
+// ScheduleDir is where the scheduled-runs store lives: machine-wide, under the
+// state root, and never inside a project.
+func (r Roots) ScheduleDir() string {
+	dir := r.userSupportDir()
+	if strings.TrimSpace(dir) == "" {
+		return ""
+	}
+	return filepath.Join(dir, "schedules")
+}
+
 func (r Roots) RemoteStateDir() string {
 	home := r.Home()
 	if strings.TrimSpace(home) == "" {

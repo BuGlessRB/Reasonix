@@ -36,6 +36,13 @@ func Open(dir string) (*Store, error) {
 	return open(dir, time.Now)
 }
 
+// WithClock returns a view of the same store that reads time from now, for a
+// test that has to see a run age past ReapGrace without waiting for it.
+func (s *Store) WithClock(now func() time.Time) *Store { return &Store{dir: s.dir, now: now} }
+
+// Dir is the directory the store lives in.
+func (s *Store) Dir() string { return s.dir }
+
 func open(dir string, now func() time.Time) (*Store, error) {
 	s := &Store{dir: dir, now: now}
 	if err := os.MkdirAll(dir, 0o700); err != nil {

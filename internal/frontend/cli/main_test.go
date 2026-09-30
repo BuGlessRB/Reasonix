@@ -10,6 +10,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if code, ok := scheduleTestHelperProcess(); ok {
+		os.Exit(code)
+	}
 	cleanupUserState, err := testenv.IsolateUserState()
 	if err != nil {
 		panic(err)

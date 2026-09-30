@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"reasonix/internal/contract/ablation"
@@ -23,6 +24,10 @@ type ObserveOptions struct {
 	Pending observe.PendingSink
 	// Run is what the run tells the model about itself on its turn tail.
 	Run observe.RunContext
+	// Tools narrows the file-reading tools to these names; nil keeps the whole
+	// ceiling. Tools that only hand the turn back to the host always stay, or the
+	// run could neither conclude nor park a question.
+	Tools []string
 }
 
 // observeOverrides pins every Options field the posture depends on. What the
@@ -56,9 +61,19 @@ func observeOverrides(opts Options) Options {
 func newToolRegistry(opts Options) *tool.Registry {
 	reg := tool.NewRegistry()
 	if opts.Observe != nil {
-		reg.Restrict(observe.Admits)
+		reg.Restrict(observeAdmits(opts.Observe.Tools))
 	}
 	return reg
+}
+
+func observeAdmits(narrow []string) func(tool.Tool) bool {
+	names := slices.Clone(narrow)
+	return func(t tool.Tool) bool {
+		if !observe.Admits(t) {
+			return false
+		}
+		return len(names) == 0 || tool.ReachOf(t) == tool.ReachHostControl || slices.Contains(names, t.Name())
+	}
 }
 
 func (b *builder) observeRun() *control.ObserveRun {

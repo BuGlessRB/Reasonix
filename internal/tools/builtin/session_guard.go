@@ -67,6 +67,11 @@ func (g SessionDataGuard) Check(target string) error {
 			"write refused: `%s` is inside Reasonix's trusted host state (%s). The host alone records evidence and contracts there, so agents may not modify it; report the underlying problem instead",
 			target, filepath.Join(g.stateRoot, TrustedStateDir))}
 	}
+	if g.deniesSchedule(abs) {
+		return tool.Refusal{Code: CodeScheduleStateWrite, Message: fmt.Sprintf(
+			"write refused: `%s` is inside the scheduled-runs store (%s). Schedules, budgets and run records are changed by the person through the app, never by an agent, so an unattended run's limits cannot be edited from a chat; report the underlying problem instead",
+			target, filepath.Join(g.stateRoot, ScheduleStateDir))}
+	}
 	if !g.denies(abs) {
 		return nil
 	}
@@ -121,6 +126,25 @@ const TrustedStateDir = "trusted"
 // CodeTrustedStateWrite identifies a file-tool write refused for landing in
 // Trusted Host State.
 const CodeTrustedStateWrite = "workspace.trusted_state_write"
+
+// ScheduleStateDir is the state-root subdirectory holding the scheduled-runs
+// store.
+const ScheduleStateDir = "schedules"
+
+// CodeScheduleStateWrite identifies a file-tool write refused for landing in the
+// scheduled-runs store.
+const CodeScheduleStateWrite = "workspace.schedule_state_write"
+
+// deniesSchedule reports whether abs lies in the scheduled-runs store and no
+// explicit allow_write root covers it.
+func (g SessionDataGuard) deniesSchedule(abs string) bool {
+	for _, a := range g.allowRoots {
+		if withinFold(a, abs) {
+			return false
+		}
+	}
+	return withinFold(filepath.Join(g.stateRoot, ScheduleStateDir), abs)
+}
 
 // deniesTrusted reports whether abs lies in Trusted Host State and no explicit
 // allow_write root covers it. An allow_write entry there also reaches the bash
