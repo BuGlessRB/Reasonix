@@ -623,8 +623,8 @@ update (revised value wins), pinned (prefix channel end to end).
 `benchmarks/compaction/` drives the real agent compaction path over a session
 that grows one generation at a time. Each generation appends a round of work
 and then folds, so generation N folds everything generations 1..N produced —
-which is the growth that matters, because a fold re-derives its digest from the
-whole canonical transcript rather than from the previous digest.
+which is the growth that matters, because a fold reads the model-visible
+projection, so the previous digest feeds the next one.
 
 ```bash
 go run ./benchmarks/compaction -mode=cost                     # offline, no API key
@@ -651,16 +651,3 @@ probe, not a compaction loss.
 Probe answers are scored on whole words, and a wanted answer does not count if a
 rejected one appears anywhere in the same reply — "yes, but it has not been
 re-run since" is the shape a drifting digest produces, and it is not a pass.
-
-### Fold arms
-
-`-arm=full` (default) re-derives every digest from the canonical transcript, so
-digests never chain. `-arm=incremental` folds the model-visible view instead,
-feeding the previous digest back through the summarizer. The arms exist to price
-that trade: run the cost arm for what chaining saves, and the fidelity arm for
-what it costs.
-
-```bash
-go run ./benchmarks/compaction -mode=cost -arm=incremental
-DEEPSEEK_API_KEY=… go run ./benchmarks/compaction -mode=fidelity -arm=incremental
-```

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"reasonix/internal/base/tokencount"
-	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
 	"reasonix/internal/contract/tool"
@@ -42,7 +41,6 @@ func main() {
 	report := flag.String("report", "1,2,4,8", "generations to report on")
 	window := flag.Int("window", 128_000, "context window in tokens")
 	control := flag.Bool("control", true, "fidelity: also score probes against full history")
-	arm := flag.String("arm", "full", "full | incremental: re-derive each digest from canonical, or fold the previous projection")
 	_ = flag.Bool("snip", false, "accepted and ignored: automatic snip projections are gone")
 	out := flag.String("out", "", "write the JSON report here")
 	flag.Parse()
@@ -51,14 +49,11 @@ func main() {
 		res []genResult
 		err error
 	)
-	a := arms{incremental: *arm == "incremental"}
-	switch {
-	case *arm != "full" && *arm != "incremental":
-		err = fmt.Errorf("unknown arm %q", *arm)
-	case *mode == "cost":
-		res, err = runCost(*gens, *window, a)
-	case *mode == "fidelity":
-		res, err = runFidelity(*gens, *window, *control, a)
+	switch *mode {
+	case "cost":
+		res, err = runCost(*gens, *window)
+	case "fidelity":
+		res, err = runFidelity(*gens, *window, *control)
 	default:
 		err = fmt.Errorf("unknown mode %q", *mode)
 	}
@@ -66,9 +61,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	printReport(*mode+" / "+*arm, res, reportAt(*report))
+	printReport(*mode, res, reportAt(*report))
 	if *out != "" {
-		b, _ := json.MarshalIndent(map[string]any{"mode": *mode, "arm": *arm, "window": *window, "generations": res}, "", "  ")
+		b, _ := json.MarshalIndent(map[string]any{"mode": *mode, "window": *window, "generations": res}, "", "  ")
 		if werr := os.WriteFile(*out, append(b, '\n'), 0o644); werr != nil {
 			fmt.Fprintln(os.Stderr, werr)
 			os.Exit(1)
@@ -101,7 +96,7 @@ type harness struct {
 	calls  *callRecorder
 }
 
-func newHarness(t *testingDir, p provider.Provider, window int, rec *callRecorder, arm arms) *harness {
+func newHarness(t *testingDir, p provider.Provider, window int, rec *callRecorder) *harness {
 	sess := newSession()
 	path := filepath.Join(t.dir, "session.jsonl")
 	a := agent.New(p, tool.NewRegistry(), sess, agent.Options{
@@ -112,24 +107,8 @@ func newHarness(t *testingDir, p provider.Provider, window int, rec *callRecorde
 		// boot's default when cfg.Agent.Keep is unset; without it the bench
 		// would measure a configuration no real session runs.
 		KeepPolicy: agent.KeepErrors,
-		Ablation:   foldArm(arm.incremental),
 	}, rec.sink())
 	return &harness{sess: sess, agentA: a, path: path, calls: rec}
-}
-
-// foldArm switches full re-derivation off, which is what makes a fold read the
-// previous projection instead of the canonical transcript.
-// arms selects the maintenance behaviour under test. Snipping is off by default
-// so a run stays comparable with baselines recorded before it existed.
-type arms struct {
-	incremental bool
-}
-
-func foldArm(incremental bool) ablation.Set {
-	if incremental {
-		return ablation.New(ablation.FullFold)
-	}
-	return ablation.Set{}
 }
 
 // runGeneration grows the session and folds it, returning what that fold cost.
@@ -160,7 +139,7 @@ func (h *harness) runGeneration(ctx context.Context, gen int, probes []probe) ge
 	return r
 }
 
-func runCost(gens, window int, a arms) ([]genResult, error) {
+func runCost(gens, window int) ([]genResult, error) {
 	dir, cleanup, err := tempDir()
 	if err != nil {
 		return nil, err
@@ -169,7 +148,7 @@ func runCost(gens, window int, a arms) ([]genResult, error) {
 
 	rec := &callRecorder{}
 	p := &scriptedProvider{rec: rec, reply: syntheticDigest, window: window}
-	h := newHarness(dir, p, window, rec, a)
+	h := newHarness(dir, p, window, rec)
 
 	var out []genResult
 	for gen := range gens {
@@ -178,7 +157,7 @@ func runCost(gens, window int, a arms) ([]genResult, error) {
 	return out, nil
 }
 
-func runFidelity(gens, window int, control bool, a arms) ([]genResult, error) {
+func runFidelity(gens, window int, control bool) ([]genResult, error) {
 	key := os.Getenv("DEEPSEEK_API_KEY")
 	if key == "" {
 		return nil, fmt.Errorf("fidelity mode needs DEEPSEEK_API_KEY")
@@ -194,7 +173,7 @@ func runFidelity(gens, window int, control bool, a arms) ([]genResult, error) {
 	defer cleanup()
 
 	rec := &callRecorder{}
-	h := newHarness(dir, &recordingProvider{inner: p, rec: rec}, window, rec, a)
+	h := newHarness(dir, &recordingProvider{inner: p, rec: rec}, window, rec)
 	probes := probeSuite()
 
 	ctx := context.Background()

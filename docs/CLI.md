@@ -206,7 +206,7 @@ and `--auto` / `-y` (an alias for `--permission-mode auto`).
 
 `--ablate` switches whole subsystems off so a benchmark can attribute a change
 in success rate to one of them. It accepts a comma-separated list of `evidence`,
-`planner`, `subagent`, `retrieval`, `compaction`, `full-fold` and `upstream`,
+`planner`, `subagent`, `retrieval`, `compaction` and `upstream`,
 plus `none` (the default, everything on) and `all`. Sub-agents inherit the
 parent's arm, and the arm name is written to the `--metrics` file so a recorded
 run is self-describing. `upstream` off leaves a fleet's `depends_on` edges
