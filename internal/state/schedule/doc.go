@@ -16,4 +16,14 @@
 // session lease is presumed dead after ReapGrace; if a start is slower than
 // that it is reaped wrongly, and MarkRunning then returns ErrRunSettled, which
 // the supervisor must treat as "do not run".
+//
+// The confirmed digest is unkeyed, and no key would change that: a writer that is
+// not confined by the operating-system sandbox can read any key a person's
+// account can. The store directory is denied to file tools, masked or
+// write-denied for sandboxed shell commands, and read-protected for every run,
+// which defends the confirmation against sandboxed writers only. On Windows
+// (no sandbox), with the sandbox off or under yolo, and for MCP and plugin
+// processes, anything that can write the directory can forge a confirmed
+// schedule. A frontend must not present "you confirmed this" as tamper-proof
+// there.
 package schedule

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -87,25 +88,14 @@ func (r *scheduleRun) exec() int {
 		fmt.Fprintln(os.Stderr, schedrun.CodeParentGone, err)
 		return execExitParentGone
 	}
-	schedrun.ExitWhenGone(gone, schedrun.ForceExitGrace, execExitParentGone, os.Exit)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var parentGone bool
-	var mu sync.Mutex
-	go func() {
-		<-gone
-		mu.Lock()
-		parentGone = true
-		mu.Unlock()
-		cancel()
-	}()
+	orphan := watchSupervisor(gone, cancel, schedrun.ForceExitGrace, os.Exit)
 
 	done := r.execute(ctx, roots, token)
-	mu.Lock()
-	orphaned := parentGone
-	mu.Unlock()
+	orphaned := orphan.Load()
 	if orphaned {
 		r.settleOrphan()
 		return execExitParentGone
@@ -115,6 +105,20 @@ func (r *scheduleRun) exec() int {
 		return execExitSetup
 	}
 	return 0
+}
+
+// watchSupervisor cancels the run when the supervisor's stream ends and, if the
+// process is still there after grace, ends it: a tool that ignores cancellation
+// must not keep an orphan alive. The flag says the supervisor left.
+func watchSupervisor(gone <-chan struct{}, cancel func(), grace time.Duration, exit func(int)) *atomic.Bool {
+	var orphan atomic.Bool
+	schedrun.ExitWhenGone(gone, grace, execExitParentGone, exit)
+	go func() {
+		<-gone
+		orphan.Store(true)
+		cancel()
+	}()
+	return &orphan
 }
 
 // settleOrphan records what a run cost when its supervisor vanished, at the
@@ -152,9 +156,6 @@ func (r *scheduleRun) load(ctx context.Context) (code string) {
 	}
 	if run == nil {
 		return schedrun.CodeNotFound
-	}
-	if run.State != schedule.RunRunning {
-		return schedrun.CodeRunSettled
 	}
 	r.claim = *run
 	found := false
@@ -358,7 +359,7 @@ func (s *reportSink) Emit(e event.Event) {
 			return
 		}
 		n := int64(e.Usage.PromptTokens) + int64(e.Usage.CompletionTokens)
-		s.gov.AddUsage(n)
+		s.gov.AddUsage(n, (e.UsageSource == "" || e.UsageSource == "executor") && !e.Usage.Estimated)
 		_ = s.out.Usage(max(n, 0))
 	case event.StreamAttempt:
 		if e.StreamAttempt.Action == event.StreamAttemptCommit {

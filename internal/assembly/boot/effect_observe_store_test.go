@@ -74,3 +74,16 @@ func TestEffectObserveWritesNoConfigFile(t *testing.T) {
 		t.Fatalf("the workspace gained files: %v", entries)
 	}
 }
+
+// The protected set masks only a directory that exists when a command's sandbox
+// is built, so a build must leave the store's directory behind.
+func TestBuildCreatesTheScheduleStoreDirectoryPrivately(t *testing.T) {
+	root := observeProject(t)
+	t.Setenv("REASONIX_STATE_HOME", filepath.Join(root, "state"))
+	prov := testutil.NewMock("observe", testutil.Turn{Text: "done"})
+	buildObserved(t, root, prov, observe.RunContext{ScheduleID: "s", TriggerID: "t"})
+	info, err := os.Stat(filepath.Join(root, "state", "schedules"))
+	if err != nil || !info.IsDir() {
+		t.Fatalf("store directory missing after a build: %v", err)
+	}
+}

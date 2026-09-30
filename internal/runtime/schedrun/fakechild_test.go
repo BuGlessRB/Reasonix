@@ -85,6 +85,9 @@ func runFakeChild(mode string) int {
 		_ = w.Usage(10)
 		_ = w.Result(Done{State: schedule.RunSucceeded, Tokens: 10, Usages: 1})
 		return 0
+	case "noisy":
+		_, _ = os.Stderr.WriteString("boom\x1b[31m\u202e\x00 secret")
+		return 3
 	case "crash":
 		_ = w.Usage(50)
 		return 3

@@ -4,6 +4,7 @@ package sandbox
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -126,4 +127,47 @@ func containsPath(paths []string, want string) bool {
 		return false
 	}
 	return slices.Contains(paths, absWant)
+}
+
+func TestBwrapMasksAForbiddenDirectoryInsideAWriteRootAfterTheBind(t *testing.T) {
+	root := testenv.TempDir(t)
+	store := filepath.Join(root, "store")
+	if err := os.Mkdir(store, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	argv := bwrapArgs(Spec{Mode: "enforce", WriteRoots: []string{root}, ForbidReadRoots: []string{store}}, Shell{Kind: ShellBash, Path: "bash"}, "true")
+	bind, mask := indexArgs(argv, "--bind", root, root), indexArgs(argv, "--tmpfs", store)
+	if bind < 0 || mask < 0 || mask < bind {
+		t.Fatalf("the mask must come after the write bind that would expose the directory: %v", argv)
+	}
+}
+
+// A blind overwrite of a file in a forbidden directory must fail even though the
+// directory sits inside a writable root, and must not reach the host's copy.
+func TestBwrapForbiddenDirectoryDoesNotTakeWrites(t *testing.T) {
+	if !Available() {
+		t.Skip("bubblewrap is not usable here")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("no home dir: %v", err)
+	}
+	root, err := os.MkdirTemp(home, ".reasonix-bwtest-*")
+	if err != nil {
+		t.Skipf("cannot create a work dir under home: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	store := filepath.Join(root, "store")
+	if err := os.Mkdir(store, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	spec := Spec{Mode: "enforce", WriteRoots: []string{root}, ForbidReadRoots: []string{store}, Network: true}
+	argv, wrapped := Command(spec, Shell{Kind: ShellBash, Path: "bash"}, "echo forged > "+filepath.Join(store, "schedules.json"))
+	if !wrapped {
+		t.Skip("the command was not wrapped")
+	}
+	_ = exec.Command(argv[0], argv[1:]...).Run()
+	if _, err := os.Stat(filepath.Join(store, "schedules.json")); !os.IsNotExist(err) {
+		t.Fatal("the write reached the host's forbidden directory")
+	}
 }
