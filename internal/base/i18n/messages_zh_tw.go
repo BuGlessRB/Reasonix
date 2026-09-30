@@ -630,6 +630,8 @@ var ChineseTraditional = Messages{
 	GoalRuntimeFmt:             "執行狀態：輪次 %d · 請求 %d · token %d · 工作時間 %s",
 	GoalRuntimeLastReason:      "最近原因",
 	ProviderErrAuthRejected:    "認證失敗 (HTTP 401)：服務端拒絕了你的 API key。可能是 key 錯誤或已過期，也可能是服務端出現瞬時鑑權/額度問題——已退避重試仍失敗。請稍後再試，或檢查 .env 中的金鑰 / 執行 `reasonix setup`。",
+	ProviderErrDNSNotFound:     "無法解析模型服務網域 %s：DNS 查詢顯示該主機不存在，未建立任何連線，也沒有重試。請檢查網路、DNS、代理設定以及服務商的介面位址。",
+	ProviderErrDNSTemporary:    "無法解析模型服務網域 %s：DNS 查詢暫時失敗（解析伺服器不可達或逾時），未建立任何連線。請檢查網路、DNS、代理設定後重試。",
 	SelectMoreAboveFmt:         "  ↑ 上方還有 %d 個",
 	SelectMoreBelowFmt:         "  ↓ 下方還有 %d 個",
 	SelectSearchHint:           "/ 搜尋 · 輸入關鍵詞過濾 · Esc 取消搜尋",

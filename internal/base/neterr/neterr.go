@@ -29,6 +29,10 @@ func IsConnReset(err error) bool {
 		errors.Is(err, net.ErrClosed) || isAny(err, resetErrors) {
 		return true
 	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return false
+	}
 	var netErr net.Error
 	return errors.As(err, &netErr)
 }

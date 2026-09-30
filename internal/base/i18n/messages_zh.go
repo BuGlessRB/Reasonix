@@ -547,6 +547,8 @@ var Chinese = Messages{
 	ProviderErrDroppedReasoning:    "端点拒绝了请求体：它要求把助手的思考内容随工具调用一并回传，而这个连接没有声明思考协议，于是这部分没有发出去。把连接的思考参数设成它后面那个模型所用的协议，再重试。",
 	ProviderErrAuth:                "认证失败 (HTTP 401)：未读到 API key（缺失或未设置）。请在 .env 中配置密钥，或运行 `reasonix setup`。",
 	ProviderErrAuthRejected:        "认证失败 (HTTP 401)：服务端拒绝了你的 API key。可能是 key 错误或已过期，也可能是服务端出现瞬时鉴权/额度问题——已退避重试仍失败。请稍后再试，或检查 .env 中的密钥 / 运行 `reasonix setup`。",
+	ProviderErrDNSNotFound:         "无法解析模型服务域名 %s：DNS 查询显示该主机不存在，未建立任何连接，也没有重试。请检查网络、DNS、代理设置以及服务商的接口地址。",
+	ProviderErrDNSTemporary:        "无法解析模型服务域名 %s：DNS 查询暂时失败（解析服务器不可达或超时），未建立任何连接。请检查网络、DNS、代理设置后重试。",
 	ProviderErrInsufficientBalance: "余额不足 (HTTP 402)：账户余额不足，请前往充值后重试。",
 	ProviderErrUnprocessable:       "参数错误 (HTTP 422)：某个请求参数被拒绝，通常是程序缺陷。若持续出现请反馈。",
 	ProviderErrInputSensitive:      "输入被 MiniMax 内容审查拒绝（错误码 1026）。审查对象可能包含会话历史和工具结果；请调整相关内容，或新建会话仅保留必要上下文。原样重试通常无效。",
