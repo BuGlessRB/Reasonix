@@ -1,7 +1,8 @@
 name: Sync in-app feedback
 
 # Turns feedback submitted from Reasonix Studio into issues and reports issue
-# state (in progress, fixed in a tag, won't fix, duplicate) back to the worker.
+# state (in progress, fixed in a tag, won't fix, duplicate) back to the worker,
+# and mirrors the reporter's replies onto their issue as bot comments.
 # Text from the public reaches the script only through the worker's JSON and
 # the GitHub API, never through a shell command line or an expression.
 
