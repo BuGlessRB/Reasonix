@@ -745,9 +745,10 @@ func TestScopedRenderSeparatesUserAndProjectConfig(t *testing.T) {
 	c.Desktop.UpdateChannel = "preview"
 	c.Agent.RecoveryModel = "deepseek-pro"
 	c.Agent.RecoveryTemperature = 0.2
+	c.AutoSubmit = true
 
 	user := RenderTOMLForScope(c, RenderScopeUser)
-	for _, want := range []string{"config_version = 12", "[desktop]", `currency = "CNY"`, "[billing]", `display_currency = "CNY"`, `theme = "dark"`, `terminal_theme = "auto"`, `close_behavior = "background"`, `status_bar_style = "text"`, `default_tool_approval_mode = "auto"`, `check_updates = false`, `recovery_model = "deepseek-pro"`, "[notifications]", "[tools.shell]"} {
+	for _, want := range []string{"config_version = 12", "[desktop]", `currency = "CNY"`, "[billing]", `display_currency = "CNY"`, `theme = "dark"`, `terminal_theme = "auto"`, `close_behavior = "background"`, `status_bar_style = "text"`, `default_tool_approval_mode = "auto"`, `check_updates = false`, `recovery_model = "deepseek-pro"`, "auto_submit = true", "[notifications]", "[tools.shell]"} {
 		if !strings.Contains(user, want) {
 			t.Fatalf("user render missing %q:\n%s", want, user)
 		}
@@ -757,7 +758,7 @@ func TestScopedRenderSeparatesUserAndProjectConfig(t *testing.T) {
 	}
 
 	project := RenderTOMLForScope(c, RenderScopeProject)
-	for _, forbidden := range []string{"[desktop]", "[notifications]", "close_behavior =", "default_tool_approval_mode =", "default_auto_recovery_checkpoint =", "check_updates =", "update_channel =", "max_steps", "planner_max_steps"} {
+	for _, forbidden := range []string{"[desktop]", "[notifications]", "close_behavior =", "default_tool_approval_mode =", "default_auto_recovery_checkpoint =", "check_updates =", "update_channel =", "max_steps", "planner_max_steps", "auto_submit"} {
 		if strings.Contains(project, forbidden) {
 			t.Fatalf("project render should not contain %q:\n%s", forbidden, project)
 		}
@@ -837,6 +838,15 @@ func TestProjectDeltaRendersRecoveryReviewerOverride(t *testing.T) {
 	}
 	if strings.Contains(delta, "recovery_temperature") {
 		t.Fatalf("deprecated recovery_temperature rendered:\n%s", delta)
+	}
+}
+
+// auto_submit is a user preference, so the project delta must not carry it.
+func TestProjectDeltaOmitsUserOnlyAutoSubmit(t *testing.T) {
+	c := Default()
+	c.AutoSubmit = true
+	if delta := RenderTOMLProjectDelta(c); strings.Contains(delta, "auto_submit") {
+		t.Fatalf("project delta must not carry the user-only auto_submit:\n%s", delta)
 	}
 }
 

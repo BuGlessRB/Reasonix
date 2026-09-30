@@ -20,6 +20,7 @@ type heldScope struct {
 	sandbox      SandboxConfig
 	permissions  PermissionsConfig
 	approvalMode string
+	autoSubmit   bool
 	shell        ShellConfig
 	rgPath       string
 	lsp          map[string]LSPServer
@@ -41,6 +42,7 @@ func holdUserScope(c *Config) heldScope {
 		sandbox:      s,
 		permissions:  p,
 		approvalMode: c.Desktop.DefaultToolApprovalMode,
+		autoSubmit:   c.AutoSubmit,
 		shell:        shell,
 		rgPath:       c.Tools.Search.RgPath,
 		lsp:          maps.Clone(c.LSP.Servers),
@@ -112,6 +114,12 @@ func (h heldScope) narrow(c *Config, r Roots, root string, projectMeta toml.Meta
 	ws := workspaceDir(root)
 	c.Tools.Shell.Env = h.shell.Env
 	warnShellEnvProblems(c, projectMeta)
+	// Auto-submit commits a user's ask answers without a confirmation, so it is
+	// the user's alone: a cloned repo must not turn it on.
+	if c.AutoSubmit != h.autoSubmit {
+		c.ignoreProject("auto_submit", fmt.Sprintf("%t", c.AutoSubmit), ProjectUserOnly)
+		c.AutoSubmit = h.autoSubmit
+	}
 	h.narrowSandbox(c, ws)
 	h.narrowPermissions(c)
 	if NormalizeToolApprovalMode(c.Desktop.DefaultToolApprovalMode) != NormalizeToolApprovalMode(h.approvalMode) {

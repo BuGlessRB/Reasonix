@@ -12,10 +12,11 @@ import (
 	"reasonix/internal/frontend/termrender"
 )
 
-// askState walks an open question panel. tab is the question in view, and
-// with more than one question one tab past the last reviews the answers.
-// Each question's rows are its options, then a typed answer, then declining.
-// A single-choice pick may carry a note, sent after it as a second selection.
+// askState walks an open question panel. tab is the question in view; with
+// more than one question and auto-submit off, one tab past the last reviews
+// the answers. Each question's rows are its options, then a typed answer, then
+// declining. A single-choice pick may carry a note, sent after it as a second
+// selection.
 type askState struct {
 	item   int
 	tab    int
@@ -52,6 +53,17 @@ func (st *askState) onSubmitTab(n int) bool { return n > 1 && st.tab == n }
 
 func (st *askState) answered(i int) bool { return len(st.picks[i]) > 0 || st.custom[i] != "" }
 
+// firstUnanswered is the index of the first question with no answer, or -1 when
+// every question is answered.
+func (st *askState) firstUnanswered(n int) int {
+	for i := range n {
+		if !st.answered(i) {
+			return i
+		}
+	}
+	return -1
+}
+
 // answerAsk takes a key while a question panel is open.
 func (m *model) answerAsk(it *Item, k string) (tea.Cmd, bool) {
 	st := m.openAsk(it)
@@ -76,7 +88,13 @@ func (m *model) answerAsk(it *Item, k string) (tea.Cmd, bool) {
 		st.tab, st.cursor = max(st.tab-1, 0), 0
 		return nil, true
 	case "right":
-		st.tab, st.cursor = min(st.tab+1, tabs-1), 0
+		// With auto-submit on the Submit tab is not drawn, so right stops at
+		// the last question instead of landing on a hidden tab that commits.
+		last := tabs - 1
+		if m.opts.AutoSubmit {
+			last = len(qs) - 1
+		}
+		st.tab, st.cursor = min(st.tab+1, last), 0
 		return nil, true
 	}
 	if st.onSubmitTab(len(qs)) {
@@ -194,8 +212,21 @@ func (m *model) typeAnswer(it *Item, k string) (tea.Cmd, bool) {
 
 func (m *model) nextQuestion(it *Item) tea.Cmd {
 	st := m.ask
-	if len(it.Ask.Questions) == 1 {
+	n := len(it.Ask.Questions)
+	if n == 1 {
 		return m.sendAsk(it)
+	}
+	// With auto-submit on, answering moves on to the next unanswered question;
+	// only answering the last one, with nothing left unanswered, commits — so a
+	// question answered after a skip-back skips ahead to the next gap.
+	if m.opts.AutoSubmit {
+		if i := st.firstUnanswered(n); i >= 0 {
+			st.tab, st.cursor = i, 0
+			return nil
+		}
+		if st.tab == n-1 {
+			return m.sendAsk(it)
+		}
 	}
 	st.tab, st.cursor = st.tab+1, 0
 	return nil
@@ -319,11 +350,13 @@ func (m *model) askTabs(it *Item) string {
 		}
 		parts = append(parts, tabLabel(mark+" "+header(q.Header, i), i == st.tab))
 	}
-	mark := "☐"
-	if all {
-		mark = "✔"
+	if !m.opts.AutoSubmit {
+		mark := "☐"
+		if all {
+			mark = "✔"
+		}
+		parts = append(parts, tabLabel(mark+" Submit", st.onSubmitTab(len(qs))))
 	}
-	parts = append(parts, tabLabel(mark+" Submit", st.onSubmitTab(len(qs))))
 	return termrender.Dim("← ") + strings.Join(parts, "  ") + termrender.Dim(" →")
 }
 

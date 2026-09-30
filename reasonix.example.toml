@@ -6,6 +6,7 @@
 
 default_model = "deepseek"   # a provider name (→ its default model) or "provider/model"
 # language      = "zh"   # ui language; empty = auto-detect from $LANG / $REASONIX_LANG
+# auto_submit   = true   # commit a multi-question ask once its last question is answered; user/global only
 
 [ui]
 theme = "auto"   # auto|dark|light; controls CLI colors only; REASONIX_THEME can override per run

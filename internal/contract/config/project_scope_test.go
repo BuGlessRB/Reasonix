@@ -228,6 +228,25 @@ func TestProjectCannotChooseToolApprovalPosture(t *testing.T) {
 	}
 }
 
+// Auto-submit commits a user's ask answers without a confirmation, so it is the
+// user's preference: a project file must not turn it on.
+func TestProjectCannotTurnOnAutoSubmit(t *testing.T) {
+	cfg, _ := loadScoped(t, "", "auto_submit = true\n")
+	if cfg.AutoSubmit {
+		t.Fatal("auto_submit = true, want the user's false kept")
+	}
+	if !slices.Contains(ignoredKeys(cfg), "auto_submit") {
+		t.Fatalf("ignored = %v, want auto_submit reported", ignoredKeys(cfg))
+	}
+}
+
+func TestUserAutoSubmitSurvivesProjectValue(t *testing.T) {
+	cfg, _ := loadScoped(t, "auto_submit = true\n", "auto_submit = false\n")
+	if !cfg.AutoSubmit {
+		t.Fatal("auto_submit = false, want the user's true kept")
+	}
+}
+
 // Equal values are not a widening and deserve no notice.
 func TestProjectRepeatingUserValuesIsQuiet(t *testing.T) {
 	same := "[sandbox]\nbash = \"enforce\"\nnetwork = true\n[permissions]\nmode = \"ask\"\n"

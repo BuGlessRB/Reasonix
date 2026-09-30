@@ -408,6 +408,157 @@ func TestAskEscDeclinesWithNothingSelected(t *testing.T) {
 	}
 }
 
+func singleChoiceAsk() eventwire.Event {
+	return eventwire.Event{Kind: "ask_request", Ask: &eventwire.Ask{ID: "ask-autosubmit", Questions: []eventwire.AskQuestion{
+		{ID: "q1", Prompt: "One", Options: []eventwire.AskOption{{Label: "A"}}},
+		{ID: "q2", Prompt: "Two", Options: []eventwire.AskOption{{Label: "B"}}},
+	}}}
+}
+
+// With auto-submit on, answering the last question of a multi-question ask
+// commits the whole batch at once, with no Submit tab and no extra Enter.
+func TestAskAutoSubmitCommitsFullyAnsweredBatch(t *testing.T) {
+	m, k := testModel(t)
+	m.opts.AutoSubmit = true
+	apply(m, singleChoiceAsk())
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	run(m, cmd)
+	if m.tr.OpenPrompt() == nil {
+		t.Fatal("answering q1 must advance to q2, not submit")
+	}
+	_, cmd = m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	run(m, cmd)
+	if m.tr.OpenPrompt() != nil {
+		t.Fatal("auto-submit must commit a fully answered batch after the last question")
+	}
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, `POST /answer {"answers":[{"QuestionID":"q1","Selected":["A"]},{"QuestionID":"q2","Selected":["B"]}],"id":"ask-autosubmit"}`) {
+		t.Fatalf("answer call missing:\n%s", calls)
+	}
+}
+
+// With auto-submit on there is no Submit tab to page onto: right stops at the
+// last question and never commits, so editing an answer after a skip-back
+// cannot submit the batch by an arrow.
+func TestAskAutoSubmitArrowStopsAtLastQuestion(t *testing.T) {
+	m, k := testModel(t)
+	m.opts.AutoSubmit = true
+	apply(m, singleChoiceAsk())
+	// Answer q2 first, then q1, so the batch completes away from the end.
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	run(m, cmd)
+	_, cmd = m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	run(m, cmd)
+	_, cmd = m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	run(m, cmd)
+	if m.tr.OpenPrompt() == nil {
+		t.Fatal("the batch must still be open before the arrow")
+	}
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	run(m, cmd)
+	if m.tr.OpenPrompt() == nil {
+		t.Fatal("an arrow must not commit the batch")
+	}
+	if m.ask == nil || m.ask.tab != 1 {
+		t.Fatalf("right must stop at the last question, got tab %d", m.ask.tab)
+	}
+	if calls := strings.Join(k.seen(), "\n"); strings.Contains(calls, "POST /answer") {
+		t.Fatalf("an arrow must make no /answer call:\n%s", calls)
+	}
+}
+
+// auto-submit fires only when nothing is unanswered: reaching the end of a batch
+// with a skipped question jumps back to that question instead of committing.
+func TestAskAutoSubmitJumpsToSkippedQuestion(t *testing.T) {
+	m, _ := testModel(t)
+	m.opts.AutoSubmit = true
+	apply(m, singleChoiceAsk())
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	run(m, cmd)
+	if m.tr.OpenPrompt() == nil {
+		t.Fatal("moving to q2 must not submit with q1 unanswered")
+	}
+	_, cmd = m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	run(m, cmd)
+	if m.tr.OpenPrompt() == nil {
+		t.Fatal("auto-submit must not commit an incomplete batch")
+	}
+	if m.ask == nil || m.ask.tab != 0 {
+		t.Fatalf("auto-submit must jump to the skipped q1, got tab %d", m.ask.tab)
+	}
+}
+
+func threeChoiceAsk() eventwire.Event {
+	return eventwire.Event{Kind: "ask_request", Ask: &eventwire.Ask{ID: "ask-autosubmit3", Questions: []eventwire.AskQuestion{
+		{ID: "q1", Prompt: "One", Options: []eventwire.AskOption{{Label: "A"}}},
+		{ID: "q2", Prompt: "Two", Options: []eventwire.AskOption{{Label: "B"}}},
+		{ID: "q3", Prompt: "Three", Options: []eventwire.AskOption{{Label: "C"}}},
+	}}}
+}
+
+// Answering a question the panel was thrown back to skips on to the next
+// unanswered one, not to the already-answered question that merely follows it;
+// only the last question, with nothing left, commits.
+func TestAskAutoSubmitSkipsToTheNextUnansweredAfterSkipBack(t *testing.T) {
+	m, k := testModel(t)
+	m.opts.AutoSubmit = true
+	apply(m, threeChoiceAsk())
+	// Answer q2, leaving q1 (behind) and q3 (ahead) unanswered: q1 is the gap
+	// the panel is thrown back to.
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	run(m, cmd)
+	run(m, press(m, "enter"))
+	if m.ask == nil || m.ask.tab != 0 {
+		t.Fatalf("answering q2 must be thrown back to q1, got tab %d", m.ask.tab)
+	}
+	run(m, press(m, "enter"))
+	if m.tr.OpenPrompt() == nil {
+		t.Fatal("answering q1 must not commit while q3 is unanswered")
+	}
+	if m.ask == nil || m.ask.tab != 2 {
+		t.Fatalf("answering q1 must skip to the unanswered q3, got tab %d", m.ask.tab)
+	}
+	run(m, press(m, "enter"))
+	if m.tr.OpenPrompt() != nil {
+		t.Fatal("answering the last question must commit the batch")
+	}
+	if calls := strings.Join(k.seen(), "\n"); !strings.Contains(calls, `POST /answer {"answers":[{"QuestionID":"q1","Selected":["A"]},{"QuestionID":"q2","Selected":["B"]},{"QuestionID":"q3","Selected":["C"]}],"id":"ask-autosubmit3"}`) {
+		t.Fatalf("answer call missing:\n%s", calls)
+	}
+}
+
+// With auto-submit on the Submit tab is not drawn.
+func TestAskAutoSubmitHidesSubmitTab(t *testing.T) {
+	m, _ := testModel(t)
+	m.opts.AutoSubmit = true
+	apply(m, singleChoiceAsk())
+	it := m.tr.OpenPrompt()
+	if it == nil {
+		t.Fatal("ask not open")
+	}
+	m.openAsk(it)
+	if tabs := m.askTabs(it); strings.Contains(tabs, "Submit") {
+		t.Fatalf("auto-submit must hide the Submit tab, got %q", tabs)
+	}
+}
+
+// Without auto-submit the Submit tab is shown and still needs its explicit
+// Enter even when the batch is fully answered.
+func TestAskWithoutAutoSubmitWaitsOnSubmit(t *testing.T) {
+	m, _ := testModel(t)
+	apply(m, singleChoiceAsk())
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	run(m, cmd)
+	_, cmd = m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	run(m, cmd)
+	if m.tr.OpenPrompt() == nil {
+		t.Fatal("without auto-submit the ask must stop at the Submit tab")
+	}
+	run(m, press(m, "enter"))
+	if m.tr.OpenPrompt() != nil {
+		t.Fatal("Enter on the Submit tab must submit the batch")
+	}
+}
+
 // An @-token opens the menu as it is typed, and the chosen item replaces the
 // token the kernel named — counted in UTF-16, so a CJK line splices where the
 // kernel meant.

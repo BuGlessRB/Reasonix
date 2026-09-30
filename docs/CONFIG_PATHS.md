@@ -84,6 +84,7 @@ Example:
 config_version = 1
 default_model = "deepseek/deepseek-flash"
 language = "zh"
+auto_submit = false          # commit a multi-question ask once its last question is answered; user/global only
 credentials_store = "auto"   # legacy compatibility; provider keys are in .env
 
 [ui]

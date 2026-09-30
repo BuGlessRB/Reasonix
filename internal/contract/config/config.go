@@ -49,6 +49,9 @@ type Config struct {
 	Serve            ServeConfig         `toml:"serve"`
 	Secrets          SecretsConfig       `toml:"secrets"`
 	Remote           RemoteConfig        `toml:"remote"`
+	// AutoSubmit commits a multi-question ask once its last question is answered,
+	// instead of showing the Submit tab. User/global only; a repo cannot set it.
+	AutoSubmit bool `toml:"auto_submit"`
 	// Storage relocates the movable roots, keyed by RootID. User/global only.
 	Storage map[string]string `toml:"storage"`
 
@@ -239,13 +242,6 @@ type SecretsConfig struct {
 	// bash sandbox alike. Default on; those files hold no settings a tool needs.
 	ProtectCredentialFiles bool `toml:"protect_credential_files"`
 }
-
-type providerSourceScope string
-
-const (
-	providerSourceUser    providerSourceScope = "user"
-	providerSourceProject providerSourceScope = "project"
-)
 
 // UIConfig controls CLI presentation-only settings. Desktop appearance is kept in
 // DesktopConfig so desktop preferences cannot alter terminal output or prompts.
