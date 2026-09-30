@@ -106,7 +106,7 @@ function Package({
           data-action="extensions.enabled"
           data-target={p.name}
         on={p.enabled}
-        busy={busy === "toggle"}
+        busy={!!busy}
         label={`${t(p.enabled ? "关闭" : "启用")} ${p.name}`}
         onClick={() => void run("toggle", () => port.setPluginEnabled(p.name, !p.enabled))}
       />
@@ -118,14 +118,14 @@ function Package({
       <span className="q">
         {t("删除 {name}？其提供的技能、命令与服务将一并移除。若只是暂时停用，关闭开关即可。", { name: p.name })}
       </span>
-      <button className="act" onClick={() => setConfirming(false)}>
+      <button className="act" disabled={!!busy} onClick={() => setConfirming(false)}>
         {t("取消")}
       </button>
       <button
         className="act danger"
             data-action="extensions.remove"
             data-target={p.name}
-        disabled={busy === "remove"}
+        disabled={!!busy}
         onClick={() =>
           void run("remove", async () => {
             const out = await port.removePlugin(p.name);
