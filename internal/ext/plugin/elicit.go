@@ -40,10 +40,9 @@ const (
 // field type, or a mode it never declared.
 var errBadElicitation = errors.New("unsupported elicitation request")
 
-// elicitCapability is what this client declares: forms only. URL mode sends
-// the person to a page the server names, which needs a consent step this host
-// does not have yet.
-func elicitCapability() map[string]any { return map[string]any{"form": map[string]any{}} }
+func elicitCapability() map[string]any {
+	return map[string]any{"form": map[string]any{}, "url": map[string]any{}}
+}
 
 type elicitProp struct {
 	name      string
@@ -263,6 +262,12 @@ func orderedObject(raw json.RawMessage) ([]string, []json.RawMessage, error) {
 // elicit answers one elicitation/create with the MCP result it calls for.
 // Nobody to ask, or a refusal, is "decline"; a stopped turn is "cancel".
 func elicit(ctx context.Context, e tool.Elicitor, server string, params json.RawMessage) (map[string]any, error) {
+	var mode struct {
+		Mode string `json:"mode"`
+	}
+	if json.Unmarshal(params, &mode) == nil && mode.Mode == "url" {
+		return elicitURL(ctx, e, server, params)
+	}
 	message, props, err := parseElicitation(params)
 	if err != nil {
 		return nil, err

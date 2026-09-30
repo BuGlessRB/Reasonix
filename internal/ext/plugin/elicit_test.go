@@ -93,7 +93,7 @@ func TestElicitationRefusesBadAnswersAndDeclines(t *testing.T) {
 		t.Fatalf("never valid = %v after %d forms, want cancel after %d", got, len(missing.seen), elicitAttempts)
 	}
 	for _, bad := range []string{
-		`{"mode":"url","url":"https://example.com","message":"go"}`,
+		`{"mode":"unsupported","message":"go"}`,
 		`{"message":"x","requestedSchema":{"type":"object","properties":{"o":{"type":"object"}}}}`,
 		`{"message":"x","requestedSchema":{"type":"object","properties":{"a":{"type":"string"},"a":{"type":"number"}}}}`,
 		`{"message":"x","requestedSchema":{"type":"object","properties":{"e":{"type":"string","enum":["x","y"],"enumNames":["Same","Same"]}}}}`,

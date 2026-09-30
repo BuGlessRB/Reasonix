@@ -19,7 +19,7 @@ export interface HostPort {
   toggleMaximiseWindow(): void;
   isWindowMaximised(): Promise<boolean>;
   closeWindow(): void;
-  openExternal(url: string): void;
+  openExternal(url: string): void | Promise<void>;
   /** Where dropped files live. Empty where the shell cannot say — a browser
    *  tab never learns a path. */
   pathsForFiles(files: File[]): string[];
@@ -169,7 +169,7 @@ class ElectronHost implements HostPort {
     void this.api.closeWindow();
   }
   openExternal(url: string) {
-    void this.api.openExternal(url);
+    return this.api.openExternal(url);
   }
   pathsForFiles(files: File[]) {
     // Resolved one at a time because that is the shape the platform offers;

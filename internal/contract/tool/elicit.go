@@ -13,21 +13,22 @@ type ElicitField struct {
 	Default     []string // prefilled: the party's default, or what was given last time
 }
 
-// ElicitRequest is a form an external party — an MCP server mid tool call —
-// asks the person at the host to fill. Source names that party on screen; Note
-// is the host's own remark, such as why the last answer was not accepted.
+// ElicitRequest asks for an external party's form or URL interaction. A nonempty
+// URL selects an action-only interaction; otherwise Fields describes the form.
 type ElicitRequest struct {
 	Source  string
 	Message string
 	Note    string
 	Fields  []ElicitField
+	URL     string
 }
 
-// ElicitReply is what the person gave back. Declined means they refused the
-// form as a whole; Values holds the selections or text per field name.
+// ElicitReply carries form values or a URL interaction's accept/decline/cancel
+// Action. URL replies never carry Values.
 type ElicitReply struct {
 	Declined bool
 	Values   map[string][]string
+	Action   string
 }
 
 // Elicitor puts an external party's form in front of the person. A refusal is a

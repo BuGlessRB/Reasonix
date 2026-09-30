@@ -17,13 +17,14 @@ import (
 // Each question's rows are its options, then a typed answer, then declining.
 // A single-choice pick may carry a note, sent after it as a second selection.
 type askState struct {
-	item   int
-	tab    int
-	cursor int
-	picks  [][]string
-	custom []string
-	notes  []string
-	entry  askEntry
+	item          int
+	tab           int
+	cursor        int
+	picks         [][]string
+	custom        []string
+	notes         []string
+	entry         askEntry
+	urlSubmission urlSubmission
 }
 
 // askEntry is what the composer is taking while the panel is open.
@@ -41,6 +42,9 @@ func (m *model) openAsk(it *Item) *askState {
 	if m.ask == nil || m.ask.item != it.ID {
 		n := len(it.Ask.Questions)
 		m.ask = &askState{item: it.ID, picks: make([][]string, n), custom: make([]string, n), notes: make([]string, n)}
+		if it.Ask.Origin != nil && it.Ask.Origin.URL != "" {
+			m.ask.cursor = 3
+		}
 		for i, q := range it.Ask.Questions {
 			m.ask.picks[i] = slices.Clone(q.Default)
 		}
@@ -54,6 +58,9 @@ func (st *askState) answered(i int) bool { return len(st.picks[i]) > 0 || st.cus
 
 // answerAsk takes a key while a question panel is open.
 func (m *model) answerAsk(it *Item, k string) (tea.Cmd, bool) {
+	if it.Ask.Origin != nil && it.Ask.Origin.URL != "" {
+		return m.answerURLAsk(it, k)
+	}
 	st := m.openAsk(it)
 	qs := it.Ask.Questions
 	if st.entering() {
@@ -234,6 +241,9 @@ func (m *model) sendAsk(it *Item) tea.Cmd {
 // askPanel draws the question in view with its rows, or the review of every
 // answer on the submit tab.
 func (m *model) askPanel(it *Item) []string {
+	if it.Ask.Origin != nil && it.Ask.Origin.URL != "" {
+		return m.urlAskPanel(it)
+	}
 	st := m.openAsk(it)
 	qs := it.Ask.Questions
 	if len(qs) == 0 {

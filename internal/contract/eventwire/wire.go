@@ -2,6 +2,7 @@
 package eventwire
 
 import (
+	"reasonix/internal/base/externalurl"
 	"reasonix/internal/contract/agentgraph"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/pricing"
@@ -13,6 +14,7 @@ import (
 // offload via content refs without changing provider-visible semantics.
 type Event struct {
 	Kind            string           `json:"kind"`
+	NonPersistable  bool             `json:"nonPersistable,omitempty"` // Live delivery and prompt replay only; never write to a durable event log.
 	Text            string           `json:"text,omitempty" externalizable:"true"`
 	Detail          string           `json:"detail,omitempty" externalizable:"true"`
 	Code            string           `json:"code,omitempty"`
@@ -152,6 +154,7 @@ func ToWire(e event.Event) Event {
 		w.Approval = toWireApproval(e.Approval)
 	case event.AskRequest:
 		w.Ask = ToWireAsk(e.Ask)
+		w.NonPersistable = urlAsk(e.Ask)
 	case event.CompactionStarted, event.CompactionDone:
 		w.Compaction = toWireCompaction(e.Compaction)
 	case event.ContextMaintenanceEvent:
@@ -388,10 +391,13 @@ type AskQuestion struct {
 
 // AskOrigin is the JSON form of an event.AskOrigin.
 type AskOrigin struct {
-	Kind    string `json:"kind"`
-	Source  string `json:"source"`
-	Message string `json:"message,omitempty" externalizable:"true"`
-	Note    string `json:"note,omitempty"`
+	Kind     string `json:"kind"`
+	Source   string `json:"source"`
+	Message  string `json:"message,omitempty" externalizable:"true"`
+	Note     string `json:"note,omitempty"`
+	URL      string `json:"url,omitempty"`
+	URLHost  string `json:"urlHost,omitempty"`
+	URLLocal bool   `json:"urlLocal,omitempty"`
 }
 
 // Ask is the JSON form of an event.Ask.
@@ -665,7 +671,10 @@ func ToWireAsk(a event.Ask) *Ask {
 	}
 	out := &Ask{ID: a.ID, Questions: qs}
 	if o := a.Origin; o != nil {
-		out.Origin = &AskOrigin{Kind: o.Kind, Source: o.Source, Message: o.Message, Note: o.Note}
+		out.Origin = &AskOrigin{Kind: o.Kind, Source: o.Source, Message: o.Message, Note: o.Note, URL: o.URL}
+		if o.URL != "" {
+			out.Origin.URLHost, out.Origin.URLLocal, _ = externalurl.Host(o.URL)
+		}
 	}
 	return out
 }
@@ -783,3 +792,5 @@ type ContextMaintenance struct {
 	Boundary            string `json:"boundary,omitempty"`
 	TriggerTokens       int    `json:"triggerTokens,omitempty"`
 }
+
+func urlAsk(a event.Ask) bool { return a.Origin != nil && a.Origin.URL != "" }

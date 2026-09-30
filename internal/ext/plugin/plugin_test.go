@@ -1398,6 +1398,11 @@ func TestHelperProcess(t *testing.T) {
 						"age":  map[string]any{"type": "integer", "minimum": 0},
 					}},
 				}})
+				if target := os.Getenv("GO_WANT_HELPER_URL_ELICIT"); target != "" {
+					ask, _ = json.Marshal(map[string]any{"jsonrpc": "2.0", "id": "e1", "method": "elicitation/create", "params": map[string]any{
+						"mode": "url", "message": "Finish in your browser", "url": target, "elicitationId": "legacy-private-id",
+					}})
+				}
 				os.Stdout.Write(append(ask, '\n'))
 				var answer json.RawMessage
 				for answer == nil {

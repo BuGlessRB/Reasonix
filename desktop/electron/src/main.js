@@ -300,7 +300,7 @@ ipcMain.handle("browser:login-answer", (event, id, username, password) => {
 ipcMain.handle("shell:open-external", (event, raw) => {
   if (!fromWindow(event)) return;
   const target = externalTarget(raw);
-  if (target) void shell.openExternal(target);
+  if (target) return shell.openExternal(target);
 });
 ipcMain.handle("shell:reveal", (event, base, rel) =>
   fromWindow(event) && client ? reveal(client, shell, String(base), String(rel)) : { code: "", error: "no window" },

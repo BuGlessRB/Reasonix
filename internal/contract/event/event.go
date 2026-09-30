@@ -407,6 +407,7 @@ type AskOrigin struct {
 	Source  string // the party, e.g. the MCP server's configured name
 	Message string // what the party said it needs
 	Note    string // the host's remark, e.g. why the last answer was refused
+	URL     string // an external interaction shown only to the person
 }
 
 // AskOriginMCP is an MCP server's elicitation.

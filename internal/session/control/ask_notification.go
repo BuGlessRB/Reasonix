@@ -18,7 +18,9 @@ func askNotificationText(questions []event.AskQuestion, origin *event.AskOrigin)
 	if len(questions) > 0 {
 		prompt = questions[0].Prompt
 	}
-	if origin != nil && origin.Kind == event.AskOriginMCP && strings.TrimSpace(origin.Message) != "" {
+	if origin != nil && origin.URL != "" {
+		prompt = "Complete an external interaction"
+	} else if origin != nil && origin.Kind == event.AskOriginMCP && strings.TrimSpace(origin.Message) != "" {
 		prompt = origin.Message
 	}
 	prompt = approvalTruncate(approvalCompactText(prompt), askNotificationPromptRunes)

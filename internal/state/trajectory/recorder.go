@@ -350,6 +350,10 @@ func (r *Recorder) flushPendingLocked() {
 
 func (r *Recorder) Emit(e event.Event) {
 	w := eventwire.ToWire(e)
+	if w.NonPersistable {
+		r.inner.Emit(e)
+		return
+	}
 	if plainDelta(&w) {
 		r.appendDelta(w)
 	} else {
