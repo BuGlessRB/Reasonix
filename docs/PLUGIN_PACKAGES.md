@@ -14,6 +14,8 @@ For a copyable local package and the community review path, see the
 [community author guide](MARKET_AUTHOR_GUIDE.md).
 The [multi-file skill example](../examples/release-note-kit/README.md) shows
 how a plugin keeps a required reference file with its skill.
+For an issue-to-PR-draft exercise with a deliberately failing local fixture,
+see the [repository workflow example](../examples/issue-fix-kit/README.md).
 
 ## CLI Mode
 
