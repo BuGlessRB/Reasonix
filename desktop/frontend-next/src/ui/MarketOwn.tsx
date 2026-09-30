@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import type { AgentPort, MarketPackage, MarketPlan } from "../port/port";
@@ -10,49 +10,58 @@ interface Props {
   pkg: MarketPackage;
   onBack: () => void;
   onInstalled: () => void;
+  onApplying?: (applying: boolean) => void;
   onViewInstalled?: (kind: string, name: string) => void;
 }
 
 // A publisher installing their own package: the kernel fetches it from the
 // registry as the account, previews it, and installs only what matches that
 // preview's digest. This view never holds a source of its own to send.
-export function OwnInstall({ port, pkg, onBack, onInstalled, onViewInstalled }: Props) {
+export function OwnInstall({ port, pkg, onBack, onInstalled, onViewInstalled, onApplying }: Props) {
   const [plan, setPlan] = useState<MarketPlan | null>(null);
   const [done, setDone] = useState<MarketPlan | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const generation = useRef(0);
   const replace = !!pkg.installed && pkg.installed.version !== pkg.latestVersion;
 
   useEffect(() => {
-    let live = true;
+    const current = ++generation.current;
+    const live = () => current === generation.current;
     setBusy(true);
     setError("");
     setPlan(null);
+    setDone(null);
+    onApplying?.(false);
     port
       .planOwnMarket({ slug: pkg.slug, replace })
-      .then((p) => live && setPlan(p))
-      .catch((e) => live && setError(reason(e)))
-      .finally(() => live && setBusy(false));
+      .then((p) => live() && setPlan(p))
+      .catch((e) => live() && setError(reason(e)))
+      .finally(() => live() && setBusy(false));
     return () => {
-      live = false;
+      ++generation.current;
+      onApplying?.(false);
     };
-  }, [port, pkg.slug, replace, attempt]);
+  }, [port, pkg.slug, replace, attempt, onApplying]);
 
   const install = async () => {
     if (!plan) return;
+    const current = generation.current;
     setBusy(true);
+    onApplying?.(true);
     setError("");
     try {
       const out = await port.installOwnMarket({
         slug: pkg.slug, version: plan.version, planId: plan.planId, replace, digest: plan.contentDigest,
       });
+      if (current !== generation.current) return;
       setDone(out);
       if (out.applied) onInstalled();
     } catch (e) {
-      setError(reason(e));
+      if (current === generation.current) setError(reason(e));
     } finally {
-      setBusy(false);
+      if (current === generation.current) { setBusy(false); onApplying?.(false); }
     }
   };
 

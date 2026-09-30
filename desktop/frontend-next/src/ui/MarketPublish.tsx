@@ -162,9 +162,18 @@ export function PublishForm({ port, handle, onMine }: { port: AgentPort; handle:
   );
 }
 
+type MineProps = { port: AgentPort; onInstalled: () => void; onViewInstalled?: (kind: string, name: string) => void; onApplying?: (applying: boolean) => void };
+
+export function MyPackages(props: MineProps) {
+  const [connection, setConnection] = useState({ port: props.port, generation: 0 });
+  // Reset before child effects can preview the previous account's slug on the new port.
+  if (connection.port !== props.port) setConnection({ port: props.port, generation: connection.generation + 1 });
+  return <PackageList key={connection.generation} {...props} />;
+}
+
 // Every row is the account's own package, so each can be installed here in
 // whatever state review has it; a private one can also be sent to review.
-export function MyPackages({ port, onInstalled, onViewInstalled }: { port: AgentPort; onInstalled: () => void; onViewInstalled?: (kind: string, name: string) => void }) {
+function PackageList({ port, onInstalled, onViewInstalled, onApplying }: MineProps) {
   const [rows, setRows] = useState<MarketPackage[] | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<MarketPackage | null>(null);
@@ -203,6 +212,7 @@ export function MyPackages({ port, onInstalled, onViewInstalled }: { port: Agent
         pkg={open}
         onBack={() => setOpen(null)}
         onViewInstalled={onViewInstalled}
+        onApplying={onApplying}
         onInstalled={() => {
           onInstalled();
           setAttempt((n) => n + 1);

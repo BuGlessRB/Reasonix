@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import { HttpError } from "../port/http_error";
@@ -346,8 +346,10 @@ const VIEWS: [View, string][] = [["browse", "浏览"], ["mine", "我的发布"],
 // Installed and discover are two views of one subject, so they are tabs of one
 // page rather than two sections: what the market adds shows up on the other tab.
 // Publishing spends the account session, so it is offered only while signed in.
-export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSignIn }: Props & { account: AccountState | null; onSignIn: () => void }) {
+export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSignIn, onApplying }: Props & { account: AccountState | null; onSignIn: () => void; onApplying?: (applying: boolean) => void }) {
   const [view, setView] = useState<View>("browse");
+  const [applying, setApplying] = useState(false);
+  const applyingChanged = useCallback((busy: boolean) => { setApplying(busy); onApplying?.(busy); }, [onApplying]);
   const handle = account?.signedIn ? account.user?.handle : undefined;
   const at = handle ? view : "browse";
   return (
@@ -356,7 +358,7 @@ export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSig
       {handle ? (
         <div className="seg mkt-views" data-text role="radiogroup" aria-label={t("社区市场")}>
           {VIEWS.map(([id, name]) => (
-            <button key={id} role="radio" aria-checked={at === id} data-action="market.view" data-value={id} onClick={() => setView(id)}>
+            <button key={id} role="radio" aria-checked={at === id} disabled={applying} data-action="market.view" data-value={id} onClick={() => setView(id)}>
               {t(name)}
             </button>
           ))}
@@ -372,7 +374,7 @@ export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSig
         )
       )}
       {at === "browse" && <Market port={port} onInstalled={onInstalled} onViewInstalled={onViewInstalled} onSignIn={onSignIn} />}
-      {at === "mine" && <MyPackages port={port} onInstalled={onInstalled} onViewInstalled={onViewInstalled} />}
+      {at === "mine" && <MyPackages port={port} onInstalled={onInstalled} onViewInstalled={onViewInstalled} onApplying={applyingChanged} />}
       {at === "publish" && handle && <PublishForm port={port} handle={handle} onMine={() => setView("mine")} />}
     </Group>
   );

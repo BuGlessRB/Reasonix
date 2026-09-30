@@ -123,13 +123,13 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
   const [extRefreshing, setExtRefreshing] = useState(false);
   const extRefresh = useRef(0);
   const [updatingPkg, setUpdatingPkg] = useState({ name: "", applying: false });
+  const applyingChanged = useCallback((applying: boolean) => setUpdatingPkg((p) => ({ ...p, applying })), []);
   const [hookCount, setHookCount] = useState(0);
   const [netMode, setNetMode] = useState("");
   const [memCount, setMemCount] = useState(0);
   const [ruleCount, setRuleCount] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const veiled = useRef(false);
-
   const reloadExt = useCallback(() => {
     const refresh = ++extRefresh.current;
     const current = () => extRefresh.current === refresh;
@@ -621,7 +621,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
             <>
               <ExtTabs at={extTab} disabled={updatingPkg.applying} onPick={(tab) => { setInstalledTarget(null); setExtTab(tab); }} />
               {extTab === "installed" && <InstalledLocation root={root} target={installedTarget} packages={packages} skills={skills} mcp={mcp} refreshing={extRefreshing} onFound={setInstalledTarget} />}
-              {extTab === "market" && <MarketGroup port={port} onInstalled={afterExtChange} onViewInstalled={(kind, name) => { setInstalledTarget({ kind, name }); setExtTab("installed"); }} account={acct} onSignIn={() => go("account", "account")} />}
+              {extTab === "market" && <MarketGroup port={port} onApplying={applyingChanged} onInstalled={afterExtChange} onViewInstalled={(kind, name) => { setInstalledTarget({ kind, name }); setExtTab("installed"); }} account={acct} onSignIn={() => go("account", "account")} />}
               {extTab === "installed" && (
               <>
                 {scope && <ScopeBar scope={scope} scopes={scopes} onPick={setScopeAt} />}
@@ -653,7 +653,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
                     <AddPlugin
                       port={port}
                       updating={packages.find((p) => p.name === updatingPkg.name)}
-                      onApplying={(applying) => setUpdatingPkg((p) => ({ ...p, applying }))}
+                      onApplying={applyingChanged}
                       onClose={() => setUpdatingPkg({ name: "", applying: false })} onInstalled={afterExtChange}
                     />
                   )}
