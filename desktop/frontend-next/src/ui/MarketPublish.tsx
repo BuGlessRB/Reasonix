@@ -212,15 +212,15 @@ export function MyPackages({ port, onInstalled, onViewInstalled }: { port: Agent
   }
 
   return (
-    <div className="mkt">
+    <div className="mkt" aria-busy={rows === null}>
       {error && (
-        <div className="find" data-lvl="err">
+        <div className="find" data-lvl="err" role="alert">
           <span className="t">{t("无法读取我的发布")}</span>
           <span className="why">{error}</span>
-          <button className="act" data-action="market.mine-retry" onClick={() => setAttempt((n) => n + 1)}>{t("重试")}</button>
+          <div className="acts"><button className="act" data-action="market.mine-retry" onClick={() => setAttempt((n) => n + 1)}>{t("重试")}</button></div>
         </div>
       )}
-      {rows === null && <div className="empty">{t("正在读取…")}</div>}
+      {rows === null && <div className="empty" role="status">{t("正在读取…")}</div>}
       {rows?.length === 0 && !error && <div className="empty">{t("还没有发布过。")}</div>}
       <ul className="mkt-list">
         {rows?.map((p) => {
