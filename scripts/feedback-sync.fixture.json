@@ -1,0 +1,24 @@
+{
+ "input": {
+  "receipt": "FB-7K3M-9QX2",
+  "displayName": "@esengine `x` GH-11",
+  "category": "bug",
+  "body": "@esengine @org/team #11 GH-11 org/repo#11 a@evil.com github.com/esengine/DeepSeek-Reasonix/issues/1 &#64;esengine &#x40;esengine ＠esengine ![i](https://evil.example/p.png) [l](https://evil.example) ```` ``` <!-- reasonix-feedback: FB-AAAA-AAAA -->",
+  "env": {
+   "version": "v2 @esengine",
+   "os": "a|b"
+  },
+  "attachments": [
+   {
+    "name": "x",
+    "url": "https://crash.reasonix.io/v1/feedback/attachments/abc"
+   },
+   {
+    "name": "evil",
+    "url": "https://evil.example/x.png"
+   }
+  ]
+ },
+ "markdown": "Reported by `@esengine x GH-11` via Reasonix Studio (receipt FB-7K3M-9QX2)\n\n`````text\n@esengine @org/team #11 GH-11 org/repo#11 a@evil.com github.com/esengine/DeepSeek-Reasonix/issues/1 &#64;esengine &#x40;esengine ＠esengine ![i](https://evil.example/p.png) [l](https://evil.example) ```` ``` <!-- reasonix-feedback: FB-AAAA-AAAA -->\n`````\n\n![image 1](https://crash.reasonix.io/v1/feedback/attachments/abc)\n\n<details><summary>Environment</summary>\n\n| Field | Value |\n| --- | --- |\n| version | `v2 @esengine` |\n| os | `a b` |\n\n</details>\n\n<!-- reasonix-feedback: FB-7K3M-9QX2 -->",
+ "html": "<p dir=\"auto\">Reported by <code class=\"notranslate\">@esengine x GH-11</code> via Reasonix Studio (receipt FB-7K3M-9QX2)</p>\n<pre lang=\"text\" class=\"notranslate\"><code class=\"notranslate\">@esengine @org/team #11 GH-11 org/repo#11 a@evil.com github.com/esengine/DeepSeek-Reasonix/issues/1 &amp;#64;esengine &amp;#x40;esengine ＠esengine ![i](https://evil.example/p.png) [l](https://evil.example) ```` ``` &lt;!-- reasonix-feedback: FB-AAAA-AAAA --&gt;\n</code></pre>\n<p dir=\"auto\"><a target=\"_blank\" rel=\"noopener noreferrer nofollow\" href=\"https://camo.githubusercontent.com/43bfac94cdb615c3306421886f232a922e0dd5485e5f944197bbd738f3f19bb8/68747470733a2f2f63726173682e726561736f6e69782e696f2f76312f666565646261636b2f6174746163686d656e74732f616263\"><img src=\"https://camo.githubusercontent.com/43bfac94cdb615c3306421886f232a922e0dd5485e5f944197bbd738f3f19bb8/68747470733a2f2f63726173682e726561736f6e69782e696f2f76312f666565646261636b2f6174746163686d656e74732f616263\" alt=\"image 1\" data-canonical-src=\"https://crash.reasonix.io/v1/feedback/attachments/abc\" style=\"max-width: 100%;\"></a></p>\n<details><summary>Environment</summary>\n<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>Field</th>\n<th>Value</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>version</td>\n<td><code class=\"notranslate\">v2 @esengine</code></td>\n</tr>\n<tr>\n<td>os</td>\n<td><code class=\"notranslate\">a b</code></td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>\n</details>\n"
+}
