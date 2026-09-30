@@ -32,7 +32,7 @@ const (
 	execExitSetup      = 1
 )
 
-func scheduleExec(args []string, version string) int {
+func scheduleExec(args []string) int {
 	if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
 		fmt.Fprintln(os.Stderr, "usage: reasonix schedule exec <trigger-id>")
 		return execExitUsage
@@ -41,7 +41,7 @@ func scheduleExec(args []string, version string) int {
 		fmt.Fprintln(os.Stderr, schedrun.ErrNoSupervisor)
 		return execExitUsage
 	}
-	return (&scheduleRun{id: args[0], version: version, out: schedrun.NewWriter(os.Stdout)}).exec()
+	return (&scheduleRun{id: args[0], out: schedrun.NewWriter(os.Stdout)}).exec()
 }
 
 // scheduleRun is the child half of one supervised run. It reads the claimed run
@@ -49,15 +49,14 @@ func scheduleExec(args []string, version string) int {
 // user's configuration alone: no file of the workspace is read before the run is
 // built, and the build itself reads none.
 type scheduleRun struct {
-	id      string
-	version string
-	out     *schedrun.Writer
-	store   *schedule.Store
-	policy  schedule.Policy
-	sc      schedule.Schedule
-	claim   schedule.Run
-	gov     *schedrun.Governor
-	sink    *reportSink
+	id     string
+	out    *schedrun.Writer
+	store  *schedule.Store
+	policy schedule.Policy
+	sc     schedule.Schedule
+	claim  schedule.Run
+	gov    *schedrun.Governor
+	sink   *reportSink
 }
 
 func (r *scheduleRun) exec() int {
@@ -80,11 +79,15 @@ func (r *scheduleRun) exec() int {
 	}
 	defer release()
 
-	gone, err := schedrun.AwaitGo(os.Stdin, schedrun.StartTimeout)
+	if err := r.out.Ready(); err != nil {
+		return execExitParentGone
+	}
+	token, gone, err := schedrun.AwaitGo(os.Stdin, schedrun.StartTimeout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, schedrun.CodeParentGone, err)
 		return execExitParentGone
 	}
+	schedrun.ExitWhenGone(gone, schedrun.ForceExitGrace, execExitParentGone, os.Exit)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	ctx, cancel := context.WithCancel(ctx)
@@ -99,7 +102,7 @@ func (r *scheduleRun) exec() int {
 		cancel()
 	}()
 
-	done := r.execute(ctx, roots)
+	done := r.execute(ctx, roots, token)
 	mu.Lock()
 	orphaned := parentGone
 	mu.Unlock()
@@ -119,11 +122,15 @@ func (r *scheduleRun) exec() int {
 func (r *scheduleRun) settleOrphan() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	policy := r.policy
+	if policy.MaxConsecutiveFails <= 0 {
+		policy = schedule.DefaultPolicy()
+	}
 	var seen int64
 	if r.gov != nil {
 		seen = r.gov.Tokens()
 	}
-	_ = r.store.Finish(ctx, r.policy, r.id, schedule.Outcome{State: schedule.RunInterrupted, Observed: seen})
+	_ = r.store.Finish(ctx, policy, r.id, schedule.Outcome{State: schedule.RunInterrupted, Observed: seen})
 }
 
 func failed(code string) schedrun.Done {
@@ -165,18 +172,23 @@ func (r *scheduleRun) load(ctx context.Context) (code string) {
 	return ""
 }
 
-func (r *scheduleRun) execute(ctx context.Context, roots config.Roots) schedrun.Done {
+func (r *scheduleRun) execute(ctx context.Context, roots config.Roots, token string) schedrun.Done {
 	if code := r.load(ctx); code != "" {
 		return failed(code)
 	}
-	if err := r.store.MarkStarted(r.id); err != nil {
-		if errors.Is(err, schedule.ErrRunStarted) {
+	if err := r.store.Start(ctx, r.id, token); err != nil {
+		switch {
+		case errors.Is(err, schedule.ErrRunStarted):
 			return failed(schedrun.CodeRunStarted)
+		case errors.Is(err, schedule.ErrRunToken):
+			return failed(schedrun.CodeRunToken)
+		case errors.Is(err, schedule.ErrRunSettled):
+			return failed(schedrun.CodeRunSettled)
 		}
 		fmt.Fprintln(os.Stderr, "schedule:", err)
 		return failed(schedrun.CodeStore)
 	}
-	user, err := schedule.LoadOverrides(roots.UserConfigPath())
+	user, err := schedule.LoadOverrides(roots.UserConfigLoadPath())
 	if err == nil {
 		r.policy, _, err = schedule.Resolve(user, schedule.Overrides{})
 	}
@@ -253,7 +265,7 @@ func (r *scheduleRun) execute(ctx context.Context, roots config.Roots) schedrun.
 	state, why := r.outcome(ctx, runCtx, runErr, ctrl, parked)
 	report, _ := schedule.ClipReport(r.sink.report())
 	return schedrun.Done{
-		State: state, Code: why, Tokens: r.gov.Tokens(), Usages: r.gov.Usages(),
+		State: state, Code: why, Tokens: r.gov.Tokens(), Usages: r.gov.Usages(), Unmetered: r.gov.Unmetered(),
 		Report: report, Pending: parked, Posture: posture, SessionPath: ctrl.SessionPath(),
 	}
 }
@@ -293,6 +305,8 @@ func (r *scheduleRun) outcome(ctx, runCtx context.Context, runErr error, ctrl *c
 	switch {
 	case r.gov.OverBudget():
 		return schedule.RunBudgetStopped, schedrun.CodeTokenLimit
+	case r.gov.Unmetered():
+		return schedule.RunBudgetStopped, schedrun.CodeUnmetered
 	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
 		return schedule.RunBudgetStopped, schedrun.CodeWallLimit
 	case ctx.Err() != nil:
@@ -346,6 +360,10 @@ func (s *reportSink) Emit(e event.Event) {
 		n := int64(e.Usage.PromptTokens) + int64(e.Usage.CompletionTokens)
 		s.gov.AddUsage(n)
 		_ = s.out.Usage(max(n, 0))
+	case event.StreamAttempt:
+		if e.StreamAttempt.Action == event.StreamAttemptCommit {
+			s.gov.Committed()
+		}
 	case event.Text:
 		s.mu.Lock()
 		s.tail.WriteString(e.Text)

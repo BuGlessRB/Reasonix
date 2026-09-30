@@ -49,6 +49,19 @@ func StartTracked(cmd *exec.Cmd) (*TrackedJob, error) {
 	return &TrackedJob{h: job}, err
 }
 
+// StartTrackedRequired is StartTracked for a caller that must not run the child
+// unless a Job Object holds its whole tree: without one the only way to end the
+// tree is walking live parent ids, which a broken chain defeats. It returns
+// ErrProcessTrackingUnavailable, with the child already ended, when the job
+// cannot be made.
+func StartTrackedRequired(cmd *exec.Cmd) (*TrackedJob, error) {
+	job, err := startTracked(cmd, true)
+	if err != nil {
+		return nil, err
+	}
+	return &TrackedJob{h: job}, nil
+}
+
 func startTracked(cmd *exec.Cmd, requireJob bool) (uintptr, error) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}

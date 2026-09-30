@@ -26,6 +26,7 @@ var (
 	ErrLifetimeSpent      = errors.New("schedule: lifetime budget is spent")
 	ErrRunSettled         = errors.New("schedule: run already settled")
 	ErrRunStarted         = errors.New("schedule: run already started")
+	ErrRunToken           = errors.New("schedule: start token does not match this run")
 	ErrRunHeld            = errors.New("schedule: run is held by another executor")
 	ErrResultNotFound     = errors.New("schedule: no result recorded for this run")
 )

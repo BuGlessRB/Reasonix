@@ -2,6 +2,7 @@ package boot
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,5 +52,25 @@ func TestEffectObserveCannotReadTheScheduleStore(t *testing.T) {
 	}
 	if !strings.Contains(results["ok"], insideMark) {
 		t.Fatalf("the control read of an ordinary file failed, so the refusals prove nothing: %q", results["ok"])
+	}
+}
+
+// A retired key in the workspace's config is what the ordinary boot rewrites in
+// place; a read-only run must leave the file, and the user's own, as it found them.
+func TestEffectObserveWritesNoConfigFile(t *testing.T) {
+	root := observeProject(t)
+	project := "[agent]\nmax_steps = 7\n\n[secrets]\nredact_tool_output = true\n"
+	writeFile(t, root, "reasonix.toml", project)
+	prov := testutil.NewMock("observe", testutil.Turn{Text: "done"})
+	ctrl, _ := buildObserved(t, root, prov, observe.RunContext{ScheduleID: "s", TriggerID: "t"})
+	if err := ctrl.Run(context.Background(), "hi"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "reasonix.toml"))
+	if err != nil || string(got) != project {
+		t.Fatalf("the workspace config changed under the read-only posture: %q, %v", got, err)
+	}
+	if entries, _ := os.ReadDir(root); len(entries) != 1 {
+		t.Fatalf("the workspace gained files: %v", entries)
 	}
 }

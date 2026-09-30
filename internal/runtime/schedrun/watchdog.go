@@ -23,12 +23,17 @@ func SupervisorPipe(f *os.File) bool {
 	return err == nil && st.Mode()&(os.ModeNamedPipe|os.ModeSocket) != 0
 }
 
-// AwaitGo blocks until the supervisor releases the run. It returns a channel
-// that closes when the supervisor's end of the stream does, whether the
-// supervisor exited or crashed; nothing else says that on every platform. The
-// child does no work before AwaitGo returns, so a run the store already settled
-// spends nothing.
-func AwaitGo(stdin io.Reader, timeout time.Duration) (gone <-chan struct{}, err error) {
+// ForceExitGrace is how long a child that has lost its supervisor gets to land
+// before the process ends anyway, so a tool that ignores cancellation cannot
+// keep an orphan alive.
+const ForceExitGrace = 30 * time.Second
+
+// AwaitGo blocks until the supervisor releases the run with "go <token>" and
+// returns the token. It also returns a channel that closes when the supervisor's
+// end of the stream does, whether the supervisor exited or crashed; nothing else
+// says that on every platform. The child does no work before AwaitGo returns, so
+// a run the store already settled spends nothing.
+func AwaitGo(stdin io.Reader, timeout time.Duration) (token string, gone <-chan struct{}, err error) {
 	br := bufio.NewReader(stdin)
 	line := make(chan string, 1)
 	ended := make(chan struct{})
@@ -44,11 +49,21 @@ func AwaitGo(stdin io.Reader, timeout time.Duration) (gone <-chan struct{}, err 
 	}()
 	select {
 	case s := <-line:
-		if s != GoLine {
-			return nil, ErrParentGone
+		verb, tok, ok := strings.Cut(s, " ")
+		if !ok || verb != GoLine || tok == "" {
+			return "", nil, ErrParentGone
 		}
-		return ended, nil
+		return tok, ended, nil
 	case <-time.After(timeout):
-		return nil, ErrStartTimeout
+		return "", nil, ErrStartTimeout
 	}
+}
+
+// ExitWhenGone runs exit(code) once grace has passed after gone closes.
+func ExitWhenGone(gone <-chan struct{}, grace time.Duration, code int, exit func(int)) {
+	go func() {
+		<-gone
+		time.Sleep(grace)
+		exit(code)
+	}()
 }

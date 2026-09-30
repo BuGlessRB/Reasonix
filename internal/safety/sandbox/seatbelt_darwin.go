@@ -104,6 +104,9 @@ func seatbeltProfile(spec Spec) string {
 	// rule; (allow default) above keeps reads working everywhere else.
 	for _, p := range forbidReadDirs(spec.ForbidReadRoots) {
 		fmt.Fprintf(&b, "(deny file-read* (subpath %s))\n", sbplString(p))
+		// bubblewrap masks these with an empty tmpfs, which takes writes away
+		// too; without this rule a blind overwrite of an unreadable file works here.
+		fmt.Fprintf(&b, "(deny file-write* (subpath %s))\n", sbplString(p))
 	}
 	// After every write allowance: SBPL takes the final match.
 	writeGitMetadataRules(&b, gitMetadataForSpec(spec))

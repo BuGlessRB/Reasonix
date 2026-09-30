@@ -30,7 +30,7 @@ func TestPutResultCleansAndBoundsWhatItStores(t *testing.T) {
 	for i := range pending {
 		pending[i] = observe.Pending{ID: fmt.Sprintf("p%d", i), Kind: observe.KindAsk, Source: "ask", Summary: "s‮", Detail: "d\x00" + strings.Repeat("y", 10<<10)}
 	}
-	in := Result{Report: "a\x00b‮c" + strings.Repeat("é", MaxReportBytes), Pending: pending, SessionPath: "p\x1b",
+	in := Result{Report: "a\x00b‮c" + strings.Repeat("é", MaxReportBytes), Pending: pending, SessionPath: "p\x1b/",
 		Posture: observe.Posture{Name: "observe", RemoteContent: true}}
 	if err := st.PutResult(t.Context(), run.TriggerID, in); err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestPutResultCleansAndBoundsWhatItStores(t *testing.T) {
 	if p := got.Pending[0]; strings.ContainsAny(p.Summary+p.Detail, "\x00‮") || len(p.Detail) > maxPendingDetail || !p.Untrusted {
 		t.Fatalf("pending not cleaned: %+v", p)
 	}
-	if got.Posture.RemoteContent || got.SessionPath != "p" {
+	if got.Posture.RemoteContent || got.SessionPath != "" {
 		t.Fatalf("posture/session = %+v %q", got.Posture, got.SessionPath)
 	}
 }
@@ -176,19 +176,69 @@ func TestProjectCannotRaiseTheRepeatParkLimit(t *testing.T) {
 	}
 }
 
-func TestMarkStartedIsOnceOnly(t *testing.T) {
+func TestStartAdmitsOnlyTheTokenHolderOnce(t *testing.T) {
 	st, _, dir, run := claimedRun(t)
-	if err := st.MarkStarted(run.TriggerID); err != nil {
+	if err := st.Start(t.Context(), run.TriggerID, "x"); !errors.Is(err, ErrRunSettled) {
+		t.Fatalf("a claimed run cannot start: %v", err)
+	}
+	token, err := st.MarkRunning(t.Context(), run.TriggerID)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.MarkStarted(run.TriggerID); !errors.Is(err, ErrRunStarted) {
+	raw, _ := os.ReadFile(filepath.Join(dir, manifestName))
+	if strings.Contains(string(raw), token) {
+		t.Fatal("the token itself is in the manifest")
+	}
+	if err := st.Start(t.Context(), run.TriggerID, "guess"); !errors.Is(err, ErrRunToken) {
+		t.Fatalf("wrong token: %v", err)
+	}
+	if err := st.Start(t.Context(), run.TriggerID, token); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Start(t.Context(), run.TriggerID, token); !errors.Is(err, ErrRunStarted) {
 		t.Fatalf("second start: %v", err)
 	}
-	other := "sch_other/1"
-	if err := st.MarkStarted(other); err != nil {
-		t.Fatalf("another run must start independently: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, leasesDirName)); err != nil {
+}
+
+func TestSupervisionKeepsARunAliveAcrossTheExecutorLeaving(t *testing.T) {
+	st, clk, _, run := claimedRun(t)
+	release, err := st.HoldSupervision(run.TriggerID)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := st.HoldSupervision(run.TriggerID); !errors.Is(err, ErrRunHeld) {
+		t.Fatalf("second supervisor: %v", err)
+	}
+	clk.Advance(ReapGrace + time.Minute)
+	if reaped, _ := st.ReapDead(t.Context(), DefaultPolicy()); len(reaped) != 0 {
+		t.Fatal("a supervised run was reaped")
+	}
+	release()
+	if reaped, _ := st.ReapDead(t.Context(), DefaultPolicy()); len(reaped) != 1 {
+		t.Fatal("a run nobody holds was not reaped")
+	}
+}
+
+func TestSessionPathMustLieUnderTheStateRoot(t *testing.T) {
+	st, _, dir, run := claimedRun(t)
+	inside := filepath.Join(filepath.Dir(dir), "projects", "p", "sessions")
+	if err := os.MkdirAll(inside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{
+		filepath.Join(inside, "a.jsonl"):                 filepath.Join(inside, "a.jsonl"),
+		filepath.Join(t.TempDir(), "a.jsonl"):            "",
+		filepath.Join(filepath.Dir(dir), "..", "x.json"): "",
+		"relative.jsonl":                                 "",
+	} {
+		if got := st.sessionPathOrEmpty(path); got != want {
+			t.Errorf("sessionPathOrEmpty(%q) = %q, want %q", path, got, want)
+		}
+	}
+	if err := st.PutResult(t.Context(), run.TriggerID, Result{Report: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.GetResult(t.Context(), run.TriggerID); !got.ReportUntrusted {
+		t.Fatal("a report must be marked untrusted")
 	}
 }

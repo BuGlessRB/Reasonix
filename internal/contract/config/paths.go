@@ -43,6 +43,11 @@ func (r Roots) userConfigDir() string { return r.Home() }
 // UserConfigPath is this binding's user config.toml.
 func (r Roots) UserConfigPath() string { return r.userConfigPath() }
 
+// UserConfigLoadPath is the user file a load actually reads: the primary path
+// when it exists, else the legacy one. A reader of one table of it must use this
+// so it and the full loader agree which file is authoritative.
+func (r Roots) UserConfigLoadPath() string { return r.userConfigLoadPath() }
+
 // Home is the Reasonix home this binding resolves to.
 func (r Roots) Home() string { return r.Dir(RootHome) }
 
@@ -298,8 +303,6 @@ func ReasonixHomeDir() string { return processRoots().Home() }
 // through the home resolver so REASONIX_HOME isolation holds.
 func RemoteStateDir() string { return processRoots().RemoteStateDir() }
 
-// RemoteStateDir is <home>/remote under these roots. A serve launched over SSH
-// keeps its launch token there, so runtime sandboxes deny reading it.
 // ScheduleDir is where the scheduled-runs store lives: machine-wide, under the
 // state root, and never inside a project.
 func (r Roots) ScheduleDir() string {
@@ -310,6 +313,8 @@ func (r Roots) ScheduleDir() string {
 	return filepath.Join(dir, "schedules")
 }
 
+// RemoteStateDir is <home>/remote under these roots. A serve launched over SSH
+// keeps its launch token there, so runtime sandboxes deny reading it.
 func (r Roots) RemoteStateDir() string {
 	home := r.Home()
 	if strings.TrimSpace(home) == "" {

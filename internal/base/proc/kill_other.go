@@ -43,6 +43,10 @@ func StartTracked(cmd *exec.Cmd) (*TrackedJob, error) {
 	return &TrackedJob{}, cmd.Start()
 }
 
+// StartTrackedRequired is StartTracked for a caller that must not run the child
+// unless its whole tree can be ended. Off Windows the process group always can.
+func StartTrackedRequired(cmd *exec.Cmd) (*TrackedJob, error) { return StartTracked(cmd) }
+
 // killTracked terminates cmd's process tree; the handle is unused off Windows.
 func killTracked(cmd *exec.Cmd, _ uintptr) { KillTree(cmd) }
 

@@ -54,7 +54,9 @@ func runFakeChild(mode string) int {
 		return 11
 	}
 	defer release()
-	gone, err := AwaitGo(os.Stdin, 20*time.Second)
+	w := NewWriter(os.Stdout)
+	_ = w.Ready()
+	_, gone, err := AwaitGo(os.Stdin, 20*time.Second)
 	if err != nil {
 		return 12
 	}
@@ -63,7 +65,6 @@ func runFakeChild(mode string) int {
 		fmt.Fprintf(f, "ran %d\n", os.Getpid())
 		f.Close()
 	}
-	w := NewWriter(os.Stdout)
 	switch mode {
 	case "ok":
 		_ = w.Usage(400)
@@ -71,6 +72,13 @@ func runFakeChild(mode string) int {
 		_ = w.Result(Done{State: schedule.RunSucceeded, Tokens: 1000, Usages: 2,
 			Report: "found 3 TODOs\x00 ‮evil", Posture: observe.New(false),
 			Pending: []observe.Pending{{ID: "p1", Kind: observe.KindAsk, Source: "ask", Detail: "which?\x1b[31m"}}})
+		return 0
+	case "lie":
+		_ = w.Usage(100)
+		_ = w.Result(Done{State: schedule.RunSucceeded, Tokens: 100, Usages: 5})
+		return 0
+	case "unmetered":
+		_ = w.Result(Done{State: schedule.RunSucceeded, Tokens: 0, Usages: 0, Unmetered: true})
 		return 0
 	case "slow-ok":
 		time.Sleep(600 * time.Millisecond)

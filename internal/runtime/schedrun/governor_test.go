@@ -77,10 +77,10 @@ func TestAwaitGoReleasesOnTheLineAndReportsTheSupervisorLeaving(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
-	go func() { _, _ = io.WriteString(w, "go\n") }()
-	gone, err := AwaitGo(r, 5*time.Second)
-	if err != nil {
-		t.Fatal(err)
+	go func() { _, _ = io.WriteString(w, "go tok123\n") }()
+	token, gone, err := AwaitGo(r, 5*time.Second)
+	if err != nil || token != "tok123" {
+		t.Fatalf("token %q, err %v", token, err)
 	}
 	select {
 	case <-gone:
@@ -96,16 +96,16 @@ func TestAwaitGoReleasesOnTheLineAndReportsTheSupervisorLeaving(t *testing.T) {
 }
 
 func TestAwaitGoRefusesAnythingButGoAndGivesUp(t *testing.T) {
-	if _, err := AwaitGo(strings.NewReader("run\n"), time.Second); !errors.Is(err, ErrParentGone) {
+	if _, _, err := AwaitGo(strings.NewReader("go\n"), time.Second); !errors.Is(err, ErrParentGone) {
 		t.Fatalf("wrong line: %v", err)
 	}
-	if _, err := AwaitGo(strings.NewReader(""), time.Second); !errors.Is(err, ErrParentGone) {
+	if _, _, err := AwaitGo(strings.NewReader(""), time.Second); !errors.Is(err, ErrParentGone) {
 		t.Fatalf("closed before go: %v", err)
 	}
 	r, w, _ := os.Pipe()
 	defer r.Close()
 	defer w.Close()
-	if _, err := AwaitGo(r, 100*time.Millisecond); !errors.Is(err, ErrStartTimeout) {
+	if _, _, err := AwaitGo(r, 100*time.Millisecond); !errors.Is(err, ErrStartTimeout) {
 		t.Fatalf("no line: %v", err)
 	}
 }
@@ -118,5 +118,46 @@ func TestReadLinesSkipsStrayOutputAndBoundsLines(t *testing.T) {
 	}
 	if err := readLines(strings.NewReader(strings.Repeat("x", MaxLineBytes+1)+"\n"), func(Line) {}); !errors.Is(err, ErrProtocol) {
 		t.Fatalf("oversize: %v", err)
+	}
+}
+
+func TestGovernorStopsARunWhoseRequestsReportNoUsage(t *testing.T) {
+	var stops atomic.Int32
+	g := NewGovernor(0, func() { stops.Add(1) })
+	g.Committed()
+	if stops.Load() != 0 {
+		t.Fatal("stopped on the first request: its usage may still be on the way")
+	}
+	g.Committed()
+	if stops.Load() != 1 || !g.Unmetered() {
+		t.Fatalf("stops=%d unmetered=%v: two requests with no report between them must stop the run", stops.Load(), g.Unmetered())
+	}
+	ok := NewGovernor(0, func() { t.Fatal("stopped") })
+	ok.Committed()
+	ok.AddUsage(10)
+	ok.Committed()
+	ok.AddUsage(10)
+	if ok.Unmetered() {
+		t.Fatal("a metered run reads as unmetered")
+	}
+}
+
+func TestExitWhenGoneForcesTheProcessOut(t *testing.T) {
+	gone := make(chan struct{})
+	got := make(chan int, 1)
+	ExitWhenGone(gone, 50*time.Millisecond, 73, func(c int) { got <- c })
+	select {
+	case <-got:
+		t.Fatal("exited while the supervisor was alive")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(gone)
+	select {
+	case c := <-got:
+		if c != 73 {
+			t.Fatalf("code %d", c)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("never exited")
 	}
 }

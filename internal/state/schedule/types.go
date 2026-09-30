@@ -126,6 +126,10 @@ type Run struct {
 	Observed   int64     `json:"observedTokens,omitempty"`
 	Charged    int64     `json:"chargedTokens"`
 	PerRunCap  int64     `json:"perRunCap"`
+	// StartHash is the sha256 of the token MarkRunning issued; the token itself
+	// travels only over the supervisor's pipe. Started is set by Start.
+	StartHash string `json:"startHash,omitempty"`
+	Started   bool   `json:"started,omitempty"`
 }
 
 type Manifest struct {

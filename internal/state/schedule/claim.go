@@ -2,6 +2,10 @@ package schedule
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -94,9 +98,12 @@ func (s *Store) RecordSkip(ctx context.Context, scheduleID string, slot time.Tim
 	})
 }
 
-// MarkRunning notes that the supervisor spawned the run.
-func (s *Store) MarkRunning(ctx context.Context, triggerID string) error {
-	return s.update(ctx, func(m *Manifest) error {
+// MarkRunning notes that the supervisor spawned the run and returns the start
+// token. Only the token's hash is stored: whoever holds the token, which is the
+// child the supervisor spawned, is the one executor Start will admit.
+func (s *Store) MarkRunning(ctx context.Context, triggerID string) (string, error) {
+	token := newToken()
+	err := s.update(ctx, func(m *Manifest) error {
 		r := m.run(triggerID)
 		if r == nil {
 			return ErrRunNotFound
@@ -104,9 +111,50 @@ func (s *Store) MarkRunning(ctx context.Context, triggerID string) error {
 		if r.State != RunClaimed {
 			return ErrRunSettled
 		}
-		r.State = RunRunning
+		r.State, r.StartHash = RunRunning, tokenHash(token)
 		return nil
 	})
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// Start is the one transition that lets a run's work begin: the run must be
+// running, the token must be the one MarkRunning issued, and nothing may have
+// started it before. It commits with the manifest, so a crash or a power loss
+// cannot leave a run that could start twice.
+func (s *Store) Start(ctx context.Context, triggerID, token string) error {
+	return s.update(ctx, func(m *Manifest) error {
+		r := m.run(triggerID)
+		if r == nil {
+			return ErrRunNotFound
+		}
+		if !r.inFlight() || r.State != RunRunning {
+			return ErrRunSettled
+		}
+		if r.Started {
+			return ErrRunStarted
+		}
+		if r.StartHash == "" || subtle.ConstantTimeCompare([]byte(r.StartHash), []byte(tokenHash(token))) != 1 {
+			return ErrRunToken
+		}
+		r.Started = true
+		return nil
+	})
+}
+
+func newToken() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("schedule: crypto/rand unavailable: " + err.Error())
+	}
+	return hex.EncodeToString(b[:])
+}
+
+func tokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 // Finish settles a claimed or running run: it replaces the reservation with
