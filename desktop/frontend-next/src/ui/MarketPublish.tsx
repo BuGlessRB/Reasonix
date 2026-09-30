@@ -170,14 +170,18 @@ export function MyPackages({ port, onInstalled }: { port: AgentPort; onInstalled
   const [open, setOpen] = useState<MarketPackage | null>(null);
   const [sending, setSending] = useState("");
   const [sendError, setSendError] = useState<[string, string] | null>(null);
-  const load = () =>
-    port.myMarket().then(setRows).catch((e) => {
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setError("");
+    setRows(null);
+    port.myMarket().then((rows) => live && setRows(rows)).catch((e) => {
+      if (!live) return;
       setError(reason(e));
       setRows([]);
     });
-  useEffect(() => {
-    void load();
-  }, [port]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { live = false; };
+  }, [port, attempt]);
 
   const submit = async (slug: string) => {
     setSending(slug);
@@ -200,7 +204,7 @@ export function MyPackages({ port, onInstalled }: { port: AgentPort; onInstalled
         onBack={() => setOpen(null)}
         onInstalled={() => {
           onInstalled();
-          void load();
+          setAttempt((n) => n + 1);
         }}
       />
     );
@@ -212,6 +216,7 @@ export function MyPackages({ port, onInstalled }: { port: AgentPort; onInstalled
         <div className="find" data-lvl="err">
           <span className="t">{t("无法读取我的发布")}</span>
           <span className="why">{error}</span>
+          <button className="act" data-action="market.mine-retry" onClick={() => setAttempt((n) => n + 1)}>{t("重试")}</button>
         </div>
       )}
       {rows === null && <div className="empty">{t("正在读取…")}</div>}
