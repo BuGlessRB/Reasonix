@@ -639,6 +639,10 @@ func (c *Controller) skillListText() string {
 		if s.RunAs == "subagent" {
 			tag = " 🧬"
 		}
+		if s.DisableUserInvocation {
+			fmt.Fprintf(&b, "  %s [model-only, not a slash command] — %s\n", s.Name, s.Description)
+			continue
+		}
 		fmt.Fprintf(&b, "  /%s%s — %s\n", s.Name, tag, s.Description)
 	}
 	return strings.TrimRight(b.String(), "\n")

@@ -6,6 +6,7 @@ import (
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/ext/plugin"
+	"reasonix/internal/ext/skill"
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/runtime/capability"
 	"reasonix/internal/state/sessionstore"
@@ -90,7 +91,7 @@ func (c *Controller) routeCapabilities(ctx context.Context, routeInput string) c
 	}
 	opts := capability.CatalogOptions{
 		Tools:   tools,
-		Skills:  c.Skills(),
+		Skills:  skill.ModelInvocable(c.Skills()),
 		Profile: profile,
 	}
 	if c.capabilityRuntime != nil {

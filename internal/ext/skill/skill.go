@@ -826,6 +826,12 @@ func (s *Store) parseSkill(path, stem string, scope Scope, requireSkillMarker bo
 	content := strings.TrimPrefix(strings.ReplaceAll(string(b), "\r\n", "\n"), "\uFEFF")
 	doc, body := frontmatter.Parse(content)
 	fm := doc.LegacyFlat()
+	var unreadable bool
+	if len(fm) == 0 {
+		if raw, ok := frontmatter.RawBlock(content); ok {
+			fm, unreadable = scanFrontmatterLines(raw), true
+		}
+	}
 	if requireSkillMarker && !hasSkillMarker(content, fm) {
 		return Skill{}, false
 	}
@@ -875,6 +881,9 @@ func (s *Store) parseSkill(path, stem string, scope Scope, requireSkillMarker bo
 		InvocationFlags: parseInvocationFlags(fm),
 		Requires:        parseCSVFrontmatter(fm[skillFrontmatterRequires]),
 		Delivery:        delivery,
+	}
+	if unreadable {
+		sk.Invalid = append(sk.Invalid, "frontmatter is not valid YAML; read line by line (quote values that contain [ ] : or #)")
 	}
 	sk.Profiles, sk.InvalidProfiles = parseProfilesFrontmatter(fm[skillFrontmatterProfiles])
 	return sk, true

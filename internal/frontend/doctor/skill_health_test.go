@@ -56,3 +56,12 @@ func TestCollectSkillHealthWarnings(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillHealthReportsInvalidInvocationDeclarations(t *testing.T) {
+	warns := CollectSkillHealthWarnings(SkillHealthOptions{Skills: []skill.Skill{
+		{Name: "typo", Description: "ok", InvocationFlags: skill.InvocationFlags{Invalid: []string{"disable-model-invocation: ture (not a boolean; treated as true)"}}},
+	}})
+	if !strings.Contains(strings.Join(warns, "\n"), "disable-model-invocation: ture") {
+		t.Fatalf("doctor did not report the invalid declaration: %v", warns)
+	}
+}

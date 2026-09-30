@@ -168,3 +168,10 @@ func flatten(out map[string]string, key string, v Value) {
 		}
 	}
 }
+
+// RawBlock returns the text between the opening and closing `---` lines, for a
+// caller that must still act on a block Parse could not read as YAML.
+func RawBlock(s string) (string, bool) {
+	raw, _, ok := splitRaw(s)
+	return raw, ok && strings.TrimSpace(raw) != ""
+}

@@ -1091,12 +1091,18 @@ func (c *Controller) ReloadCommands(ctx context.Context) error {
 
 	entries := make([]command.SlashEntry, 0, len(cmdSkills)+len(cmds))
 	for _, sk := range cmdSkills {
-
 		entries = append(entries, command.SlashEntry{
 			Name:        sk.SlashName(),
 			Description: sk.Description,
 			ArgHint:     sk.ArgumentHint,
-			Render:      func(args []string) string { return c.skills.renderInvocation(sk, strings.Join(args, " ")) },
+			Skill:       true,
+			Render: func(args []string) string {
+				cur, err := c.skills.forModel(sk)
+				if err != nil {
+					return ""
+				}
+				return c.skills.renderInvocation(cur, strings.Join(args, " "))
+			},
 		})
 	}
 	for _, cmd := range cmds {
@@ -1111,7 +1117,7 @@ func (c *Controller) ReloadCommands(ctx context.Context) error {
 			Render:      func(args []string) string { return cmd.Render(args) },
 		})
 	}
-	c.mcp.registerTool(command.NewSlashCommandTool(entries))
+	c.mcp.registerTool(command.NewSlashCommandTool(entries, c.skills.modelGate()))
 	cmdSlice := cmds
 	c.commands.Store(&cmdSlice)
 	return loadErr

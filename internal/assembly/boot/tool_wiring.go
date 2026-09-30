@@ -116,12 +116,18 @@ func registerSkillTools(reg *tool.Registry, set ablation.Set, store *skill.Store
 		reg.Add(skill.NewInstallSkillTool(store, nil))
 		addTools(reg, builtinSubagentTools(set, store, runners.run, runners.profile))
 		for _, sk := range skill.ModelInvocable(store.SlashList()) {
+			name := sk.SlashName()
 			entries = append(entries, command.SlashEntry{
 				Name:        sk.SlashName(),
 				Description: sk.Description,
 				ArgHint:     sk.ArgumentHint,
+				Skill:       true,
 				Render: func(args []string) string {
-					return skill.RenderInvocation(store.Prepare(sk), strings.Join(args, " "))
+					cur, err := store.ForModel(name)
+					if err != nil {
+						return ""
+					}
+					return skill.RenderInvocation(cur, strings.Join(args, " "))
 				},
 			})
 		}
@@ -137,7 +143,11 @@ func registerSkillTools(reg *tool.Registry, set ablation.Set, store *skill.Store
 			Render:      func(args []string) string { return cmd.Render(args) },
 		})
 	}
-	reg.Add(command.NewSlashCommandTool(entries))
+	var gate func() func(string) error
+	if implicit {
+		gate = store.ModelGate()
+	}
+	reg.Add(command.NewSlashCommandTool(entries, gate))
 }
 
 // capabilitySurface is the session-shared MCP runtime behind use_capability:

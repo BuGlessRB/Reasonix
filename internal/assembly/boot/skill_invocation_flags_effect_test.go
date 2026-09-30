@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reasonix/internal/session/control"
 	"strings"
 	"testing"
 	"time"
@@ -113,5 +114,34 @@ func TestEffectSkillInvocationFlagChangeIsProjectedOnceAndPrefixStable(t *testin
 	again := h.turn("turn-gamma")
 	if l := blockOf(projectionOf(t, again, "turn-gamma"), "available-skills"); strings.Contains(l, "ship-it") || l == "" {
 		t.Fatalf("freshness: re-adding the flag must re-send a listing without ship-it, got:\n%s", l)
+	}
+}
+
+// The user-side half at the provider boundary: neither a typed /name nor an
+// invocation chip may deliver a user-invocable:false skill.
+func TestEffectUserInvocableFalseNeverDeliversTheSkill(t *testing.T) {
+	h := newProjectionHarness(t, "skillflags-userside", "", "")
+	h.writeSkillFile("ctx-notes", modelOnlySkill)
+	h.restart()
+
+	wait := func() {
+		deadline := time.Now().Add(30 * time.Second)
+		for h.ctrl.Running() {
+			if time.Now().After(deadline) {
+				t.Fatal("turn did not finish")
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	h.ctrl.Submit("/ctx-notes")
+	wait()
+	h.ctrl.SubmitInvocationDisplay("/ctx-notes", "", []control.InvocationRequest{{Name: "ctx-notes", Kind: "skill"}})
+	wait()
+	for _, req := range h.rec.requests() {
+		for _, m := range req.Messages {
+			if m.Role == "user" && strings.Contains(m.Content, "CTX BODY") {
+				t.Fatalf("a user-invocable:false skill body reached the model through a user path:\n%s", m.Content)
+			}
+		}
 	}
 }

@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -29,7 +30,7 @@ func sampleTool() interface {
 		// Leading slash on Name should be tolerated.
 		{Name: "/git:commit", Description: "commit",
 			Render: func(a []string) string { return "COMMIT" }},
-	}).(interface {
+	}, nil).(interface {
 		Execute(context.Context, json.RawMessage) (string, error)
 		Name() string
 		ReadOnly() bool
@@ -110,7 +111,7 @@ func TestSlashToolUnknown(t *testing.T) {
 }
 
 func TestSlashToolEmptyRegistry(t *testing.T) {
-	tl := NewSlashCommandTool(nil)
+	tl := NewSlashCommandTool(nil, nil)
 	out, err := tl.Execute(context.Background(), json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +131,7 @@ func TestSlashToolNameClashCommandWins(t *testing.T) {
 	tl := NewSlashCommandTool([]SlashEntry{
 		{Name: "dup", Render: func([]string) string { return "FROM-SKILL" }},
 		{Name: "dup", Render: func([]string) string { return "FROM-COMMAND" }},
-	})
+	}, nil)
 	out, err := tl.Execute(context.Background(), json.RawMessage(`{"command":"dup"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -162,8 +163,8 @@ func TestPluginSlashToolShowsOnlyCanonicalQualifiedName(t *testing.T) {
 		}
 		return out
 	}
-	plainTool := NewSlashCommandTool(entries(plain))
-	ownedTool := NewSlashCommandTool(entries(owned))
+	plainTool := NewSlashCommandTool(entries(plain), nil)
+	ownedTool := NewSlashCommandTool(entries(owned), nil)
 	plainList, err := runSlash(t, plainTool, map[string]any{})
 	if err != nil {
 		t.Fatal(err)
@@ -184,5 +185,39 @@ func TestPluginSlashToolShowsOnlyCanonicalQualifiedName(t *testing.T) {
 	}
 	if string(plainTool.Schema()) != string(ownedTool.Schema()) {
 		t.Fatal("plugin qualification must not change the slash_command schema")
+	}
+}
+
+func TestGatedSlashCommandToolSnapshotsOncePerCall(t *testing.T) {
+	var snapshots int
+	gate := func() func(string) error {
+		snapshots++
+		return func(name string) error {
+			if name == "hidden" {
+				return errors.New("reserved")
+			}
+			return nil
+		}
+	}
+	entries := []SlashEntry{
+		{Name: "a", Skill: true, Render: func([]string) string { return "A" }},
+		{Name: "b", Skill: true, Render: func([]string) string { return "B" }},
+		{Name: "hidden", Skill: true, Render: func([]string) string { return "H" }},
+		{Name: "cmd", Render: func([]string) string { return "C" }},
+	}
+	tl := NewSlashCommandTool(entries, gate)
+	out, err := tl.Execute(context.Background(), []byte(`{"command":"list"}`))
+	if err != nil || strings.Contains(out, "hidden") || snapshots != 1 {
+		t.Fatalf("list = %q err=%v snapshots=%d; want one snapshot and no hidden entry", out, err, snapshots)
+	}
+	if _, err := tl.Execute(context.Background(), []byte(`{"command":"nope"}`)); err == nil || strings.Contains(err.Error(), "hidden") || snapshots != 2 {
+		t.Fatalf("unknown-name error = %v snapshots=%d", err, snapshots)
+	}
+	if _, err := tl.Execute(context.Background(), []byte(`{"command":"hidden"}`)); err == nil {
+		t.Fatal("a gated entry rendered")
+	}
+	flaky := []SlashEntry{{Name: "x", Skill: true, Render: func([]string) string { return "" }}}
+	if _, err := NewSlashCommandTool(flaky, gate).Execute(context.Background(), []byte(`{"command":"x"}`)); err == nil {
+		t.Fatal("an empty expansion must be an error, not an empty Expanded result")
 	}
 }
