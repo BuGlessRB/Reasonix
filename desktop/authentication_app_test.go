@@ -111,7 +111,7 @@ func TestRetryAuthenticationPublishesAuthoritativeTabRefresh(t *testing.T) {
 
 	// 回归：缓冲已满时再次触发同一事件，emitter 泵必须继续排空而不是停在
 	// tabs.go 的 emit 调用点上（曾实证 chan send 卡死 7 分钟）。
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		app.runtimeEvents.Emit(app.ctx, tabMetaRefreshEventChannel)
 	}
 	deadline := time.Now().Add(5 * time.Second)
