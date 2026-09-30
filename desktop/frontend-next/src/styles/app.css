@@ -3339,6 +3339,7 @@
     padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r-xs);
     background: var(--raised); color: var(--text); font: var(--w-reg) var(--fs-ui) var(--mono);
   }
+  .rule select { width: 200px; max-width: 100%; min-width: 0; text-overflow: ellipsis }
   .rule select:focus, .rule input:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .rule .match { flex: 1; min-width: 140px }
   .rule .cmd { display: block; width: 100%; margin-top: 8px }
@@ -3363,7 +3364,7 @@
   .fromplugin { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--hair) }
   .fromplugin .lb { font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--faint) }
   .hookrow { display: flex; align-items: baseline; gap: 10px; margin-top: 6px }
-  .hookrow .ev { flex: none; min-width: 128px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--muted) }
+  .hookrow .ev { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--muted) }
   .hookrow .cm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
   .hookrow .sc { flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost) }
