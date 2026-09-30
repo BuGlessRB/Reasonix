@@ -430,6 +430,40 @@ describe("CLI public release gateway", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://dl.reasonix.io/cli/preview/latest.json");
   });
 
+  it("serves a 2.x pointer whose archives were published from a studio release", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify(cliRelease("v2.24.0", false)), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleCLIRelease("stable");
+    const body = await response.json() as { tag_name?: string; assets?: { browser_download_url: string }[] };
+
+    expect(body.tag_name).toBe("v2.24.0");
+    expect(body.assets?.[0]?.browser_download_url).toBe(
+      "https://github.com/esengine/DeepSeek-Reasonix/releases/download/v2.24.0/reasonix-darwin-amd64.tar.gz",
+    );
+  });
+
+  it("does not serve a studio-shaped tag or an rc as a public channel", async () => {
+    for (const [channel, tag, prerelease] of [
+      ["stable", "studio-v2.24.0", false],
+      ["stable", "v2.24.0-rc.1", false],
+      ["preview", "v2.25.0-rc.1", true],
+    ] as const) {
+      const fetchMock = vi.fn(async (url: string) =>
+        url.startsWith("https://dl.reasonix.io/")
+          ? new Response(JSON.stringify(cliRelease(tag, prerelease)), { status: 200 })
+          : new Response(JSON.stringify([cliRelease(tag, prerelease)]), { status: 200 }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const response = await handleCLIRelease(channel);
+
+      expect(response.status, `${channel} ${tag}`).toBe(502);
+    }
+  });
+
   it("rewrites release notes to the canonical repository tag URL", async () => {
     const release = cliRelease("v1.18.0", false);
     release.html_url = "https://evil.invalid/phishing";

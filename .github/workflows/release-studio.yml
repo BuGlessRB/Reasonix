@@ -1107,6 +1107,108 @@ jobs:
             --cache-control "public, max-age=300, stale-if-error=86400"
           echo "Studio catalog -> $VERSION"
 
+  # A CLI channel that moves while 1.x still publishes would have two lines
+  # writing it, so every CLI job waits for this check. It runs no repository code.
+  cli-gate:
+    name: require the 1.x line to be frozen
+    needs: resolve
+    if: vars.STUDIO_PUBLISHES_CLI == 'true'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require CLI_PUBLISH_FROZEN
+        env:
+          CLI_PUBLISH_FROZEN: ${{ vars.CLI_PUBLISH_FROZEN }}
+        run: |
+          if [ "$CLI_PUBLISH_FROZEN" != true ]; then
+            echo "::error::STUDIO_PUBLISHES_CLI is on but CLI_PUBLISH_FROZEN is not: freeze the 1.x line first, or two lines would write the CLI channels"
+            exit 1
+          fi
+
+  # The v<version> tag the update pointer needs is created here, by the release
+  # identity the 1.x line also uses, because only that identity may create v*
+  # tags. This job checks out nothing and runs no repository code; the one step
+  # that reads RELEASE_TAG_TOKEN is written inline and only runs on the studio
+  # tag or branch, through the studio-release environment's ref policy.
+  cli-tag:
+    name: create the CLI tag
+    needs: [resolve, publish, cli-gate]
+    if: vars.STUDIO_PUBLISHES_CLI == 'true'
+    runs-on: ubuntu-latest
+    environment: studio-release
+    permissions:
+      contents: read
+    steps:
+      - name: Create v<version> on the studio commit
+        env:
+          TAG_TOKEN: ${{ secrets.RELEASE_TAG_TOKEN }}
+          RELEASE_TAG_ACTOR: ${{ vars.RELEASE_TAG_ACTOR }}
+          READ_TOKEN: ${{ github.token }}
+          CLI_PUBLISH_FROZEN: ${{ vars.CLI_PUBLISH_FROZEN }}
+          STUDIO_TAG: ${{ needs.resolve.outputs.tag }}
+          CLI_VERSION: ${{ needs.resolve.outputs.version }}
+          APPROVED_SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          repo=esengine/DeepSeek-Reasonix
+          stable_re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          preview_re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-preview\.(0|[1-9][0-9]*)$'
+          tag="v${CLI_VERSION#v}"
+          if [[ ! "$tag" =~ $stable_re && ! "$tag" =~ $preview_re ]]; then
+            echo "$tag publishes no CLI pointer; no tag is created"
+            exit 0
+          fi
+          [ "$CLI_PUBLISH_FROZEN" = true ] || { echo "::error::CLI_PUBLISH_FROZEN must be true"; exit 1; }
+          [ "$GITHUB_REPOSITORY" = "$repo" ] || { echo "::error::the release tag identity is only used in $repo"; exit 1; }
+          case "$GITHUB_REF" in
+            refs/tags/studio-v* | refs/heads/studio) ;;
+            *) echo "::error::the release tag identity is only used on a studio tag or the studio branch, not $GITHUB_REF"; exit 1 ;;
+          esac
+          [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::approved SHA is not a full commit SHA"; exit 1; }
+          [[ "$STUDIO_TAG" == "studio-$CLI_VERSION" ]] || { echo "::error::studio tag does not match the version"; exit 1; }
+          [ -n "$TAG_TOKEN" ] || { echo "::error::RELEASE_TAG_TOKEN is not configured; the default Actions token cannot create v* tags"; exit 1; }
+          [[ "$RELEASE_TAG_ACTOR" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || { echo "::error::configure RELEASE_TAG_ACTOR with the tag publisher's login"; exit 1; }
+          read_api() { GH_TOKEN="$READ_TOKEN" gh api "$@"; }
+          write_api() { GH_TOKEN="$TAG_TOKEN" gh api "$@"; }
+          actor="$(write_api user)"
+          jq -e --arg login "$RELEASE_TAG_ACTOR" '.type == "User" and (.login | ascii_downcase) == ($login | ascii_downcase)' <<<"$actor" >/dev/null ||
+            { echo "::error::the release tag credential does not identify RELEASE_TAG_ACTOR"; exit 1; }
+          [ "$(write_api "repos/$repo" --jq .permissions.push)" = true ] ||
+            { echo "::error::the release tag identity cannot push to $repo"; exit 1; }
+          [ "$(read_api "repos/$repo/commits/$STUDIO_TAG" --jq .sha)" = "$APPROVED_SHA" ] ||
+            { echo "::error::$STUDIO_TAG does not resolve to $APPROVED_SHA"; exit 1; }
+          case "$(read_api "repos/$repo/compare/studio...$APPROVED_SHA" --jq .status)" in
+            behind | identical) ;;
+            *) echo "::error::$APPROVED_SHA is not on studio history"; exit 1 ;;
+          esac
+          # Prints the commit the tag points at; status 1 only when the tag does not exist.
+          tag_commit() {
+            local ref kind sha
+            ref="$(read_api "repos/$repo/git/ref/tags/$tag" --jq '.object.type + " " + .object.sha' 2>"$RUNNER_TEMP/tag.error")" || {
+              grep -Eiq '404|Not Found' "$RUNNER_TEMP/tag.error" && return 1
+              cat "$RUNNER_TEMP/tag.error" >&2
+              exit 1
+            }
+            read -r kind sha <<<"$ref"
+            [ "$kind" != tag ] || sha="$(read_api "repos/$repo/git/tags/$sha" --jq .object.sha)"
+            echo "$sha"
+          }
+          if existing="$(tag_commit)"; then
+            [ "$existing" = "$APPROVED_SHA" ] || { echo "::error::$tag already exists on $existing, not $APPROVED_SHA"; exit 1; }
+            echo "$tag already points at $APPROVED_SHA"
+            exit 0
+          fi
+          if ! write_api "repos/$repo/git/refs" -f "ref=refs/tags/$tag" -f "sha=$APPROVED_SHA" >/dev/null 2>"$RUNNER_TEMP/create.error"; then
+            # A concurrent run may have created the same tag in the meantime.
+            if existing="$(tag_commit)" && [ "$existing" = "$APPROVED_SHA" ]; then
+              echo "$tag already points at $APPROVED_SHA"
+              exit 0
+            fi
+            cat "$RUNNER_TEMP/create.error" >&2
+            exit 1
+          fi
+          echo "created $tag at $APPROVED_SHA"
+
   # The CLI's install channels, npm's `reasonix` and the Homebrew tap. The 1.x
   # line owns them until this one takes the CLI over; the repository variable
   # STUDIO_PUBLISHES_CLI=true hands them here. They run once the release
@@ -1115,7 +1217,7 @@ jobs:
   # candidate cask would become the default install.
   cli-channels:
     name: publish the CLI to npm and Homebrew
-    needs: [resolve, publish]
+    needs: [resolve, publish, cli-gate, cli-tag]
     if: vars.STUDIO_PUBLISHES_CLI == 'true'
     runs-on: ubuntu-latest
     # id-token lets npm publish --provenance attach a Sigstore attestation; the
@@ -1163,3 +1265,47 @@ jobs:
           fi
           git -c user.name=reasonix -c user.email=reasonix@deepseek.com commit -m "reasonix ${VERSION#v}"
           git push origin HEAD:main
+
+  # The 1.x updater accepts only a release tagged vMAJOR.MINOR.PATCH whose assets
+  # sit under that tag, so the archives go to a v<version> release. Only a
+  # -preview.N version moves preview; other prereleases publish nothing.
+  cli-pointer:
+    name: publish the CLI update pointer
+    needs: [resolve, publish, cli-gate, cli-tag]
+    if: vars.STUDIO_PUBLISHES_CLI == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: studio-cli-pointer-${{ contains(needs.resolve.outputs.version, '-') && 'preview' || 'stable' }}
+      cancel-in-progress: false
+    permissions:
+      contents: write # create the CLI release; cli-tag has already made its tag
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-archives
+          path: cli-archives
+      - name: Publish the release, its record and the pointer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLI_VERSION: ${{ needs.resolve.outputs.version }}
+          CLI_PUBLISH_FROZEN: ${{ vars.CLI_PUBLISH_FROZEN }}
+          APPROVED_SHA: ${{ needs.resolve.outputs.sha }}
+          STUDIO_TAG: ${{ needs.resolve.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+          ARCHIVES_DIR: cli-archives
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          HAS_R2: ${{ secrets.R2_ACCESS_KEY_ID != '' && secrets.R2_SECRET_ACCESS_KEY != '' && secrets.R2_ACCOUNT_ID != '' && secrets.R2_BUCKET != '' }}
+        run: |
+          if [ "$HAS_R2" != "true" ]; then
+            echo "::error::R2 credentials are not configured; the CLI pointer was not written"
+            exit 1
+          fi
+          bash scripts/publish-cli-pointer.sh

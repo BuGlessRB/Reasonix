@@ -60,7 +60,10 @@ Jobs in the run:
 | `windows-sign-installer` | Requires both packages to hash to the checked values, signs the installer, verifies its signature, and outputs the signed installer's SHA-256. Opens no archive. | shared concurrency group `certum-signing`, environment `studio-release` |
 | `cli` | Builds `reasonix` archives for six OS/arch targets plus `SHA256SUMS`. | fails on a missing archive |
 | `publish` | Renders the notes with their authors, minisigns, writes `latest.json`, creates the GitHub prerelease, mirrors to R2. | environment `studio-release`; skipped unless all four Windows signing jobs succeeded or signing is off; an unresolved `#N` stops it before signing |
-| `cli-channels` | Only with `STUDIO_PUBLISHES_CLI=true` (unset today; 1.x owns the channels). Publishes `reasonix` and `@reasonix/cli-*` to npm with `--provenance`, then updates the Homebrew cask (not for a candidate). | no environment and no approval; `id-token: write` on this job only; runs after `publish` |
+| `cli-gate` | Only with `STUDIO_PUBLISHES_CLI=true`. Requires `CLI_PUBLISH_FROZEN=true`. Checks out nothing and reads no secret. | fails while 1.x is not frozen, and then no other CLI job runs |
+| `cli-tag` | Only with `STUDIO_PUBLISHES_CLI=true`. For a stable or `-preview.N` version, creates the tag `vX.Y.Z` on the studio commit with the release tag identity (`RELEASE_TAG_TOKEN`, see below); an existing tag on that commit is kept, one elsewhere fails. | environment `studio-release`; runs after `publish` and `cli-gate`; checks out nothing, one inline step reads the token |
+| `cli-channels` | Only with `STUDIO_PUBLISHES_CLI=true` (unset today; 1.x owns the channels). Publishes `reasonix` and `@reasonix/cli-*` to npm with `--provenance`, then updates the Homebrew cask (not for a candidate). | no environment and no approval; `id-token: write` on this job only; runs after `publish`, `cli-gate` and `cli-tag` |
+| `cli-pointer` | Only with `STUDIO_PUBLISHES_CLI=true`. Creates the GitHub release `vX.Y.Z` holding the CLI archives, writes `cli/releases/vX.Y.Z/latest.json`, then moves `cli/stable/latest.json` (a `-preview.N` version moves `cli/preview/latest.json`; any other prerelease publishes nothing). | runs after `publish`, `cli-gate` and `cli-tag`; serialized per channel by the `studio-cli-pointer-<channel>` lock |
 
 The `studio-release` environment allows the `studio-v*` tag and the `studio` branch. It has no required reviewer.
 
@@ -69,6 +72,25 @@ Publishing to the CLI channels needs no human approval. Three controls stand in 
 - The variable `STUDIO_PUBLISHES_CLI` is off by default, and the job is skipped unless it is `true`.
 - The tag protection rule `Protect release tags` covers `studio-v*`, so only someone with write access can push the tag that starts a release.
 - `npm publish --provenance` attaches a Sigstore attestation naming this repository and commit.
+
+Recovery of the CLI pointer:
+
+- `cli-pointer` trusts an existing release `vX.Y.Z` after checking it on its own terms: tag, asset names, sizes, URLs, and `SHA256SUMS` against the release's own digests.
+- It never compares the release with the rerun's archives, which are not byte-reproducible.
+- If the release was created and the R2 write failed, a `workflow_dispatch` run finishes the job.
+- The pointer script refuses to run unless `CLI_PUBLISH_FROZEN=true`, and re-reads the pointer after writing it.
+
+The tag identity:
+
+- Only a person may create `v*` tags (release ruleset), so `cli-tag` uses the secret `RELEASE_TAG_TOKEN` and variable `RELEASE_TAG_ACTOR` that the 1.x release workflow also uses. This workflow is a second user.
+- One inline step reads the token, in a job that checks out and runs no repository code. It creates only the tag, through the refs API; `cli-pointer` creates the release with the run's own token.
+- It refuses unless the repository is the official one, the ref is a `studio-v*` tag or `studio`, `CLI_PUBLISH_FROZEN` is true, and the credential belongs to `RELEASE_TAG_ACTOR` with push access.
+- It also refuses unless the studio tag still resolves to the approved SHA and that SHA is on `studio` history.
+- An existing tag on the same commit (lightweight or annotated) counts as done; on another commit it fails.
+- The `studio-release` environment restricts where the job runs. It does not protect the secret: `RELEASE_TAG_TOKEN` is repository-level, so anyone who can push a workflow can read it. The owner is the only writer today.
+- The 1.x identity script is not reused: it pins `main-v2` and would need a checkout. The server enforces the rulesets at the tag write.
+
+Once a GitHub release `vX.Y.Z` exists, the v1.39.5 client's GitHub-list fallback and the gateway's CLI fallback select it, so turning the switch on is the switch of the update channel itself.
 
 While the variable is `true`, pushing a `studio-v*` tag publishes to npm `latest` and to Homebrew. The `workflow_dispatch` recovery run is subject to the same switch.
 
@@ -241,4 +263,6 @@ Studio and 1.x signing jobs and smoke tests share the concurrency group `certum-
 | --- | --- | --- |
 | `studio/versions.json` | this workflow | Studio catalog, newest first |
 | `studio-vX.Y.Z/` | this workflow | artifacts, signatures, `latest.json` |
+| `cli/stable/latest.json`, `cli/preview/latest.json` | `cli-pointer` | what `reasonix upgrade` reads through `crash.reasonix.io/v1/cli/releases/<channel>/latest.json`; only ever moves to a newer version |
+| `cli/releases/vX.Y.Z/latest.json` | `cli-pointer` | immutable record of one CLI release; a rerun with different content fails |
 | `versions.json` | desktop line | never written by this workflow |
