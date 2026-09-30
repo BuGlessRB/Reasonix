@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -645,6 +646,46 @@ func (a *App) SubmitRemoteTab(tabID, text string) error {
 	return a.SubmitRemoteTabWithSubmission(tabID, text, "")
 }
 
+// remoteSessionChangedSubmitError reports the serve's expected-session fence:
+// the submit raced a session switch or a session re-adoption. Nothing started,
+// and the same submit succeeds once the route settles.
+func remoteSessionChangedSubmitError(err error) bool {
+	var statusErr *serveHTTPStatusError
+	return errors.As(err, &statusErr) && statusErr.statusCode == http.StatusConflict &&
+		strings.Contains(statusErr.message, "active session changed")
+}
+
+// remoteSubmitRetryDelaysMs paces a submit that raced a session change. The
+// window is a route settle (resume commit plus buffered-frame drain), so a few
+// short retries cover it; anything longer is reported as a transient outcome
+// the composer holds and retries with the rest of the durable queue.
+var remoteSubmitRetryDelaysMs = []int{120, 250, 500}
+
+// submitWithRouteRetry posts one foreground submit, re-resolving the route and
+// retrying while the serve answers that the active session changed. A response
+// that is not that fence (2xx, busy, or any other refusal) returns immediately.
+func (a *App) submitWithRouteRetry(tabID string, attempt func(client *http.Client, base, expectedPath string) error) error {
+	var lastErr error
+	for round := 0; ; round++ {
+		client, base, expectedPath, err := a.remoteTabCommandTarget(tabID)
+		if err != nil {
+			return err
+		}
+		lastErr = attempt(client, base, expectedPath)
+		if lastErr == nil || !remoteSessionChangedSubmitError(lastErr) || round >= len(remoteSubmitRetryDelaysMs) {
+			break
+		}
+		time.Sleep(time.Duration(remoteSubmitRetryDelaysMs[round]) * time.Millisecond)
+	}
+	if lastErr != nil && remoteSessionChangedSubmitError(lastErr) {
+		// The route did not settle in the retry window: report a transient
+		// outcome so the composer holds the message visibly instead of showing
+		// a failure the user cannot act on.
+		return inboxTargetTransient(lastErr)
+	}
+	return lastErr
+}
+
 func (a *App) SubmitRemoteTabWithSubmission(tabID, text, submissionID string) error {
 	// Report the connection state before capability negotiation so a tab that
 	// has not finished bootstrap is never misdiagnosed as a legacy Serve.
@@ -665,21 +706,19 @@ func (a *App) SubmitRemoteTabWithSubmission(tabID, text, submissionID string) er
 		if err != nil {
 			return &submissionNotAcceptedError{cause: err}
 		}
-		client, base, expectedPath, err := a.remoteTabCommandTarget(tabID)
-		if err != nil {
-			return err
-		}
 		if !a.remoteTabAdmissionCurrent(tabID, admittedGen) {
 			continue
 		}
-		ctx, cancel := commandContext(a)
 		input := map[string]string{"input": text}
 		if submissionID != "" {
 			input["submissionId"] = submissionID
 		}
 		body, _ := json.Marshal(input)
-		err = servePostForSession(ctx, client, serveURL(base, "/submit"), body, expectedPath, revision)
-		cancel()
+		err = a.submitWithRouteRetry(tabID, func(client *http.Client, base, expectedPath string) error {
+			ctx, cancel := commandContext(a)
+			defer cancel()
+			return servePostForSession(ctx, client, serveURL(base, "/submit"), body, expectedPath, revision)
+		})
 		return err
 	}
 }

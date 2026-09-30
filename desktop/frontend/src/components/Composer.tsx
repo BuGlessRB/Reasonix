@@ -23,6 +23,7 @@ import type { ComposerTarget } from "../generated/desktopContract.generated";
 import { desktopHost } from "../lib/desktopHost";
 import { steerInboxItemForActiveTurn } from "../lib/inboxSubmit";
 import { formatInboxError, isInboxItemMissing } from "../lib/inboxError";
+import { TRANSIENT_GUIDANCE_RETRY_DELAYS_MS, isTransientInboxTargetError } from "../lib/transientInboxTarget";
 import { inboxScopeKey } from "../lib/composerInboxQueue";
 import { useComposerInboxRefresh } from "../lib/useComposerInboxRefresh";
 import { useComposerImeGuard } from "../lib/useComposerImeGuard";
@@ -833,6 +834,9 @@ export function Composer({
   );
   const guidanceReceiptTrackerRef = useRef<GuidanceReceiptTracker | null>(null);
   guidanceReceiptTrackerRef.current ??= createGuidanceReceiptTracker();
+  // Messages held behind a transient target fence, keyed by follow-up key so a
+  // dismissal or a second send can cancel the pending retry loop.
+  const transientRetriesRef = useRef(new Map<string, { cancelled: boolean }>());
   const selfDispatchedGuidanceByDraftRef = useRef<Record<string, string[]>>({});
   const submittingRef = useRef<false | "message" | "compact">(false);
   const nativeClipboardPasteTimerRef = useRef<number | null>(null);
@@ -2153,6 +2157,99 @@ export function Composer({
 		let submissionAttachmentTarget: string | undefined;
 		let attachmentSubmissionId: string | undefined;
 		let attachmentSubmit: Awaited<ReturnType<typeof loadAttachmentSubmit>> | undefined;
+    // Captured for the outer catch: a transient submit failure still holds the
+    // exact message (display and submit text) the user typed.
+    let submittedDisplayText = "";
+    let submittedSubmitText = "";
+    let submittedStructured: StructuredInvocationSubmit | undefined;
+    // A transient target fence (session switching/reconnecting) clears by
+    // itself. Hold the message under its pending-followup identity and retry
+    // briefly with a freshly captured target, instead of failing it with an
+    // error the user cannot act on. Pending requests stay visible through the
+    // unresolved-submission banner until they land in the durable queue.
+    const retryTransientGuidanceEnqueue = (
+      request: PendingFollowup,
+      options: {
+        pendingKey: string;
+        submitDraftKey: string;
+        submitTabId: string;
+        sessionPath: string;
+        submittedDraft: string;
+        queueOnly: boolean;
+        turnId?: string;
+      },
+    ) => {
+      if (transientRetriesRef.current.has(request.key)) return;
+      const token = { cancelled: false };
+      transientRetriesRef.current.set(request.key, token);
+      void (async () => {
+        const [{ enqueueComposerGuidance }, { TRANSIENT_GUIDANCE_RETRY_DELAYS_MS }] = await Promise.all([
+          import("../lib/inboxGuidanceSubmit"),
+          import("../lib/transientInboxTarget"),
+        ]);
+        for (const delayMs of TRANSIENT_GUIDANCE_RETRY_DELAYS_MS) {
+          await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+          if (token.cancelled || transientRetriesRef.current.get(request.key) !== token) return;
+          // The user moved to another session: leave the pending request for
+          // that session's own reconciliation instead of retrying a gone route.
+          if (options.pendingKey !== pendingKeyRef.current) {
+            transientRetriesRef.current.delete(request.key);
+            return;
+          }
+          try {
+            const target = app.CaptureInboxTarget
+              ? await app.CaptureInboxTarget(options.submitTabId, options.sessionPath)
+              : undefined;
+            const receipt = await enqueueComposerGuidance(app, { ...request, target }, options.queueOnly, options.turnId);
+            if (receipt?.error) throw new Error(receipt.error);
+            if (!receipt?.itemId) throw new Error("Follow-up receipt unconfirmed");
+            pendingFollowups.clear(options.pendingKey, request);
+            if (followupDraftFingerprint(options.submitDraftKey) === options.submittedDraft) clearSubmittedDraft(options.submitDraftKey);
+            setGuidanceRetryNonce((value) => value + 1);
+            showToast(t("runtime.queued"), "info");
+            transientRetriesRef.current.delete(request.key);
+            return;
+          } catch (error) {
+            if (isTransientInboxTargetError(error)) continue;
+            // A permanent refusal is actionable: surface it and drop the hold.
+            pendingFollowups.clear(options.pendingKey, request);
+            showToast(formatInboxError(error, locale), "warn");
+            transientRetriesRef.current.delete(request.key);
+            return;
+          }
+        }
+        // The window outlasted the bound: keep the pending request so its
+        // banner stays visible and a later send reconciles the receipt.
+        if (transientRetriesRef.current.get(request.key) === token) transientRetriesRef.current.delete(request.key);
+      })();
+    };
+    const holdTransientGuidance = (
+      error: unknown,
+      input: { display: string; submit: string; structured?: StructuredInvocationSubmit; turnId?: string },
+    ): boolean => {
+      if (!isTransientInboxTargetError(error)) return false;
+      if (!submitPendingKey) return false;
+      const existing = pendingFollowups.get(submitPendingKey);
+      const request: PendingFollowup = existing ?? {
+        key: `followup-${crypto.randomUUID()}`,
+        tabId: submitTabId || "",
+        display: input.display,
+        submit: input.submit,
+        structured: input.structured,
+        draft: submittedDraft,
+      };
+      pendingFollowups.set(submitPendingKey, request);
+      retryTransientGuidanceEnqueue(request, {
+        pendingKey: submitPendingKey,
+        submitDraftKey,
+        submitTabId: submitTabId || "",
+        sessionPath: inboxSessionPath || "",
+        submittedDraft,
+        queueOnly,
+        turnId: input.turnId,
+      });
+      return true;
+    };
     try {
       submissionCapture = onCaptureSubmit?.(persistentSnapshot(snapshotComposerDraft()));
       if (onCaptureSubmit && !submissionCapture) return;
@@ -2162,8 +2259,21 @@ export function Composer({
         await restoreExternalFolderReferences(app, bridgeTarget, currentWorkspaceRefs);
       }
       if (queueOnly && !submitPendingKey) throw new Error("reasonix_error:inbox_not_submitted");
-      const target = running && app.CaptureInboxTarget
-        ? await app.CaptureInboxTarget(submitTabId || "", inboxSessionPath || "") : undefined;
+      // The target fence rejects while the tab is switching or reconnecting.
+      // That window clears by itself, so wait it out inside the send instead of
+      // failing a message the user just typed.
+      let target: Awaited<ReturnType<NonNullable<typeof app.CaptureInboxTarget>>> | undefined;
+      if (running && app.CaptureInboxTarget) {
+        for (let attempt = 0; ; attempt++) {
+          try {
+            target = await app.CaptureInboxTarget(submitTabId || "", inboxSessionPath || "");
+            break;
+          } catch (error) {
+            if (!isTransientInboxTargetError(error) || attempt >= TRANSIENT_GUIDANCE_RETRY_DELAYS_MS.length) throw error;
+            await new Promise((resolve) => window.setTimeout(resolve, TRANSIENT_GUIDANCE_RETRY_DELAYS_MS[attempt]));
+          }
+        }
+      }
       const orderedAttachments = sortComposerAttachments(currentAttachments);
       const refs = [
         ...currentWorkspaceRefs.map((ref) => formatWorkspaceReference(ref.path, ref.isDir)),
@@ -2175,6 +2285,7 @@ export function Composer({
         ...currentSelectedTextRefs.map(formatSelectionLabel),
       ].join(" ");
       const displayText = [trimmedText, displayRefs].filter(Boolean).join(trimmedText && displayRefs ? " " : "");
+      submittedDisplayText = displayText;
       // PR-B: when past:chats refs are attached, prepend their formatted transcript
       // to submitText only (displayText stays unchanged so the user still sees their
       // original prompt in the input preview). With no refs we keep the original
@@ -2185,6 +2296,7 @@ export function Composer({
       const baseSubmitText = [expandPastedBlocks(invocationText, currentPastedBlocks), refs].filter(Boolean).join(" ");
       const submitBase = sessionContext ? `${sessionContext}${baseSubmitText}` : baseSubmitText;
       const submitText = [submitBase, selectedTextContext].filter(Boolean).join("\n\n");
+      submittedSubmitText = submitText;
       const structuredInput = [expandPastedBlocks(trimmedText, currentPastedBlocks), refs].filter(Boolean).join(" ");
 				let structured: StructuredInvocationSubmit | undefined = trimmedDraft.invocations.length > 0 ? {
 				display: [invocationText, displayRefs].filter(Boolean).join(invocationText && displayRefs ? " " : ""),
@@ -2199,6 +2311,7 @@ export function Composer({
 				attachmentSubmissionId = prepared.submissionId;
 				structured = prepared.structured;
 			}
+      submittedStructured = structured;
       // Repeated compaction asks the owner for its current operation receipt;
       // queueing it would unexpectedly start another compaction after this one.
       if (running && !(maintenanceActive && !structured && isCompactCommand(submitText))) {
@@ -2265,6 +2378,10 @@ export function Composer({
             }
             if (queueOnly || receipt.disposition === "queued_followup") showToast(t("runtime.queued"), "info");
           } catch (error) {
+            // A transient fence keeps the pending request and retries it
+            // briefly: the message stays visibly pending instead of surfacing
+            // an error the user cannot act on.
+            if (holdTransientGuidance(error, { display: guidanceText, submit: guidanceSubmitText, structured, turnId })) return;
             if (followupNotSubmitted(error)) attachmentSubmit?.settleImageSubmission(submitDraftKey, attachmentSubmissionId);
             // Registration still needs reconciliation, but no inbox receipt exists before enqueue starts.
             if (unresolvedRequest && (!enqueueAttempted || followupNotSubmitted(error))) pendingFollowups.clear(submitPendingKey, unresolvedRequest);
@@ -2285,6 +2402,14 @@ export function Composer({
 			attachmentSubmit?.settleImageSubmission(submitDraftKey, attachmentSubmissionId);
 			if (!persistentDraft && followupDraftFingerprint(submitDraftKey) === submittedDraft) clearSubmittedDraft(submitDraftKey);
     } catch (error) {
+      // A submit that raced a session switch is refused by the serve's
+      // expected-session fence. Hold it visibly and retry once the route
+      // settles instead of reporting a failure the user cannot act on.
+      if (holdTransientGuidance(error, {
+        display: submittedDisplayText || trimmedText,
+        submit: submittedSubmitText || trimmedText,
+        structured: submittedStructured,
+      })) return;
       if (definitelyNotAccepted(error) || followupNotSubmitted(error)) attachmentSubmit?.settleImageSubmission(submitDraftKey, attachmentSubmissionId);
       if (savedInput.target && modelApplicationError(error)) savedInput.reportSubmissionError(error);
       else if (savedInput.target) showToast(formatInboxError(error, locale), "warn");
