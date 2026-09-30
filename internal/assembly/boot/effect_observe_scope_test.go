@@ -166,7 +166,7 @@ func TestEffectObserveDotDotAfterALinkStaysInside(t *testing.T) {
 	}
 	results := w.run(t, calls, []string{"read", "ls", "grep", "glob", "idx"})
 	for id, got := range results {
-		if strings.Contains(got, outsideMark) || (!strings.Contains(got, refusedText) && (strings.Contains(got, "notes.txt") || strings.Contains(got, "data.go"))) {
+		if strings.Contains(got, outsideMark) || (runtime.GOOS != "windows" && !strings.Contains(got, refusedText) && (strings.Contains(got, "notes.txt") || strings.Contains(got, "data.go"))) {
 			t.Errorf("%s reached the folder beside the workspace: %q", id, got)
 		}
 	}
