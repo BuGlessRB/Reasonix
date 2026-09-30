@@ -935,6 +935,9 @@ what exists.
   under — the second is the writer's taxonomy and means nothing to a reader. The
   dot on the left is the one pixel on this page that matters: it joins a memory
   to the behaviour just observed.
+- The title is the one part of a row nobody bounds, so it wraps inside a share of
+  the row and the description gives way to it; the scope, date and action keep
+  their width and never break.
 - Older versions are indented and one tier darker so they read as what is behind
   the current one rather than as more memories beside it.
 - The write card uses the memory colour rather than a tool colour: this step

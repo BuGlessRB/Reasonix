@@ -3614,7 +3614,8 @@
   }
   .memrow[data-used] .dot { background: var(--net); box-shadow: none }
   .memrow .nm {
-    flex: none; min-width: 168px; padding: 0; border: 0; background: none; text-align: left;
+    flex: 0 1 auto; min-width: 168px; max-width: 60%; padding: 0; border: 0; background: none; text-align: left;
+    overflow-wrap: anywhere;
     font: var(--w-reg) var(--fs-ui) var(--ui); color: var(--text); cursor: pointer;
   }
   .memrow .nm:hover { text-decoration: underline }
@@ -3625,6 +3626,7 @@
     flex: none; padding: 1px 5px; border-radius: var(--r-pill); font: var(--w-med) var(--fs-micro) var(--ui); font-style: normal;
     color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 14%, transparent);
   }
+  .memrow .act { flex: none; white-space: nowrap }
   .memrow .sc { flex: none; min-width: 30px; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
   .memrow .at { flex: none; font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); font-variant-numeric: tabular-nums }
   .memrow .why-used { margin: -2px 0 8px 26px; font: var(--w-reg) var(--fs-meta)/1.6 var(--ui); color: var(--net) }
