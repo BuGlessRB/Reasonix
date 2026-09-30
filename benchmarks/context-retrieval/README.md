@@ -76,42 +76,77 @@ marks the run contaminated and takes it out of every statistic.
 
 ## Index corpus v2
 
-The substrate is being filled with two tasks per cue tier. These six are the
-current candidates, each authored to the bar below and screened three times per
-arm: `i09-lease-epoch` and `i10-shard-seal` (quarter), `i07-stream-latch` and
-`i08-quota-refill` (half), `i13-replica-tag` and `i14-tombstone-ttl` (default).
+The efficiency substrate is six tasks that hold on both arms: `i37-dispatchlag`
+and `i118-fencelag` (quarter), `i106-budgetseal` and `i70-ingestfloor` (half),
+`i47-tenantlease` and `i112-lagquota` (default).
 
-Clean means a `stopping_class` that is neither `PostSufficientRetrieval` nor
-`PostSufficientRunaway`; three `-mode=run-index` passes (32 cells each) measured:
+They came out of five batches of candidates, each screened the same way: one
+`-mode=run-index` pass over the batch, then two more only for the candidates that
+were clean on both boundary arms, and only the candidates that held on both arms
+in all three passes stayed. A candidate that does not hold is dropped, not
+promoted. The numbers are candidates, per tier:
 
-| task | tier | cue present | cue absent | both arms |
-| --- | --- | ---: | ---: | --- |
-| `i09-lease-epoch` | quarter | 2/3 | 0/3 | no |
-| `i10-shard-seal` | quarter | 0/3 | 2/3 | no |
-| `i07-stream-latch` | half | 2/3 | 0/3 | no |
-| `i08-quota-refill` | half | 3/3 | 1/3 | no |
-| `i11-quorum-floor` | half | 1/3 | 1/3 | no |
-| `i12-flush-margin` | half | 1/3 | 1/3 | no |
-| `i13-replica-tag` | default | 2/3 | 1/3 | no |
-| `i14-tombstone-ttl` | default | 3/3 | 2/3 | no |
+| batch | quarter | half | default |
+| --- | --- | --- | --- |
+| first pool, `i31`-`i54` | 1 of 8 | 0 of 8 | 2 of 8 |
+| second pool, `i61`-`i84` | 1 of 4 screened | 4 of 8 | 0 of 8 |
+| third pool, `i85`-`i108` | 2 of 8 | 8 of 16 | none authored |
+| replacement pool, `i109`-`i116` | - | - | 4 of 8 |
+| replacement pool, `i92`, `i117`-`i124` | 3 of 9 | - | - |
 
-No candidate is clean on both arms yet, so this corpus is not qualified:
-screening continues and a candidate that does not hold on both arms is replaced
-rather than promoted. The classification is also a rate rather than a property at
-this sample - which is the variance the freeze note said was unknown - so a
-screening batch is three passes per cell and a replacement is measured the same
-way. The full per-cell table (eight tasks x four budgets x three passes) is in
-the pull request.
+That table counts candidates that held on both arms in all three passes, which is
+not the size of the substrate. 89 candidates were authored, 77 were screened (the
+second pool's quarter tier stopped at 4 of 8 and its default tier was never run),
+and 25 held: 7 quarter, 12 half, 6 default. The substrate keeps two per tier, so
+the other 19 survivors are spares rather than corpus members. Candidates from the
+earlier round are not counted here.
 
-`i01`-`i06` are the frozen study's six tasks, kept as `roleStopping`. `i03`/`i04`
-are the heavy-tail pair the freeze note names; one screening pass over the other
-four showed post-sufficient behaviour in `i01`, `i02` and `i05` (one boundary arm
-or both), and `i06` came back clean on both arms. A single pass does not certify
-a task - that is what the rates above exist for - so `i06` stays with the frozen
-set rather than being drafted into the substrate. All six are excluded from
-`run-index` and `run-boundary` batches and stay measurable one at a time with
-`-task <id>`. A task added to the corpus declares a role, so it cannot arrive
-without one.
+| task | tier | cue present | cue absent |
+| --- | --- | ---: | ---: |
+| `i37-dispatchlag` | quarter | 3/3 | 3/3 |
+| `i118-fencelag` | quarter | 3/3 | 3/3 |
+| `i106-budgetseal` | half | 3/3 | 3/3 |
+| `i70-ingestfloor` | half | 3/3 | 3/3 |
+| `i47-tenantlease` | default | 3/3 | 3/3 |
+| `i112-lagquota` | default | 3/3 | 3/3 |
+
+Across their 36 judged cells: `SnippetStop` 23, `SnippetThenRead` 10 and
+`DefensiveRead` 3 - every cell clean, nothing post-sufficient and nothing
+`NeverSufficient`.
+
+Four of the first six were flagged in review for sharing answer values, probe
+queries and prompt wording within a tier. Separating them and re-screening those
+four changed two of them: `i37` and `i47` held, `i62` and `i51` did not, so they
+were replaced - `i90-recoverylag` was tried first and did not hold either, and
+`i118-fencelag` and `i112-lagquota` are what did. The separation was not
+cosmetic: the shared wording had been carrying two of the six.
+
+Nothing in the task shape separates the survivors from the rest: within the half
+tier, plain-number answers survived 0 of 8 in the first pool and 4 of 8 in the
+second, and codename answers survived 8 of 16 in the third. An earlier claim here
+that the answer kind decides whether a candidate holds does not survive this
+table and is withdrawn. The dirty class was `PostSufficientRetrieval` in most
+failures - the model re-checking a value it already had - but which tasks hit it
+was not predictable from their shape at this sample.
+
+`i01`-`i06` are the frozen study's six tasks, kept as `roleStopping`. Measured
+once each with `-mode=run-index -task <id>`, per task and per arm:
+
+| task | tier | cue present | cue absent |
+| --- | --- | --- | --- |
+| `i01-transport-fallback` | quarter | SnippetStop | DefensiveRead |
+| `i02-scheduler-handoff` | quarter | PostSufficientRetrieval | PostSufficientRetrieval |
+| `i03-coalescing` | half | PostSufficientRetrieval | PostSufficientRunaway |
+| `i04-recovery-fence` | half | DefensiveRead | PostSufficientRunaway |
+| `i05-cache-probe` | default | SnippetThenRead | PostSufficientRetrieval |
+| `i06-dispatch-handoff` | default | SnippetStop | PostSufficientRetrieval |
+
+Five of the six show post-sufficient behaviour in at least one arm (`i02`-`i06`),
+and `i01` is clean on both. The cue-present arm is clean for four of them
+(`i01`, `i04`, `i05`, `i06`), which is why they stay in the corpus as the
+stopping side rather than being retitled. All six are excluded from `run-index`
+and `run-boundary` batches and stay measurable one at a time with `-task <id>`. A
+task added to the corpus declares a role, so it cannot arrive without one.
 
 A task qualifies only if it is clean on both of its boundary arms - the
 cue-present run and the cue-absent run - in every run of a screening batch. Clean
