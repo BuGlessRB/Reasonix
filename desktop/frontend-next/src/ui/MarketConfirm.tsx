@@ -88,7 +88,7 @@ export function PlanConfirm({ slug, plan, busy, error, onCancel, onInstall, own 
       ))}
       <div className="acts">
         <span className="note">{t("安装到「我的」，所有项目均可使用")}</span>
-        <button className="act" data-action="market.cancel" onClick={onCancel}>
+        <button className="act" data-action="market.cancel" disabled={busy} onClick={onCancel}>
           {t("返回")}
         </button>
         <button className="act" data-action="market.install" data-primary disabled={busy || (many && !seen)} onClick={onInstall}>
