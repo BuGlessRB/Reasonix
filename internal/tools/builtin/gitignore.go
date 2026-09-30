@@ -41,8 +41,8 @@ type walkIgnorer struct {
 	confine walkConfine   // what the walk may not read, forbid roots included
 }
 
-func newWalkIgnorer(root string, forbidRoots []string, wide bool) *walkIgnorer {
-	ig := &walkIgnorer{root: absClean(root), confine: newWalkConfine(forbidRoots, root), wide: wide}
+func newWalkIgnorer(root string, forbidRoots, scope []string, wide bool) *walkIgnorer {
+	ig := &walkIgnorer{root: absClean(root), confine: newWalkConfine(forbidRoots, scope, root), wide: wide}
 	// The reader is this package's: a .gitignore written as UTF-16 is decoded
 	// here the way every other file this tool reads is.
 	rules := gitignore.At(ig.root, gitignore.Options{ReadLines: readIgnoreLines})

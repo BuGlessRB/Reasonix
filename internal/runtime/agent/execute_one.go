@@ -156,6 +156,10 @@ func (a *Agent) parseToolCall(ctx context.Context, plan *toolCallPlan) (toolOutc
 				output: fmt.Sprintf("MCP server %q is connected; its real tools are now available", server),
 			}, true
 		}
+		if a.svc.postureLocked.Load() {
+			msg := fmt.Sprintf("blocked: tool %q is not available: this run is read-only and offers only %s. Nothing else can be enabled from inside the run.", plan.call.Name, strings.Join(a.svc.tools.AllNames(), ", "))
+			return toolOutcome{output: msg, blocked: true, errMsg: firstLine(msg), refusalCode: CodePostureToolNotAllowed}, true
+		}
 		return toolOutcome{
 			output: fmt.Sprintf("error: unknown tool %q", plan.call.Name),
 			errMsg: fmt.Sprintf("unknown tool %q", plan.call.Name),

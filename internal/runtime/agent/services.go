@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"sync/atomic"
+
 	"reasonix/internal/base/diff"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/provider"
@@ -62,6 +64,8 @@ type agentServices struct {
 	hooks ToolHooks
 	// asker lets the `ask` tool put questions to the user; nil in headless runs.
 	asker Asker
+	// postureLocked freezes gate and asker; see LockPosture.
+	postureLocked atomic.Bool
 	// preEdit is the seam the checkpoint store uses to snapshot pre-edit
 	// content. Only non-ReadOnly tool.Previewer tools fire it, so bash — whose
 	// targets are unknowable — is never tracked. Prefer mutationObserver.

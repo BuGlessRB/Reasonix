@@ -204,6 +204,39 @@ func sensitiveReadPath(abs string) bool {
 	return false
 }
 
+// CodeReadOutsideScope identifies a read refused for resolving outside every
+// read root. The read tools enforce it on every platform, symlinks resolved.
+const CodeReadOutsideScope = "workspace.read_outside_scope"
+
+// readOutsideScope reports whether target resolves outside every scope root.
+// An empty scope is unconfined. A path that cannot be resolved counts as outside.
+func readOutsideScope(scope []string, target string) bool {
+	if len(scope) == 0 {
+		return false
+	}
+	abs, err := realPath(target)
+	if err != nil {
+		return true
+	}
+	for _, r := range scope {
+		if within(r, abs) {
+			return false
+		}
+	}
+	return true
+}
+
+// confineScope is readOutsideScope with the typed refusal a read tool returns.
+func confineScope(scope []string, target string) error {
+	if !readOutsideScope(scope, target) {
+		return nil
+	}
+	return tool.Refusal{Code: CodeReadOutsideScope, Message: fmt.Sprintf(
+		"read refused: `%s` is outside the folders this run may read (%s), after following symlinks. "+
+			"This run is read-only and limited to its workspace; nothing else can be read from it",
+		target, strings.Join(scope, ", "))}
+}
+
 // realRoots resolves each root to an absolute, symlink-free path, dropping any
 // that cannot be made absolute. Resolving here (once) means the per-call check
 // only has to resolve the target.

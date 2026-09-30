@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/observe"
@@ -24,6 +25,17 @@ type ObserveRun struct {
 	Posture observe.Posture
 	Pending observe.PendingSink
 	Context observe.RunContext
+	// stopped is set once the run parked more than it may; see ObserveStopped.
+	stopped *atomic.Bool
+}
+
+// ObserveStopped reports the identity of what ended the run: observe.ErrParkLimit
+// once it asked for a person too many times, nil otherwise.
+func (c *Controller) ObserveStopped() error {
+	if c == nil || c.observe == nil || !c.observe.stopped.Load() {
+		return nil
+	}
+	return observe.ErrParkLimit
 }
 
 // ObservePosture reports the posture this controller runs under. ok is false
@@ -40,6 +52,7 @@ func cloneObserveRun(o *ObserveRun) *ObserveRun {
 		return nil
 	}
 	cp := *o
+	cp.stopped = new(atomic.Bool)
 	return &cp
 }
 
@@ -61,8 +74,13 @@ func (c *Controller) bindObserve() {
 	if c.executor == nil {
 		return
 	}
-	c.executor.SetGate(newObserveGate(c.policy, c.observe.Pending))
-	c.executor.SetAsker(parkingAsker{sink: c.observe.Pending})
+	stop := func() {
+		c.observe.stopped.Store(true)
+		c.Cancel()
+	}
+	c.executor.SetGate(newObserveGate(c.policy, c.observe.Pending, stop))
+	c.executor.SetAsker(parkingAsker{sink: c.observe.Pending, stop: stop})
+	c.executor.LockPosture()
 }
 
 // observeGate answers every call for a run nobody watches. Whatever the inner
@@ -71,11 +89,12 @@ func (c *Controller) bindObserve() {
 type observeGate struct {
 	inner *permission.Gate
 	sink  observe.PendingSink
+	stop  func()
 }
 
-func newObserveGate(policy permission.Policy, sink observe.PendingSink) *observeGate {
+func newObserveGate(policy permission.Policy, sink observe.PendingSink, stop func()) *observeGate {
 	policy.Mode, policy.ReadOnly, policy.SessionAllow = permission.Deny, true, nil
-	return &observeGate{inner: permission.NewGate(policy, denyPermissionApprover{}), sink: sink}
+	return &observeGate{inner: permission.NewGate(policy, denyPermissionApprover{}), sink: sink, stop: stop}
 }
 
 func (g *observeGate) Check(ctx context.Context, toolName string, args json.RawMessage, readOnly bool) (bool, string, error) {
@@ -105,14 +124,18 @@ func (g *observeGate) ExplicitlyDenies(toolName string, args json.RawMessage) bo
 }
 
 func (g *observeGate) park(toolName string, args json.RawMessage, risk observe.Risk) permission.Verdict {
-	subject := permission.Subject(args)
 	stored, err := g.sink.Park(observe.Pending{
-		Kind:    observe.KindApproval,
-		Source:  toolName,
-		Summary: clipUTF8(strings.TrimSpace(toolName+" "+subject), 240),
-		Risk:    risk,
-		Digest:  observe.DigestOf(observe.KindApproval, toolName, string(args)),
+		Kind:      observe.KindApproval,
+		Source:    toolName,
+		Summary:   "The run asked to use " + toolName + ".",
+		Detail:    clipUTF8(strings.TrimSpace(toolName+" "+permission.Subject(args)), 400),
+		Untrusted: true,
+		Risk:      risk,
+		Digest:    observe.DigestOf(observe.KindApproval, toolName, string(args)),
 	})
+	if errors.Is(err, observe.ErrParkLimit) && g.stop != nil {
+		g.stop()
+	}
 	if err != nil {
 		return permission.Verdict{Reason: "this call needs a person and this run is unattended; recording it for one failed, so it was refused and did not run. Do the part that needs no approval, then conclude and name what was refused.", Code: permission.RefusalUnattended}
 	}
@@ -125,19 +148,24 @@ func (g *observeGate) park(toolName string, args json.RawMessage, risk observe.R
 // parkingAsker records a question for a person and reports it unanswered. It
 // never returns an answer: an empty selection would read to the model as the
 // user declining, and a chosen option as the user deciding.
-type parkingAsker struct{ sink observe.PendingSink }
+type parkingAsker struct {
+	sink observe.PendingSink
+	stop func()
+}
 
 func (a parkingAsker) Ask(_ context.Context, questions []event.AskQuestion) ([]event.AskAnswer, error) {
-	summary := barrierSummary(questions)
 	stored, err := a.sink.Park(observe.Pending{
 		Kind:      observe.KindAsk,
 		Source:    "ask",
-		Summary:   clipUTF8(summary, 240),
+		Summary:   "The run asked a question that only a person can answer.",
 		Detail:    clipUTF8(renderQuestions(questions), 4000),
 		Untrusted: true,
 		Risk:      observe.RiskLow,
 		Digest:    observe.DigestOf(observe.KindAsk, "ask", renderQuestions(questions)),
 	})
+	if errors.Is(err, observe.ErrParkLimit) && a.stop != nil {
+		a.stop()
+	}
 	if err != nil {
 		return nil, errors.New("this run is unattended and the question could not be recorded for a person, so it is unanswered; do not choose for them. Do the part the task allows without it, then conclude and name the decision that is missing")
 	}

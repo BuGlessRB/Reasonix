@@ -143,6 +143,11 @@ func (b *builder) load() error {
 		b.stderr = os.Stderr
 	}
 	b.root, b.roots = resolveWorkspaceRoot(opts.WorkspaceRoot), opts.roots()
+	if opts.Observe != nil {
+		if err := checkObserveRoot(b.root); err != nil {
+			return err
+		}
+	}
 	b.repo = workspaceRepo(b.ctx, opts.WorkspaceRepo, b.root)
 	var err error
 	if b.additionalDirs, err = normalizeAdditionalDirs(b.root, opts.AdditionalDirs); err != nil {
@@ -220,6 +225,7 @@ func (b *builder) loadConfig() (*config.Config, error) {
 		return nil, err
 	}
 	cfg.Plugins = nil
+	cfg.Secrets.ProtectSensitiveFiles, cfg.Secrets.ProtectCredentialFiles = true, true
 	return cfg, nil
 }
 
@@ -244,7 +250,7 @@ func (b *builder) wireTools() error {
 	t.env = resolveToolEnvironment(opts, cfg, b.roots, root, b.additionalDirs, b.shell, b.stderr)
 	env := t.env
 	// The full inventory registers for use_capability; the provider-visible surface narrows later.
-	addBuiltins(t.reg, cfg.Tools.Enabled, env.writeRoots, env.bash, env.bashTimeout, env.search, b.stderr, root, b.proxy, env.forbidReadRoots, env.readPaths, env.sessionGuard, env.managedConfig, opts.FileOverlay, opts.TerminalRunner, env.sessionTemp, b.fileWriteReceipt)
+	addBuiltins(t.reg, cfg.Tools.Enabled, env.writeRoots, env.bash, env.bashTimeout, env.search, b.stderr, root, b.proxy, env.forbidReadRoots, env.readRoots, env.readPaths, env.sessionGuard, env.managedConfig, opts.FileOverlay, opts.TerminalRunner, env.sessionTemp, b.fileWriteReceipt)
 	bindFileViews(t.reg, cfg.Tools.ChangedFilesProtected())
 	addSystemOne(t.reg, cfg.Tools.Enabled, cfg, b.balanceClient)
 	addAdvisor(t.reg, cfg, b.proxy, b.sink)

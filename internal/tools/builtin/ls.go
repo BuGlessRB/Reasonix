@@ -21,6 +21,7 @@ type listDir struct {
 	workDir     string
 	paths       *PathResolver
 	forbidRoots []string
+	readRoots   []string
 }
 
 func (listDir) Name() string { return "ls" }
@@ -58,6 +59,9 @@ func (l listDir) Execute(ctx context.Context, args json.RawMessage) (string, err
 	}
 	rp := resolveReadablePath(l.workDir, p.Path, l.paths)
 	p.Path = rp.Path
+	if err := confineScope(l.readRoots, p.Path); err != nil {
+		return "", err
+	}
 	if confineRead(l.forbidRoots, p.Path) {
 		return "(empty directory)", nil
 	}

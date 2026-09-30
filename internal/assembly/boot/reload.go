@@ -57,6 +57,9 @@ func rebuildWithPrevious(ctx context.Context, old *control.Controller, previous 
 	if old == nil {
 		return nil, fmt.Errorf("boot: Rebuild requires the controller being replaced")
 	}
+	if _, observed := old.ObservePosture(); observed && opts.Observe == nil {
+		return nil, ErrObserveRebuild
+	}
 	if opts.Owner == nil {
 		opts.Owner = old.RuntimeOwner()
 	}
@@ -85,7 +88,7 @@ func rebuildWithPrevious(ctx context.Context, old *control.Controller, previous 
 	opts.Graph = fromGraph
 
 	// Prefer subgraph-classified rebuild when previous assembly is available.
-	if previous != nil && !opts.ForceFullRebuild && !changesModel(opts, old) {
+	if previous != nil && opts.Observe == nil && !opts.ForceFullRebuild && !changesModel(opts, old) {
 		if res, handled, err := tryRebuildSubgraph(ctx, old, previous, opts, m); handled {
 			return res, err
 		}

@@ -149,7 +149,7 @@ func TestUnrecordedRequestsAreStillRefused(t *testing.T) {
 	if answers != nil || err == nil || errors.Is(err, observe.ErrParked) {
 		t.Fatalf("Ask = %v, %v, want an unanswered error that does not claim to be parked", answers, err)
 	}
-	gate := newObserveGate(permission.New("ask", nil, []string{"read_file"}, nil), failingSink{})
+	gate := newObserveGate(permission.New("ask", nil, []string{"read_file"}, nil), failingSink{}, nil)
 	v, verr := gate.Verdict(context.Background(), "read_file", json.RawMessage(`{"path":"a"}`), true)
 	if verr != nil || v.Allow || v.Code != permission.RefusalUnattended {
 		t.Fatalf("verdict = %+v, %v", v, verr)
@@ -158,7 +158,7 @@ func TestUnrecordedRequestsAreStillRefused(t *testing.T) {
 
 func TestObserveGateIgnoresSessionAllowAndModes(t *testing.T) {
 	policy := permission.New("allow", []string{"read_file", "write_file"}, []string{"read_file"}, nil).WithSessionAllow([]string{"read_file"})
-	gate := newObserveGate(policy, observe.NewLedger(nil))
+	gate := newObserveGate(policy, observe.NewLedger(nil), nil)
 	if v, _ := gate.Verdict(context.Background(), "read_file", json.RawMessage(`{"path":"a"}`), true); v.Allow {
 		t.Fatalf("a session allow answered an ask rule: %+v", v)
 	}

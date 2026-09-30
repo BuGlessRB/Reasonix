@@ -14,15 +14,16 @@ import (
 // path; only a symlink, junction or other special entry pays a full resolve.
 type walkConfine struct {
 	forbidRoots []string
+	scope       []string
 	root        string
 	realRoot    string // empty when the root did not resolve: every entry pays
 	protect     bool
 	active      bool
 }
 
-func newWalkConfine(forbidRoots []string, root string) walkConfine {
-	w := walkConfine{forbidRoots: forbidRoots, root: root, protect: secrets.ProtectSensitiveFiles()}
-	w.active = len(forbidRoots) > 0 || w.protect || secrets.ProtectCredentialFiles()
+func newWalkConfine(forbidRoots, scope []string, root string) walkConfine {
+	w := walkConfine{forbidRoots: forbidRoots, scope: scope, root: root, protect: secrets.ProtectSensitiveFiles()}
+	w.active = len(forbidRoots) > 0 || len(scope) > 0 || w.protect || secrets.ProtectCredentialFiles()
 	if w.active {
 		if real, err := realPath(root); err == nil {
 			w.realRoot = real
@@ -38,11 +39,11 @@ func (w walkConfine) blocked(path string, d fs.DirEntry) bool {
 		return false
 	}
 	if w.realRoot == "" || d == nil || d.Type()&^fs.ModeDir != 0 {
-		return confineRead(w.forbidRoots, path)
+		return readOutsideScope(w.scope, path) || confineRead(w.forbidRoots, path)
 	}
 	rel, err := filepath.Rel(w.root, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return confineRead(w.forbidRoots, path)
+		return readOutsideScope(w.scope, path) || confineRead(w.forbidRoots, path)
 	}
 	return confineResolved(w.forbidRoots, filepath.Join(w.realRoot, rel), w.protect)
 }

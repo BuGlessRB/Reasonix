@@ -3,6 +3,7 @@ package observe
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -90,5 +91,32 @@ func TestBlockCannotCloseItsOwnTag(t *testing.T) {
 	}
 	if !strings.Contains(block, "posture: observe") {
 		t.Fatalf("block lacks the posture: %q", block)
+	}
+}
+
+func TestSanitizeRemovesControlAndBidiCharacters(t *testing.T) {
+	in := "a\x00b\u202ec\u2066d\u200fe\x1b[31mf\tg\nh"
+	if got := Sanitize(in); got != "abcde[31mf\tg\nh" {
+		t.Fatalf("Sanitize = %q", got)
+	}
+	l := NewLedger(nil)
+	p, _ := l.Park(Pending{Kind: KindAsk, Summary: "x\u202ey", Detail: "d\x00", Digest: "1"})
+	if p.Summary != "xy" || p.Detail != "d" {
+		t.Fatalf("ledger stored %+v", p)
+	}
+}
+
+func TestLedgerRefusesPastItsLimit(t *testing.T) {
+	l := NewLedger(nil)
+	for i := range MaxPending {
+		if _, err := l.Park(Pending{Kind: KindApproval, Digest: DigestOf(KindApproval, "t", string(rune('a'+i)))}); err != nil {
+			t.Fatalf("park %d: %v", i, err)
+		}
+	}
+	if _, err := l.Park(Pending{Kind: KindApproval, Digest: "new"}); !errors.Is(err, ErrParkLimit) {
+		t.Fatalf("park past the limit = %v, want ErrParkLimit", err)
+	}
+	if _, err := l.Park(Pending{Kind: KindApproval, Digest: DigestOf(KindApproval, "t", "a")}); err != nil {
+		t.Fatalf("a repeat of a parked request was refused: %v", err)
 	}
 }

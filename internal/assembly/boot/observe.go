@@ -1,6 +1,12 @@
 package boot
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+
 	"reasonix/internal/contract/ablation"
 	"reasonix/internal/contract/observe"
 	"reasonix/internal/contract/tool"
@@ -64,3 +70,39 @@ func (b *builder) observeRun() *control.ObserveRun {
 		Context: b.opts.Observe.Run,
 	}
 }
+
+// ErrObserveRootTooBroad refuses a workspace whose read scope would take in the
+// filesystem root or the user's home directory.
+var ErrObserveRootTooBroad = errors.New("boot: the read-only posture will not run with a workspace that contains the user's home directory or the filesystem root")
+
+func checkObserveRoot(root string) error {
+	real, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		real = filepath.Clean(root)
+	}
+	if abs, err := filepath.Abs(real); err == nil {
+		real = abs
+	}
+	if filepath.Dir(real) == real {
+		return ErrObserveRootTooBroad
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+	if h, err := filepath.EvalSymlinks(home); err == nil {
+		home = h
+	}
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		real, home = strings.ToLower(real), strings.ToLower(home)
+	}
+	rel, err := filepath.Rel(real, home)
+	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ErrObserveRootTooBroad
+	}
+	return nil
+}
+
+// ErrObserveRebuild refuses to rebuild a read-only run into an ordinary one: a
+// rebuild inherits nothing of the posture, so the caller has to state it again.
+var ErrObserveRebuild = errors.New("boot: a controller under the read-only posture cannot be rebuilt without it")

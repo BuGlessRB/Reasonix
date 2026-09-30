@@ -35,6 +35,7 @@ type readFile struct {
 	workDir     string
 	paths       *PathResolver
 	forbidRoots []string
+	readRoots   []string
 	// overlay, when non-nil, serves content from the host transport (unsaved
 	// editor buffers) before falling back to disk. Consulted only after path
 	// resolution and read confinement, and never for external alias paths.
@@ -103,6 +104,22 @@ func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 	return out, err
 }
 
+// refuse is the read boundary: outside the read roots, or a forbidden path that
+// is answered as if it did not exist.
+func (r readFile) refuse(rp ResolvedPath) error {
+	if err := confineScope(r.readRoots, rp.Path); err != nil {
+		return err
+	}
+	if !confineRead(r.forbidRoots, rp.Path) {
+		return nil
+	}
+	err := &os.PathError{Op: "open", Path: rp.Path, Err: os.ErrNotExist}
+	if rp.External {
+		return fmt.Errorf("read %s: %s", rp.DisplayPath, rp.ErrorText(err))
+	}
+	return err
+}
+
 func (r readFile) read(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Path   string `json:"path"`
@@ -118,11 +135,7 @@ func (r readFile) read(ctx context.Context, args json.RawMessage) (string, error
 	rp := resolveReadablePath(r.workDir, p.Path, r.paths)
 	p.Path = rp.Path
 	displayPath := rp.DisplayPath
-	if confineRead(r.forbidRoots, p.Path) {
-		err := &os.PathError{Op: "open", Path: p.Path, Err: os.ErrNotExist}
-		if rp.External {
-			return "", fmt.Errorf("read %s: %s", displayPath, rp.ErrorText(err))
-		}
+	if err := r.refuse(rp); err != nil {
 		return "", err
 	}
 	if p.Offset < 0 {

@@ -2,7 +2,10 @@ package boot
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"flag"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -76,23 +79,58 @@ func call(id, name, args string) testutil.Turn {
 	return testutil.Turn{ToolCalls: []provider.ToolCall{{ID: id, Name: name, Arguments: args}}}
 }
 
+// TestHookMarkerHelper is the program a hook or MCP server command runs: the
+// test binary itself, so a marker works on every platform. It does nothing
+// unless it is handed a file name.
+func TestHookMarkerHelper(t *testing.T) {
+	if args := flag.Args(); len(args) == 1 {
+		_ = os.WriteFile(args[0], []byte("ran"), 0o600)
+	}
+}
+
+// markerArgs are the arguments that make the test binary write marker.
+func markerArgs(marker string) []string {
+	return []string{"-test.run=^TestHookMarkerHelper$", filepath.ToSlash(marker)}
+}
+
+func markerCommand(t *testing.T, marker string) string {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return `"` + filepath.ToSlash(exe) + `" ` + strings.Join(markerArgs(marker), " ")
+}
+
 // writeHostileCheckout declares everything a checkout can: a config that widens
 // every boundary, project hooks the user approved, and MCP servers. The user
-// also has an MCP server of their own; mcpMarker is what it touches on start.
-func writeHostileCheckout(t *testing.T, root string) (hookMarker, mcpMarker string) {
+// also has a hook and an MCP server of their own. Every one of them writes a
+// marker file when it runs; the markers are returned by who declared them.
+func writeHostileCheckout(t *testing.T, root string) map[string]string {
 	t.Helper()
-	hookMarker = filepath.Join(root, "hook-ran")
-	mcpMarker = filepath.Join(root, "mcp-ran")
-	writeUserConfig(t, userModel+"\n[[plugins]]\nname = \"mine\"\ncommand = \"sh\"\nargs = [\"-c\", \"touch "+filepath.ToSlash(mcpMarker)+"\"]\n")
-	writeFile(t, root, "reasonix.toml", widenAllProject+`
-[[plugins]]
-name = "evil"
-command = "sh"
-args = ["-c", "touch mcp-ran"]
-`)
-	writeFile(t, root, ".mcp.json", `{"mcpServers":{"evil2":{"command":"sh","args":["-c","touch mcp-ran"]}}}`)
+	markers := map[string]string{
+		"project hook": filepath.Join(root, "project-hook-ran"),
+		"user hook":    filepath.Join(root, "user-hook-ran"),
+		"user MCP":     filepath.Join(root, "user-mcp-ran"),
+		"project MCP":  filepath.Join(root, "project-mcp-ran"),
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := func(name, marker string) string {
+		args, _ := json.Marshal(markerArgs(marker))
+		return "\n[[plugins]]\nname = " + jsonString(name) + "\ncommand = " + jsonString(filepath.ToSlash(exe)) + "\nargs = " + string(args) + "\n"
+	}
+	writeUserConfig(t, userModel+server("mine", markers["user MCP"]))
+	userHooks := `{"hooks":{"Stop":[{"command":` + jsonString(markerCommand(t, markers["user hook"])) + `}],"PreToolUse":[{"command":` + jsonString(markerCommand(t, markers["user hook"])) + `}]}}`
+	writeFile(t, config.RootsForHome("").Home(), "settings.json", userHooks)
+	writeFile(t, root, "reasonix.toml", widenAllProject+server("evil", markers["project MCP"]))
+	args, _ := json.Marshal(markerArgs(markers["project MCP"]))
+	writeFile(t, root, ".mcp.json", `{"mcpServers":{"evil2":{"command":`+jsonString(filepath.ToSlash(exe))+`,"args":`+string(args)+`}}}`)
+	projectHook := markerCommand(t, markers["project hook"])
 	writeFile(t, filepath.Join(root, ".reasonix"), "settings.json",
-		`{"hooks":{"Stop":[{"command":"touch hook-ran"}],"PreToolUse":[{"command":"touch hook-ran"}]}}`)
+		`{"hooks":{"Stop":[{"command":`+jsonString(projectHook)+`}],"PreToolUse":[{"command":`+jsonString(projectHook)+`}]}}`)
 	program, ok := hook.ProjectHooksProgram(root)
 	if !ok {
 		t.Fatal("project hooks were not recognised as a program to approve")
@@ -101,7 +139,20 @@ args = ["-c", "touch mcp-ran"]
 		t.Fatalf("approve project hooks: %v", err)
 	}
 	approveWorkspace(t, root)
-	return hookMarker, mcpMarker
+	return markers
+}
+
+func waitForMarker(path string) bool {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func TestEffectObserveOffersOnlyTheCeiling(t *testing.T) {
@@ -167,7 +218,7 @@ func TestEffectObserveCeilingIsTheDeclaredReads(t *testing.T) {
 
 func TestEffectObserveIgnoresTheCheckout(t *testing.T) {
 	root := observeProject(t)
-	hookMarker, mcpMarker := writeHostileCheckout(t, root)
+	markers := writeHostileCheckout(t, root)
 	prov := testutil.NewMock("observe", call("r1", "read_file", `{"path":"reasonix.toml"}`), testutil.Turn{Text: "done"})
 	ctrl, _ := buildObserved(t, root, prov, observe.RunContext{ScheduleID: "s1", TriggerID: "t1"})
 	if got := ctrl.ToolApprovalMode(); got != control.ToolApprovalReadOnly {
@@ -185,19 +236,22 @@ func TestEffectObserveIgnoresTheCheckout(t *testing.T) {
 			t.Fatalf("checkout changed the tool surface: %v", got)
 		}
 	}
-	for _, marker := range []string{hookMarker, mcpMarker} {
+	// Leave the hooks time to fire if they were going to.
+	time.Sleep(300 * time.Millisecond)
+	for who, marker := range markers {
 		if _, err := os.Stat(marker); !os.IsNotExist(err) {
-			t.Fatalf("%s exists: something the checkout declared ran (stat err %v)", filepath.Base(marker), err)
+			t.Fatalf("something the %s declared ran (stat err %v)", who, err)
 		}
 	}
 }
 
-func TestEffectOrdinaryRunStillRunsApprovedHooksAndServers(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the marker command is POSIX")
-	}
+// The control for the test above: an ordinary run does run what the observed
+// run leaves alone, so the observed run's silence is not an artefact of the
+// marker never working. On Windows the hook interpreter is not one the test can
+// rely on, so a silent control there is reported and not failed.
+func TestEffectOrdinaryRunRunsApprovedHooksAndServers(t *testing.T) {
 	root := observeProject(t)
-	hookMarker, mcpMarker := writeHostileCheckout(t, root)
+	markers := writeHostileCheckout(t, root)
 	prov := testutil.NewMock("ordinary", testutil.Turn{Text: "done"})
 	setBootTokenProfileTestProvider(t, prov)
 	ctrl, err := Build(context.Background(), Options{Sink: event.Discard, WorkspaceRoot: root})
@@ -208,16 +262,13 @@ func TestEffectOrdinaryRunStillRunsApprovedHooksAndServers(t *testing.T) {
 	if err := ctrl.Run(context.Background(), "hello"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	for _, marker := range []string{hookMarker, mcpMarker} {
-		deadline := time.Now().Add(5 * time.Second)
-		for {
-			if _, err := os.Stat(marker); err == nil {
-				break
+	for _, who := range []string{"project hook", "user hook", "user MCP"} {
+		if !waitForMarker(markers[who]) {
+			if runtime.GOOS == "windows" {
+				t.Logf("control: the %s did not run on windows; the observed test's silence for it proves nothing here", who)
+				continue
 			}
-			if time.Now().After(deadline) {
-				t.Fatalf("the control build never ran what wrote %s, so the observed run's silence proves nothing", filepath.Base(marker))
-			}
-			time.Sleep(20 * time.Millisecond)
+			t.Fatalf("the control build never ran the %s, so the observed run's silence proves nothing", who)
 		}
 	}
 }
@@ -308,7 +359,7 @@ func TestEffectObserveParksWhatNeedsAPersonAndRunsNothingElse(t *testing.T) {
 		t.Fatalf("an ask-rule read was not parked: %q", got)
 	}
 	for _, id := range []string{"c-write", "c-bash", "c-fetch", "c-cap", "c-task"} {
-		if got := results[id]; !strings.Contains(got, "unknown tool") {
+		if got := results[id]; !strings.Contains(got, "this run is read-only") || !strings.Contains(got, "read_file") {
 			t.Fatalf("%s: a tool outside the ceiling was not refused by the host: %q", id, got)
 		}
 	}
@@ -323,7 +374,7 @@ func TestEffectObserveParksWhatNeedsAPersonAndRunsNothingElse(t *testing.T) {
 		t.Fatalf("parked = %+v, want the read and the question", parked)
 	}
 	read, ask := parked[0], parked[1]
-	if read.Kind != observe.KindApproval || read.Source != "read_file" || read.Risk != observe.RiskLow || read.Untrusted {
+	if read.Kind != observe.KindApproval || read.Source != "read_file" || read.Risk != observe.RiskLow || !read.Untrusted || strings.Contains(read.Summary, "secret.txt") || !strings.Contains(read.Detail, "secret.txt") {
 		t.Fatalf("approval record = %+v", read)
 	}
 	if ask.Kind != observe.KindAsk || !ask.Untrusted || !strings.Contains(ask.Detail, "Ship it?") {
@@ -449,5 +500,103 @@ api_key_env = "DEEPSEEK_API_KEY"
 	}
 	if len(prov.Requests()) == 0 {
 		t.Fatal("the turn did not reach the user's own model")
+	}
+}
+
+type allowEverything struct{}
+
+func (allowEverything) Check(context.Context, string, json.RawMessage, bool) (bool, string, error) {
+	return true, "", nil
+}
+
+type answersYes struct{}
+
+func (answersYes) Ask(context.Context, []event.AskQuestion) ([]event.AskAnswer, error) {
+	return []event.AskAnswer{{QuestionID: "q1", Selected: []string{"Yes"}}}, nil
+}
+
+func TestEffectObserveGateAndAskerCannotBeSwappedOnTheAgent(t *testing.T) {
+	root := observeProject(t)
+	writeUserConfig(t, userModel+"\n[permissions]\nask = [\"read_file(secret.txt)\"]\n")
+	writeFile(t, root, "secret.txt", "SECRET-CONTENTS")
+	prov := testutil.NewMock("observe",
+		call("c-read", "read_file", `{"path":"secret.txt"}`),
+		call("c-ask", "ask", `{"questions":[{"header":"Q","question":"Ship?","options":[{"label":"Yes"},{"label":"No"}]}]}`),
+		testutil.Turn{Text: "done"},
+	)
+	ctrl, ledger := buildObserved(t, root, prov, observe.RunContext{ScheduleID: "s", TriggerID: "t"})
+	ctrl.Executor().SetGate(allowEverything{})
+	ctrl.Executor().SetAsker(answersYes{})
+	if err := ctrl.Run(context.Background(), "go"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	results := toolResults(prov.Requests())
+	if strings.Contains(results["c-read"], "SECRET-CONTENTS") || strings.Contains(results["c-ask"], "The user answered") || len(ledger.List()) != 2 {
+		t.Fatalf("replacing the gate or asker changed the posture: %v / %v / %+v", results["c-read"], results["c-ask"], ledger.List())
+	}
+}
+
+func TestEffectObserveRefusesAToolOutsideTheCeilingByIdentity(t *testing.T) {
+	root := observeProject(t)
+	prov := testutil.NewMock("observe", call("c-bash", "bash", `{"command":"touch x"}`), testutil.Turn{Text: "done"})
+	setBootTokenProfileTestProvider(t, prov)
+	var code string
+	sink := event.FuncSink(func(e event.Event) {
+		if e.Kind == event.ToolResult && e.Tool.RefusalCode != "" {
+			code = e.Tool.RefusalCode
+		}
+	})
+	ctrl, err := Build(context.Background(), Options{Sink: sink, WorkspaceRoot: root, Observe: &ObserveOptions{Pending: observe.NewLedger(nil)}})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+	if err := ctrl.Run(context.Background(), "go"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if code != "posture.tool_not_allowed" {
+		t.Fatalf("refusal code = %q, want posture.tool_not_allowed", code)
+	}
+	if got := toolResults(prov.Requests())["c-bash"]; !strings.Contains(got, "read-only") || strings.Contains(got, "unknown tool") {
+		t.Fatalf("the model was told %q, want the posture named as the cause", got)
+	}
+}
+
+func TestEffectObserveEndsARunThatParksTooMuch(t *testing.T) {
+	root := observeProject(t)
+	writeUserConfig(t, userModel+"\n[permissions]\nask = [\"read_file(secret*)\"]\n")
+	var turns []testutil.Turn
+	for i := 0; i <= observe.MaxPending+2; i++ {
+		turns = append(turns, call(fmt.Sprintf("c%d", i), "read_file", fmt.Sprintf(`{"path":"secret%d.txt"}`, i)))
+	}
+	prov := testutil.NewMock("observe", append(turns, testutil.Turn{Text: "done"})...)
+	ctrl, ledger := buildObserved(t, root, prov, observe.RunContext{ScheduleID: "s", TriggerID: "t"})
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_ = ctrl.Run(ctx, "go")
+	if got := len(ledger.List()); got != observe.MaxPending {
+		t.Fatalf("parked %d records, want the ceiling %d", got, observe.MaxPending)
+	}
+	if err := ctrl.ObserveStopped(); !errors.Is(err, observe.ErrParkLimit) {
+		t.Fatalf("ObserveStopped = %v, want ErrParkLimit", err)
+	}
+	if n := len(agentRequests(prov.Requests())); n > observe.MaxPending+2 {
+		t.Fatalf("the run kept going after the limit: %d requests", n)
+	}
+}
+
+func TestBuildRefusesToRebuildAnObservedRunWithoutTheirPosture(t *testing.T) {
+	root := observeProject(t)
+	ctrl, ledger := buildObserved(t, root, testutil.NewMock("observe", testutil.Turn{Text: "ok"}), observe.RunContext{ScheduleID: "s", TriggerID: "t"})
+	if _, err := Rebuild(context.Background(), ctrl, Options{Sink: event.Discard, WorkspaceRoot: root}); !errors.Is(err, ErrObserveRebuild) {
+		t.Fatalf("Rebuild without the posture = %v, want ErrObserveRebuild", err)
+	}
+	res, err := Rebuild(context.Background(), ctrl, Options{Sink: event.Discard, WorkspaceRoot: root, Observe: &ObserveOptions{Pending: ledger}})
+	if err != nil {
+		t.Fatalf("Rebuild with the posture: %v", err)
+	}
+	defer res.Controller.Close()
+	if _, ok := res.Controller.ObservePosture(); !ok {
+		t.Fatal("the rebuilt controller lost the posture")
 	}
 }

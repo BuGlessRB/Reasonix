@@ -405,7 +405,7 @@ func (a *Agent) SetGate(g Gate) {
 	if nilutil.IsNil(g) {
 		g = nil
 	}
-	a.svc.gate = g
+	a.svc.setGate(g)
 }
 
 // SetExtensions installs the extension dispatcher after construction. Boot
@@ -493,7 +493,7 @@ func (a *Agent) withTurnPreferences(input string) string {
 
 // SetAsker installs the asker the `ask` tool uses to question the user.
 // Interactive frontends wire one in; headless runs leave it nil.
-func (a *Agent) SetAsker(as Asker) { a.svc.asker = as }
+func (a *Agent) SetAsker(as Asker) { a.svc.setAsker(as) }
 
 // SetMemoryQueue installs the sink the remember/forget tools use to apply a
 // memory change in the current session. The controller wires itself in.
