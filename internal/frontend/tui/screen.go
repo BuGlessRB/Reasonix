@@ -48,9 +48,8 @@ type block struct {
 	hideRail bool
 	cells    ansi.Method
 	lines    []string
-	// diff marks a block whose rows draw through the diff formatter, so a
-	// landed background run must drop its cached lines.
-	diff bool
+	// keys are the diff-formatter keys the block's last render consulted.
+	keys []termrender.DiffKey
 	// row is the settled row the block draws, when it draws one: a shell
 	// call's output opens and shuts through it.
 	row *Item
@@ -60,7 +59,9 @@ func (b *block) at(width int, hideRail bool) []string {
 	cells := termrender.Cells()
 	if b.lines == nil || b.width != width || b.hideRail != hideRail || b.cells != cells {
 		b.width, b.hideRail, b.cells = width, hideRail, cells
-		b.lines = wrapLines(b.render(width, hideRail), width)
+		out, keys := termrender.RenderKeys(func() string { return b.render(width, hideRail) })
+		b.keys = keys
+		b.lines = wrapLines(out, width)
 	}
 	return b.lines
 }
@@ -116,8 +117,6 @@ func wrapLines(out string, width int) []string {
 type settledPrint struct {
 	render func(width int, hideRail bool) string
 	row    *Item
-	// diff marks a print whose rows draw through the diff formatter.
-	diff bool
 }
 
 // settledRow keeps a copy of the row to draw from. Full screen, a shell
@@ -126,7 +125,7 @@ func (m *model) settledRow(row Item, shown int) settledPrint {
 	if m.scr != nil && (row.Kind == ItemTool || row.Kind == ItemSay && row.Reasoning != "" && shown == 0) {
 		row.Fold = foldShut
 	}
-	return settledPrint{render: func(w int, hideRail bool) string { return renderItem(&row, w, shown, hideRail) }, row: &row, diff: drawsThroughDiffFormatter(&row)}
+	return settledPrint{render: func(w int, hideRail bool) string { return renderItem(&row, w, shown, hideRail) }, row: &row}
 }
 
 // publish sends what settled where this screen keeps it: blocks of the full
@@ -134,7 +133,7 @@ func (m *model) settledRow(row Item, shown int) settledPrint {
 func (m *model) publish(out []settledPrint) tea.Cmd {
 	if m.scr != nil {
 		for _, p := range out {
-			m.scr.blocks = append(m.scr.blocks, block{render: p.render, row: p.row, diff: p.diff})
+			m.scr.blocks = append(m.scr.blocks, block{render: p.render, row: p.row})
 		}
 		return nil
 	}
@@ -151,19 +150,25 @@ func (m *model) emit(render func(int, bool) string) tea.Cmd {
 	return m.publish([]settledPrint{{render: render}})
 }
 
-// invalidateDiffBlocks drops the cached rows of every block that draws through
-// the diff formatter. A background run reports its result long after the block
-// that asked for it was drawn and its rows cached, so without this the built-in
-// rows it showed while the run was in flight would stay on screen.
-func (m *model) invalidateDiffBlocks() {
-	if m.scr == nil {
+// invalidateDiffKey drops the cached rows of the blocks whose last render
+// consulted key, but only while the memo still holds it. Dropping every diff
+// block would re-render — and so re-spawn — blocks that never asked for it;
+// dropping an evicted key's block would re-run the formatter and evict another
+// live key, a cascade that never settles, so that block keeps its rows.
+func (m *model) invalidateDiffKey(key termrender.DiffKey) {
+	if m.scr == nil || !termrender.HasDiffFormat(key) {
 		return
 	}
 	for i := range m.scr.blocks {
-		if m.scr.blocks[i].diff {
+		if m.scr.blocks[i].hasKey(key) {
 			m.scr.blocks[i].lines = nil
 		}
 	}
+}
+
+// hasKey reports whether the block's last render consulted key.
+func (b *block) hasKey(key termrender.DiffKey) bool {
+	return slices.Contains(b.keys, key)
 }
 
 // fillScreen pushes whatever the terminal shows into its scrollback before a

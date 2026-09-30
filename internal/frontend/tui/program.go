@@ -59,7 +59,7 @@ func Run(ctx context.Context, opts Options) error {
 	// path: built-in rows now, formatted ones when the run lands. Inline writes to
 	// the scrollback, where a row cannot be repainted, so it stays inline.
 	if !opts.Inline {
-		termrender.SetDiffFormatNotify(func() { p.Send(diffFormattedMsg{}) })
+		termrender.SetDiffFormatNotify(func(k termrender.DiffKey) { p.Send(diffFormattedMsg{key: k}) })
 		defer termrender.SetDiffFormatNotify(nil)
 	}
 	_, err := p.Run()
@@ -147,9 +147,11 @@ type (
 	}
 	statusTickMsg struct{}
 	// diffFormattedMsg is the diff formatter's background run reporting a
-	// result; the model repaints on it so the formatted rows replace the
-	// built-in ones drawn while the run was in flight.
-	diffFormattedMsg struct{}
+	// result; the model repaints the rows that asked for that key so the
+	// formatted rows replace the built-in ones drawn while the run was in flight.
+	diffFormattedMsg struct {
+		key termrender.DiffKey
+	}
 )
 
 func newModel(ctx context.Context, opts Options) *model {
@@ -295,7 +297,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statusTickMsg:
 		return m, tea.Batch(m.fetchStatus(), tickStatus())
 	case diffFormattedMsg:
-		m.invalidateDiffBlocks()
+		m.invalidateDiffKey(msg.key)
 		return m, m.commit()
 	case actionMsg:
 		if msg.err != nil {
@@ -452,7 +454,7 @@ func (m *model) settledChunk(it *Item) (settledPrint, bool) {
 	row := *it
 	p := settledPrint{render: func(w int, hideRail bool) string {
 		return withThought(&row, shown, w, renderSayPart(row.Text[shown:end], shown == 0, w, hideRail))
-	}, diff: drawsThroughDiffFormatter(it)}
+	}}
 	if m.scr != nil && shown == 0 && row.Reasoning != "" {
 		row.Fold = foldShut
 		p.row = &row

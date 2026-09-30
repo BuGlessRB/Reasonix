@@ -136,8 +136,9 @@ diff 卡片，以及整段输出就是 diff 的 shell 结果（见下方
 全屏 TUI 中它在渲染路径之外运行：先画内置行，待其输出就绪后再替换，因此慢格式化器不会
 卡住界面。
 
-命令失败、超时或输出为空时保留内置渲染器。与 `[cli].update_channel` 一样，它仅属于
-用户/全局配置，项目内的 `reasonix.toml` 无法设置。
+命令失败、超时、输出为空或 diff 超过 1 MiB 时保留内置渲染器。与
+`[cli].update_channel` 一样，它仅属于用户/全局配置，项目内的 `reasonix.toml`
+无法设置。
 
 `[agent].embedded_diff_detection = true` 会把整段输出为 unified diff 的 shell 结果
 （例如 `bash` 运行 `git diff`）标记出来，让 CLI/TUI 与桌面端把它画成彩色 diff 而不是

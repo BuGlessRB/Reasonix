@@ -9,6 +9,7 @@ package termrender
 import (
 	"bytes"
 	"context"
+	"hash/maphash"
 	"os"
 	"os/exec"
 	"strconv"
@@ -49,8 +50,8 @@ func configureDiffFormatter(cfg *config.Config) {
 	}
 	diffFormatMu.Lock()
 	activeDiffFormatter = argv
-	diffFormatCache, diffFormatOrder = map[diffFormatKey]diffFormatEntry{}, nil
-	diffFormatInflight = map[diffFormatKey]bool{}
+	diffFormatCache, diffFormatOrder = map[DiffKey]diffFormatEntry{}, nil
+	diffFormatInflight = map[DiffKey]bool{}
 	diffFormatDisabled = false
 	diffFormatMu.Unlock()
 }
@@ -62,17 +63,18 @@ func SetDiffFormatterForTest(argv []string) (restore func()) {
 	diffFormatMu.Lock()
 	prev := activeDiffFormatter
 	activeDiffFormatter = argv
-	diffFormatCache, diffFormatOrder = map[diffFormatKey]diffFormatEntry{}, nil
-	diffFormatInflight = map[diffFormatKey]bool{}
+	diffFormatCache, diffFormatOrder = map[DiffKey]diffFormatEntry{}, nil
+	diffFormatInflight = map[DiffKey]bool{}
 	diffFormatMu.Unlock()
 	return func() { SetDiffFormatterForTest(prev) }
 }
 
 // SetDiffFormatNotify registers fn as the re-render hook: the formatter calls it
-// from its goroutine once a background run lands, so the frontend can repaint and
-// pick up the result. Pass nil to run the formatter inline instead — a renderer
-// that cannot re-render then still shows the output on the frame it draws.
-func SetDiffFormatNotify(fn func()) {
+// from its goroutine with the key that landed, so the frontend can repaint only
+// the rows that asked for it. Pass nil to run the formatter inline instead — a
+// renderer that cannot re-render then still shows the output on the frame it
+// draws.
+func SetDiffFormatNotify(fn func(DiffKey)) {
 	diffFormatMu.Lock()
 	diffFormatNotify = fn
 	diffFormatMu.Unlock()
@@ -184,11 +186,27 @@ func formatToolDiff(diff string, width int) ([]string, bool) {
 	return rows, true
 }
 
-const diffFormatCacheMax = 32
+const diffFormatCacheMax = 128
 
-type diffFormatKey struct {
-	content string
-	width   int
+// DiffKey identifies a memoized [cli].diff_formatter result: a 128-bit hash of
+// the diff text and the width it was laid out to. Hashing rather than holding
+// the text keeps the memo from keeping a second copy of a diff a block already
+// carries, so a landed background run can still re-render only the rows that
+// asked for its key without the memo paying for the input again.
+type DiffKey struct {
+	Hash  [2]uint64
+	Width int
+}
+
+// diffKeySeeds give the two hash halves; two seeds make a 128-bit key, so two
+// distinct diffs collide with probability below 2^-115 at the memo's size.
+var diffKeySeeds = [2]maphash.Seed{maphash.MakeSeed(), maphash.MakeSeed()}
+
+func diffKeyOf(content string, width int) DiffKey {
+	return DiffKey{
+		Hash:  [2]uint64{maphash.String(diffKeySeeds[0], content), maphash.String(diffKeySeeds[1], content)},
+		Width: width,
+	}
 }
 
 type diffFormatEntry struct {
@@ -198,19 +216,46 @@ type diffFormatEntry struct {
 
 var (
 	diffFormatMu       sync.Mutex
-	diffFormatCache    = map[diffFormatKey]diffFormatEntry{}
-	diffFormatOrder    []diffFormatKey
-	diffFormatInflight = map[diffFormatKey]bool{}
+	diffFormatCache    = map[DiffKey]diffFormatEntry{}
+	diffFormatOrder    []DiffKey
+	diffFormatInflight = map[DiffKey]bool{}
 	// diffFormatDisabled latches once a run hits diffFormatTimeout. A formatter
 	// that hangs once hangs again, and each retry costs a full timeout — worst on
 	// a resize, which changes the width key and so misses the per-(content,width)
 	// cache. Once latched the built-in renderer is used.
 	diffFormatDisabled bool
 	// diffFormatNotify, when set, makes the run asynchronous and is called from
-	// the formatter goroutine once a result lands, so the frontend repaints and
-	// picks it up. Nil runs the formatter inline.
-	diffFormatNotify func()
+	// the formatter goroutine with the landed key once a result arrives, so the
+	// frontend repaints and picks it up. Nil runs the formatter inline.
+	diffFormatNotify func(DiffKey)
+	// renderKeySink, when non-nil, receives every key a render consults. Set only
+	// for the duration of a RenderKeys call, on the one goroutine that renders.
+	renderKeySink func(DiffKey)
 )
+
+// RenderKeys runs render and returns its output with every formatter key it
+// consulted, so the caller can remember which keys its rows depend on. The keys
+// come back whether the memo served them or a background run was started.
+func RenderKeys(render func() string) (string, []DiffKey) {
+	var keys []DiffKey
+	prev := renderKeySink
+	renderKeySink = func(k DiffKey) { keys = append(keys, k) }
+	out := render()
+	renderKeySink = prev
+	return out, keys
+}
+
+// HasDiffFormat reports whether the memo still holds a result for key. A
+// frontend that scopes its repaint by key checks this before dropping a block's
+// rows: re-rendering a block whose key the memo has since evicted would re-run
+// the formatter and evict another live key, a cascade that never settles, so the
+// evicted block keeps the rows it already shows.
+func HasDiffFormat(key DiffKey) bool {
+	diffFormatMu.Lock()
+	defer diffFormatMu.Unlock()
+	_, ok := diffFormatCache[key]
+	return ok
+}
 
 // formatDiffCached returns the formatter's output for (diff, width), memoized
 // per key. With a re-render hook set (SetDiffFormatNotify) the run goes to a
@@ -221,7 +266,10 @@ func formatDiffCached(diff string, width int) (string, bool) {
 	if len(activeDiffFormatter) == 0 {
 		return "", false
 	}
-	key := diffFormatKey{content: diff, width: width}
+	key := diffKeyOf(diff, width)
+	if renderKeySink != nil {
+		renderKeySink(key)
+	}
 	diffFormatMu.Lock()
 	if diffFormatDisabled {
 		diffFormatMu.Unlock()
@@ -254,7 +302,7 @@ func formatDiffCached(diff string, width int) (string, bool) {
 			notify := diffFormatNotify
 			diffFormatMu.Unlock()
 			if ok && notify != nil {
-				notify()
+				notify(key)
 			}
 		}()
 		return "", false
@@ -272,7 +320,7 @@ func formatDiffCached(diff string, width int) (string, bool) {
 
 // storeDiffFormat records a result under key, evicting the oldest entry when the
 // memo is full. Callers hold diffFormatMu.
-func storeDiffFormat(key diffFormatKey, text string, ok bool) {
+func storeDiffFormat(key DiffKey, text string, ok bool) {
 	if _, seen := diffFormatCache[key]; seen {
 		return
 	}

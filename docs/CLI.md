@@ -155,9 +155,9 @@ In the full-screen TUI it runs off the render path: the built-in rows are drawn
 first and replaced once its output is ready, so a slow formatter cannot freeze
 the UI.
 
-On any failure, timeout, or empty output the built-in renderer is kept. Like
-`[cli].update_channel` it is user/global only — a project-local `reasonix.toml`
-cannot set it.
+On any failure, timeout, empty output, or a diff larger than 1 MiB, the
+built-in renderer is kept. Like `[cli].update_channel` it is user/global only —
+a project-local `reasonix.toml` cannot set it.
 
 `[agent].embedded_diff_detection = true` marks a shell result whose whole output
 is a unified diff — e.g. `bash` running `git diff` — so the CLI/TUI and desktop

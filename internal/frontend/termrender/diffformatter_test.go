@@ -319,7 +319,7 @@ func TestFormatDiffCachedAsyncWhenNotifyHookSet(t *testing.T) {
 	setDiffFormatter([]string{"cat"})
 
 	done := make(chan struct{}, 1)
-	SetDiffFormatNotify(func() { done <- struct{}{} })
+	SetDiffFormatNotify(func(DiffKey) { done <- struct{}{} })
 	defer SetDiffFormatNotify(nil)
 
 	if _, ok := formatDiffCached("body", 80); ok {
