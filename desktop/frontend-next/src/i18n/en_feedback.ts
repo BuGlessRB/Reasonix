@@ -25,7 +25,8 @@ export const EN_FEEDBACK: Record<string, string> = {
   "状态已无法追踪": "Status no longer trackable",
   "处理进展": "Progress",
   "刷新列表": "Refresh list",
-  "每次打开这一页时刷新。状态来自对应的 GitHub 议题。": "Refreshed each time you open this page. Status follows the matching GitHub issue.",
+  "每次打开这一页时刷新。状态和回复来自维护者，已登记的反馈会跟随对应的 GitHub 议题。":
+    "Refreshed each time you open this page. Status and replies come from the maintainers; a report that was filed follows its GitHub issue.",
   "暂时连不上反馈服务。下面是保存在本机的记录，状态可能不是最新的。":
     "Cannot reach the feedback service right now. This is what was saved on this machine, and statuses may be out of date.",
   "正在读取你的反馈…": "Loading your feedback…",
@@ -33,14 +34,17 @@ export const EN_FEEDBACK: Record<string, string> = {
   "复制回执号": "Copy receipt number",
   "回执号": "Receipt number",
   "已收到你的反馈": "Your feedback was received",
-  "回执号是这份反馈的凭据，请留着它。我们会把它记成一个 GitHub 议题，进展会出现在「我的反馈」里。":
-    "Keep the receipt number: it identifies this report. We turn it into a GitHub issue, and its progress appears under My feedback.",
+  "回执号是这份反馈的凭据，请留着它。我们会先看一遍，只有被登记为 GitHub 议题的内容才会公开。进展、议题链接，以及我们的回复或提问，都会出现在「我的反馈」里。":
+    "Keep the receipt number: it identifies this report. We read it first, and only what we file as a GitHub issue becomes public. Progress, the issue link and any reply or question from us appear under My feedback.",
   "你的文字里有看起来像密钥的内容，已在发出前打码。": "Text in your report that looked like a secret was masked before it was sent.",
   "查看我的反馈": "View my feedback",
   "再写一条": "Write another",
-  "这里写的一切都会成为公开的 GitHub 议题": "Everything you write here becomes a public GitHub issue",
-  "文字、截图和昵称都会发布在 esengine/DeepSeek-Reasonix 仓库，任何人都看得到。请不要写入密钥、账号密码或私有代码，截图里也一样。":
-    "Your text, screenshots and nickname are posted in the esengine/DeepSeek-Reasonix repository, where anyone can read them. Do not include secrets, passwords or private code, and that goes for screenshots too.",
+  "只有被我们登记为议题的反馈才会公开":
+    "It becomes public only if we file it as an issue",
+  "如果登记为 GitHub 议题，你的文字、昵称和截图会发布在 esengine/DeepSeek-Reasonix 仓库，任何人都看得到；不登记就不会公开。你会在这里收到回执，登记后还会看到议题链接，我们也可能在这里回复或向你提问。":
+    "If we file it as a GitHub issue, your text, nickname and screenshots are posted in the esengine/DeepSeek-Reasonix repository, where anyone can read them; if we do not, it stays private. You will see a receipt here and, once filed, the issue link, and we may reply or ask you questions here.",
+  "请不要在文字或截图里写入密钥、账号密码、聊天记录或私有代码：一旦公开就收不回来。":
+    "Do not put secrets, passwords, chats or private code in the text or in screenshots: once public it cannot be taken back.",
   "发现的是安全漏洞？请不要在这里提交，{link}。": "Found a security vulnerability? Do not post it here; {link}.",
   "按安全策略私下报告": "report it privately under the security policy",
   "反馈内容": "Feedback details",
@@ -48,18 +52,20 @@ export const EN_FEEDBACK: Record<string, string> = {
   "发生了什么？": "What happened?",
   "描述你遇到的情况，或你希望它怎样。": "Describe what you ran into, or what you would like instead.",
   "{n} / {max} 字节": "{n} / {max} bytes",
-  "昵称（公开）": "Nickname (public)",
-  "会显示在议题里：「由 {name} 提交」。用昵称即可，不必真名。": "Shown on the issue as \"Reported by {name}\". A nickname is fine; no real name needed.",
+  "昵称（登记为议题时公开）": "Nickname (public if filed as an issue)",
+  "如果登记为议题，会显示为「由 {name} 提交」。用昵称即可，不必真名。":
+    "If it is filed as an issue it shows as \"Reported by {name}\". A nickname is fine; no real name needed.",
   "联系方式（可选，私密）": "Contact (optional, private)",
   "邮箱或 QQ。只有维护者看得到，绝不会出现在 GitHub 上。": "Email or QQ. Only the maintainers see it; it is never posted on GitHub.",
-  "截图（可选，公开）": "Screenshots (optional, public)",
+  "截图（可选，登记为议题时公开）":
+    "Screenshots (optional, public if filed as an issue)",
   "移除截图 {name}": "Remove screenshot {name}",
   "添加截图…": "Add screenshots…",
   "选择截图文件": "Choose screenshot files",
   "也可以直接粘贴或拖进来。PNG 或 JPEG，最多 {n} 张，每张不超过 {size} MB，较大的图会自动缩小。":
     "You can also paste or drop them here. PNG or JPEG, up to {n} images, {size} MB each; large images are shrunk automatically.",
-  "截图会和文字一起公开发布，发送前请确认没有露出密钥、聊天记录或私有代码。":
-    "Screenshots are published with your text. Before sending, check they show no keys, chats or private code.",
+  "如果这份反馈被登记为公开议题，截图会和文字一起公开。发送前请确认没有露出密钥、聊天记录或私有代码。":
+    "If this report is filed as a public issue, your screenshots are published with your text. Before sending, check they show no keys, chats or private code.",
   "{name}：只支持 PNG 或 JPEG": "{name}: only PNG or JPEG is supported",
   "{name}：超过 {size} MB，没有添加": "{name}: larger than {size} MB, not added",
   "{name}：最多 {n} 张，没有添加": "{name}: the limit is {n} images, not added",
@@ -94,4 +100,33 @@ export const EN_FEEDBACK: Record<string, string> = {
   "反馈服务暂时出了问题，不是你的操作有误。稍后再试即可。": "The feedback service is having trouble; this is not something you did. Try again later.",
   "本机保存反馈记录时出错，请重试。": "Saving the feedback record on this machine failed. Please try again.",
   "反馈没有发出去，请稍后重试。": "The feedback was not sent. Please try again later.",
+  "需要补充信息": "Needs more info",
+  "维护者已回复": "Answered by us",
+  "已关闭此反馈": "Closed",
+  "需要你回复": "Needs your reply",
+  "等你补充信息": "Waiting for your information",
+  "维护者": "Maintainers",
+  "新": "New",
+  "显示更早的 {n} 条": "Show {n} earlier messages",
+  "回复": "Reply",
+  "回复维护者": "Reply to the maintainers",
+  "你的回复": "Your reply",
+  "发送回复": "Send reply",
+  "离线时暂时不能回复。": "You cannot reply while offline.",
+  "这份反馈已有公开议题 #{n}：你的回复会被公开转发到那个议题里。请不要写入密钥、密码或私有内容。": "This report already has a public issue, #{n}: your reply is copied there publicly. Do not include secrets, passwords or private content.",
+  "只发给维护者，不会公开。请不要写入密钥、密码或私有代码。": "Sent to the maintainers only; it is not made public. Do not include secrets, passwords or private code.",
+  "找不到这条反馈，请刷新列表后再试。": "That report could not be found. Refresh the list and try again.",
+  "回复不能为空。": "The reply is empty.",
+  "回复太长了，请缩短后再发。": "The reply is too long. Please shorten it and send again.",
+  "回复不符合要求，请检查后重试。": "The reply was not accepted. Please check it and try again.",
+  "这份反馈的回复次数已到上限，或你回复得太频繁了。请稍后再试，必要时另外提交一条新反馈。": "This report has reached its reply limit, or you replied too often. Try again later, or send a new report.",
+  "这份反馈现在不接收回复，它可能已经处理完毕或被关闭。请刷新列表查看最新状态。": "This report takes no reply right now; it may be finished or closed. Refresh the list to see its latest status.",
+  "这台电脑的反馈身份已经变了，这份反馈不能再从这里回复。可以另外提交一条新反馈。": "This computer's feedback identity has changed, so this report can no longer be answered from here. You can send a new report.",
+  "反馈通道暂时关闭，暂时不能回复。": "The feedback channel is switched off for now, so replies are not possible.",
+  "没能连上反馈服务。你写的回复还在；如果不确定它有没有送达，请先刷新列表看看，再决定要不要重发。": "Could not reach the feedback service. Your reply is kept; if you are not sure it arrived, refresh the list first, then decide whether to send it again.",
+  "回复没有发出去，请稍后重试。": "The reply was not sent. Please try again later.",
+  "服务暂时要求额外验证，当前版本还不能显示验证步骤。请稍后再试，或直接到 GitHub 提交问题。": "The service temporarily asks for an extra verification step that this version cannot show. Try again later, or file an issue on GitHub directly.",
+  "{n} 项待查看": "{n} to review",
+  "有 {n} 份反馈收到了新回复。": "{n} of your reports have new replies.",
+  "回复已发送。": "Reply sent.",
 };

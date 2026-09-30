@@ -59,7 +59,7 @@ describe("my feedback", () => {
     const port = portWith({ offline: false, unread: 0, hasNew: false, items: FEEDBACK_STATUSES.map((status, i) => item({ receipt: `FB-AAAA-000${i}`, status })) });
     render(<FeedbackMine port={port} onFile={() => {}} />);
     await screen.findByText("FB-AAAA-0000");
-    for (const [status, label] of [["received", "已收到"], ["recorded", "已登记"], ["in_progress", "处理中"], ["fixed", "已修复"], ["wontfix", "不予修复"], ["duplicate", "重复"]]) {
+    for (const [status, label] of [["received", "已收到"], ["needs_info", "需要补充信息"], ["answered", "维护者已回复"], ["closed", "已关闭此反馈"], ["recorded", "已登记"], ["in_progress", "处理中"], ["fixed", "已修复"], ["wontfix", "不予修复"], ["duplicate", "重复"]]) {
       expect(document.querySelector(`.fbk-chip[data-status="${status}"]`)!.textContent).toBe(label);
     }
   });
@@ -98,7 +98,7 @@ describe("my feedback", () => {
   it("keeps the remembered list under a gentle banner when the service is offline", async () => {
     render(<FeedbackMine port={portWith({ items: [item({})], offline: true, unread: 0, hasNew: false })} onFile={() => {}} />);
     await screen.findByText("FB-AAAA-0001");
-    const banner = screen.getByRole("status", { name: "" , hidden: false } as never);
+    const banner = screen.getAllByRole("status").find((n) => /连不上反馈服务/.test(n.textContent ?? ""))!;
     expect(banner.textContent).toMatch(/连不上反馈服务/);
     expect(screen.queryByRole("alert")).toBeNull();
   });

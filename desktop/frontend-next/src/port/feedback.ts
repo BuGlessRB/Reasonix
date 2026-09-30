@@ -1,15 +1,22 @@
-// In-app feedback: a report that becomes a public issue, and the receipt that
-// follows it. Field names are the kernel's json tags; a refusal is told apart
-// by its code, never by its sentence.
+// In-app feedback: a report the maintainers triage, the receipt that follows
+// it, and the thread of replies under it. Field names are the kernel's json
+// tags; a refusal is told apart by its code, never by its sentence.
 
 export type FeedbackCategory = "bug" | "idea" | "question" | "other";
 
 export const FEEDBACK_CATEGORIES: readonly FeedbackCategory[] = ["bug", "idea", "question", "other"];
 
-// Ordered by how far along a report is; the timeline reads this order.
-export type FeedbackStatus = "received" | "recorded" | "in_progress" | "fixed" | "wontfix" | "duplicate";
+// What a person may see. A report waiting for triage reads as received; one
+// the maintainers declined reads as closed, with no reason.
+export type FeedbackStatus =
+  | "received" | "needs_info" | "answered" | "recorded" | "in_progress" | "fixed" | "wontfix" | "duplicate" | "closed";
 
-export const FEEDBACK_STATUSES: readonly FeedbackStatus[] = ["received", "recorded", "in_progress", "fixed", "wontfix", "duplicate"];
+export const FEEDBACK_STATUSES: readonly FeedbackStatus[] = [
+  "received", "needs_info", "answered", "recorded", "in_progress", "fixed", "wontfix", "duplicate", "closed",
+];
+
+// Only these take a reply from the reporter; the service has the last word.
+export const FEEDBACK_REPLYABLE: readonly FeedbackStatus[] = ["needs_info", "answered", "recorded", "in_progress"];
 
 export interface FeedbackEnvInfo {
   version: string;
@@ -57,6 +64,11 @@ export interface FeedbackRequest {
   images: FeedbackImage[];
   // Answer to a feedback.challenge_required refusal.
   turnstileToken?: string;
+}
+
+export interface FeedbackReplyReceipt {
+  replyId: number;
+  createdAt: string;
 }
 
 export interface FeedbackReceipt {
@@ -121,6 +133,9 @@ export const FEEDBACK_CODE = {
   disabled: "feedback.disabled",
   duplicate: "feedback.duplicate",
   badToken: "feedback.bad_token",
+  replyLimit: "feedback.reply_limit",
+  notReplyable: "feedback.not_replyable",
+  challengeRequired: "feedback.challenge_required",
   offline: "feedback.offline",
   unavailable: "feedback.unavailable",
   internal: "feedback.internal",

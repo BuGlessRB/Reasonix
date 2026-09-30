@@ -78,7 +78,7 @@ describe("feedback form", () => {
   it("says the report is public and points security reports elsewhere", async () => {
     const { port } = setup();
     await ready();
-    expect(screen.getByText("这里写的一切都会成为公开的 GitHub 议题")).toBeTruthy();
+    expect(screen.getByText("只有被我们登记为议题的反馈才会公开")).toBeTruthy();
     await userEvent.click(screen.getByRole("link", { name: "按安全策略私下报告" }));
     expect(port.openExternal).toHaveBeenCalledWith(expect.stringContaining("/security/policy"));
   });

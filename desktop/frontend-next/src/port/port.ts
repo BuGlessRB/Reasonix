@@ -42,7 +42,7 @@ import type { BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 export type { ModelEffort, ModelLimit, Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 import type { StoragePlan, StorageQuery, StorageState } from "./storage";
-import type { FeedbackEnv, FeedbackMine, FeedbackReceipt, FeedbackRequest } from "./feedback";
+import type { FeedbackEnv, FeedbackMine, FeedbackReceipt, FeedbackReplyReceipt, FeedbackRequest } from "./feedback";
 
 export type * from "./plugin";
 export type * from "./market";
@@ -350,11 +350,16 @@ export interface AgentPort {
   deleteBackup(id: string): Promise<void>;
   previewBackup(id: string, passphrase: string): Promise<BackupPlan>;
   applyBackup(planId: string, items: string[], consented: string[]): Promise<BackupApplyResult>;
-  // A report becomes a public issue. Refusals carry feedback.* codes; only
-  // feedback.offline is safe to retry with the same idempotencyKey.
+  // A report becomes public only if the maintainers file it as an issue.
+  // Refusals carry feedback.* codes; only feedback.offline is safe to retry
+  // with the same idempotencyKey. A reply has no key and is never retried by
+  // the kernel.
   feedbackEnv(locale?: string): Promise<FeedbackEnv>;
   sendFeedback(req: FeedbackRequest): Promise<FeedbackReceipt>;
   myFeedback(): Promise<FeedbackMine>;
+  replyFeedback(receipt: string, body: string): Promise<FeedbackReplyReceipt>;
+  // Records that the thread was shown up to reply upTo, so those replies stop counting as new.
+  feedbackSeen(receipt: string, upTo: number): Promise<void>;
   workspaces(): Promise<WorkspaceInfo>;
   // Rebuilds the whole runtime against another folder. The conversation does
   // not come along, so the caller has to reload the transcript afterwards.

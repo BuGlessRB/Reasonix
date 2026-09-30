@@ -13,6 +13,8 @@ export interface Command {
   keywords: string;
   // The shortcut that does the same thing, printed where "操作" would be.
   keys?: string;
+  // What the command has to say right now, printed instead of a shortcut.
+  status?: string;
   run: () => void;
 }
 
@@ -29,6 +31,7 @@ interface Hit {
   label: string;
   icon: StudioIconName;
   note?: string;
+  alert?: boolean;
   run: () => void;
 }
 
@@ -68,7 +71,7 @@ export function Palette({ open, onClose, commands, tree, onOpenSession }: Props)
       }
     }
     return [
-      { label: t("快捷操作"), hits: matched.map((c) => ({ key: `c:${c.id}`, label: c.label, icon: c.icon, note: c.keys ?? t("操作"), run: c.run })) },
+      { label: t("快捷操作"), hits: matched.map((c) => ({ key: `c:${c.id}`, label: c.label, icon: c.icon, note: c.status ?? c.keys ?? t("操作"), alert: c.status !== undefined, run: c.run })) },
       { label: t("会话"), hits: sessions },
     ].filter((g) => g.hits.length > 0);
   }, [commands, tree, query, onOpenSession]);
@@ -140,7 +143,7 @@ export function Palette({ open, onClose, commands, tree, onOpenSession }: Props)
                 >
                   <StudioIcon name={hit.icon} />
                   <span>{hit.label}</span>
-                  {hit.note && <small>{hit.note}</small>}
+                  {hit.note && <small data-alert={hit.alert ? "" : undefined}>{hit.note}</small>}
                 </button>
               ))}
             </div>

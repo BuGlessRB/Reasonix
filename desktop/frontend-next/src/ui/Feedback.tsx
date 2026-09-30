@@ -19,9 +19,10 @@ interface Props {
   tab?: FeedbackTab;
   onClose: () => void;
   onError: (message: string) => void;
+  onUnread?: (n: number) => void;
 }
 
-export function Feedback({ port, tab: first = "send", onClose, onError }: Props) {
+export function Feedback({ port, tab: first = "send", onClose, onError, onUnread }: Props) {
   const [tab, setTab] = useState<FeedbackTab>(first);
   const card = useRef<HTMLDivElement>(null);
   const opener = useRef<Element | null>(document.activeElement);
@@ -104,7 +105,7 @@ export function Feedback({ port, tab: first = "send", onClose, onError }: Props)
           </div>
           {tab === "mine" && (
             <div id="fbk-panel-mine" role="tabpanel" aria-labelledby="fbk-tab-mine">
-              <FeedbackMine port={port} onFile={openLink} />
+              <FeedbackMine port={port} onFile={openLink} onUnread={onUnread} />
             </div>
           )}
         </div>
