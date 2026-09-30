@@ -30,12 +30,19 @@ import type { ForkTargetView } from "./forkTargets";
 // shapes the local UI consumes.
 
 // RemoteSessionApi is the surface-facing contract of useRemoteSession.
+// Last session path mounted per remote tab. Switching sessions inside one tab
+// keeps the tab-keyed reducer state, so a resident paint must know the mounted
+// content belongs to a different session before replacing it.
+const lastPaintedSessionPathByTab = new Map<string, string>();
+
 export interface RemoteSessionApi {
   state: RemoteTabStateValue;
   error: string;
   transcript: State;
   liveStore: ControllerLiveStore;
   hydrated: boolean;
+  /** Content is painted from the resident cache; the authoritative hydrate is still running. */
+  revalidating: boolean;
   syncMode?: "v2";
   loadOlderHistory?: (targetTurn?: number, trigger?: HistoryLoadTrigger) => Promise<HistoryLoadOutcome>;
   loadNewerHistory?: (latest?: boolean, current?: () => boolean) => Promise<HistoryLoadOutcome>;
@@ -136,6 +143,10 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   const [surfaceGeneration, setSurfaceGeneration] = useState(0);
   const [promptError, setPromptError] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  // A resident-cache paint shows the session instantly while the authoritative
+  // hydrate reconciles in the background.
+  const [revalidating, setRevalidating] = useState(false);
+  const cachePaintedRef = useRef(false);
   const olderRef = useRef<((trigger?: HistoryLoadTrigger) => Promise<HistoryLoadOutcome>) | undefined>(undefined);
   const navigateRef = useRef<NavigateToTurn | undefined>(undefined);
   const newerRef = useRef<((latest?: boolean, current?: () => boolean) => Promise<HistoryLoadOutcome>) | undefined>(undefined);
@@ -239,6 +250,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     spectatorRef.current = false;
     setSpectator(false);
     setHydrated(false);
+    cachePaintedRef.current = false;
+    setRevalidating(false);
     let cancelled = false;
     let generation = 0;
     let follower: TranscriptSessionFollower | undefined;
@@ -254,6 +267,26 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     const transcriptHasContent = () => {
       const mounted = transcriptRef.current;
       return mounted.items.length > 0 || Boolean(mounted.live?.text || mounted.live?.reasoning);
+    };
+    // Local sessions paint a resident session synchronously before any I/O
+    // (useController's peek path). The remote surface had no such path: every
+    // switch paid the network round trips even for a session whose transcript
+    // was already resident. Paint it, then let hydrate() reconcile.
+    const paintResidentCache = () => {
+      if (!tabId || !sessionPath) return false;
+      const previousPath = lastPaintedSessionPathByTab.get(tabId);
+      lastPaintedSessionPathByTab.set(tabId, sessionPath);
+      // Same session (reconnect) or a restored mount already showing content:
+      // the mounted state is this session's and may be fresher than the cut.
+      if (previousPath === sessionPath || (previousPath === undefined && transcriptHasContent())) return false;
+      const resident = getTranscriptStore().peek(tabId, sessionPath);
+      if (!resident) return false;
+      cachePaintedRef.current = true;
+      setTranscript(current => reducer(current, historyReplaceAction(resident)));
+      hydratedRef.current = true;
+      setHydrated(true);
+      setRevalidating(true);
+      return true;
     };
     const primeEarlyHistory = async () => {
       if (primeRef.current !== "idle") return;
@@ -302,7 +335,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
         if (action.type === "transcript_v2_snapshot") primeRef.current = "retired";
         dispatch(action);
       });
-      setHydrated(false);
+      if (!cachePaintedRef.current) setHydrated(false);
       try {
         await follower.start();
         const loaded = await loadRemoteStatusSnapshot(tabId, mountedState === "ready" ? 3 : 60,
@@ -317,6 +350,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
         setState("ready");
         setHydrated(true);
         setError("");
+        cachePaintedRef.current = false;
+        setRevalidating(false);
         setSurfaceGeneration(value => value + 1);
         void forkTargetsRefreshRef.current?.();
       } catch (error) {
@@ -350,6 +385,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
           setState("ready");
           setHydrated(true);
           setError("");
+          cachePaintedRef.current = false;
+          setRevalidating(false);
           setSurfaceGeneration(value => value + 1);
           void forkTargetsRefreshRef.current?.();
         } catch (fallbackError) {
@@ -411,6 +448,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       if (next.state === "ready") void hydrate();
       else if (next.state === "disconnected") {
         setHydrated(false);
+        setRevalidating(false);
         dispatch({ type: "transcript_connection", status: "disconnected" });
       }
     });
@@ -433,6 +471,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       }
     });
     if (revivedFromShell) void app.SetActiveTab(tabId).catch(() => undefined);
+    paintResidentCache();
     void primeEarlyHistory();
     void hydrate();
     return () => {
@@ -685,7 +724,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   }, []);
 
   return {
-    state, error, transcript, liveStore, hydrated, syncMode: "v2", navigateToTurn: (target, current) => navigateRef.current?.(target, current) ?? Promise.resolve("cancelled"), loadOlderHistory: (_targetTurn?: number, trigger?: HistoryLoadTrigger) => olderRef.current?.(trigger) ?? Promise.resolve("empty"), loadNewerHistory: (latest = false, current) => newerRef.current?.(latest, current) ?? Promise.resolve("empty"), running: transcript.running, modelLabel, commands,
+    state, error, transcript, liveStore, hydrated, revalidating, syncMode: "v2", navigateToTurn: (target, current) => navigateRef.current?.(target, current) ?? Promise.resolve("cancelled"), loadOlderHistory: (_targetTurn?: number, trigger?: HistoryLoadTrigger) => olderRef.current?.(trigger) ?? Promise.resolve("empty"), loadNewerHistory: (latest = false, current) => newerRef.current?.(latest, current) ?? Promise.resolve("empty"), running: transcript.running, modelLabel, commands,
     composerProfile, goalRuntime, goalView, effort, surfaceGeneration, promptError, submit, runManagementCommand, compact, cancelTurn,
     approve, resolvePlanDecision, answer, clearExtensionForm, rewind, forkTurn, acknowledgeFork, setModel, setEffort, setQualityFloor, pauseGoal, resumeGoal, editGoal, steer, cancelJob,
     drainApprovals, retryHydration,
