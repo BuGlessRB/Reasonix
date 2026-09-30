@@ -17,6 +17,40 @@ const row = (slug: string, pinned?: boolean): MarketPackage => ({
 });
 
 describe("market list", () => {
+  it.each([
+    ["more", "success"], ["more", "failure"], ["retry", "success"], ["retry", "failure"],
+  ])("keeps focus in the market while a next-page %s ends in %s", async (trigger, outcome) => {
+    const port = new MockPort() as unknown as AgentPort;
+    let finish!: (value: MarketList) => void;
+    let fail!: (error: Error) => void;
+    const read = vi.fn().mockResolvedValueOnce({ packages: [row("a/one", true), row("b/two", true)], limit: 2, offset: 0 });
+    if (trigger === "retry") read.mockRejectedValueOnce(new Error("offline"));
+    read.mockImplementationOnce(() => new Promise<MarketList>((resolve, reject) => { finish = resolve; fail = reject; }));
+    port.marketList = read;
+    render(<Market port={port} onInstalled={() => {}} />);
+    const more = await screen.findByRole("button", { name: "加载更多" });
+    if (trigger === "retry") {
+      await userEvent.click(more);
+      await screen.findByRole("alert");
+    }
+    screen.getByRole("button", { name: trigger === "retry" ? "重试" : "加载更多" }).focus();
+    await userEvent.keyboard("{Enter}");
+    const market = screen.getByRole("region", { name: "社区市场" });
+    expect(document.activeElement).toBe(market);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "正在读取…" }).disabled).toBe(true);
+    expect(read).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 2 }));
+    await act(async () => {
+      if (outcome === "success") finish({ packages: [], limit: 2, offset: 2 });
+      else fail(new Error("still offline"));
+    });
+    expect(document.activeElement).toBe(market);
+    expect(screen.getByText("one")).toBeTruthy();
+    if (outcome === "success") expect(screen.queryByRole("button", { name: "加载更多" })).toBeNull();
+    else expect(screen.getByRole("alert").textContent).toContain("still offline");
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("searchbox"));
+  });
+
   it("retries a failed list request without changing its filters", async () => {
     const port = new MockPort() as unknown as AgentPort;
     let finish!: (value: MarketList) => void;
@@ -29,13 +63,21 @@ describe("market list", () => {
     await screen.findByText("没有找到已固定内容的包。可关闭筛选查看全部包。");
     await userEvent.type(screen.getByRole("searchbox"), "kit");
     await screen.findByText("无法读取社区市场");
-    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(screen.getByRole("alert").textContent).toContain("offline");
+    expect(screen.queryByRole("button", { name: "查看全部包" })).toBeNull();
+    screen.getByRole("button", { name: "重试" }).focus();
+    await userEvent.keyboard("{Enter}");
 
     expect(screen.queryByText("无法读取社区市场")).toBeNull();
     expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
     expect(screen.getByRole("status").textContent).toBe("正在读取…");
+    const market = screen.getByRole("region", { name: "社区市场" });
+    expect(document.activeElement).toBe(market);
     await act(async () => finish({ packages: [row("a/kit", true)], limit: 24, offset: 0 }));
     await screen.findByText("kit");
+    expect(document.activeElement).toBe(market);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("searchbox"));
     expect(port.marketList).toHaveBeenCalledTimes(3);
     expect(vi.mocked(port.marketList).mock.calls[2]).toEqual(vi.mocked(port.marketList).mock.calls[1]);
     expect(vi.mocked(port.marketList).mock.calls[2]?.[0]).toMatchObject({ q: "kit", pinned: true, offset: 0 });
@@ -61,11 +103,41 @@ describe("market list", () => {
     expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
     expect(screen.getByRole("status").textContent).toBe("正在读取…");
     expect(screen.queryByRole("button", { name: "查看将安装的内容" })).toBeNull();
+    const detail = screen.getByRole("region", { name: "a/kit" });
+    expect(document.activeElement).toBe(detail);
     await act(async () => finish({ package: row("a/kit", true), pinned: true }));
     await screen.findByRole("button", { name: "查看将安装的内容" });
+    expect(document.activeElement).toBe(detail);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "返回列表" }));
     expect(port.marketDetail).toHaveBeenNthCalledWith(2, "a/kit");
     expect(screen.queryByText("无法读取 a/kit")).toBeNull();
     expect(plan).not.toHaveBeenCalled();
+  });
+
+  it.each(["list", "detail"])("keeps keyboard focus in the %s after a retry fails again", async (target) => {
+    const port = new MockPort() as unknown as AgentPort;
+    let fail!: (error: Error) => void;
+    const read = vi.fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+    if (target === "list") port.marketList = read;
+    else {
+      port.marketList = async () => ({ packages: [row("a/kit", true)], limit: 24, offset: 0 });
+      port.marketDetail = read;
+    }
+    render(<Market port={port} onInstalled={() => {}} />);
+    if (target === "detail") await userEvent.click(await screen.findByRole("button", { name: /kit/ }));
+    (await screen.findByRole("button", { name: "重试" })).focus();
+    await userEvent.keyboard("{Enter}");
+    const panel = screen.getByRole("region", { name: target === "list" ? "社区市场" : "a/kit" });
+    expect(document.activeElement).toBe(panel);
+    await act(async () => fail(new Error("still offline")));
+    expect(screen.getByRole("alert").textContent).toContain("still offline");
+    expect(document.activeElement).toBe(panel);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(target === "list" ? screen.getByRole("searchbox") : screen.getByRole("button", { name: "返回列表" }));
+    expect(read).toHaveBeenCalledTimes(2);
   });
 
   it.each(["success", "failure"])("ignores a stale detail %s after StrictMode replays the read", async (outcome) => {
@@ -129,6 +201,8 @@ describe("market list", () => {
     expect(screen.getByText("two")).toBeTruthy();
     expect(screen.queryByText("无法读取社区市场")).toBeNull();
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "正在读取…" }).disabled).toBe(true);
+    expect(screen.getAllByText("正在读取…")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "正在读取…" }).getAttribute("aria-live")).toBe("polite");
     expect(vi.mocked(port.marketList).mock.calls[2]).toEqual(vi.mocked(port.marketList).mock.calls[1]);
     expect(vi.mocked(port.marketList).mock.calls[2]?.[0]).toMatchObject({ offset: 2 });
     await act(async () => finish({ packages: [row("b/two", true), row("c/three", true)], limit: 2, offset: 2 }));
@@ -164,8 +238,12 @@ describe("market list", () => {
       return { packages: [row("b/raw", false)], limit: 24, offset: 0 };
     });
     render(<Market port={port} onInstalled={() => {}} />);
-    await userEvent.click(await screen.findByRole("button", { name: "查看全部包" }));
+    const showAll = await screen.findByRole("button", { name: "查看全部包" });
+    expect(screen.getByRole("alert").textContent).toContain("社区市场暂不支持只列出已固定内容的包");
+    expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
+    await userEvent.click(showAll);
     await screen.findByText("raw");
+    expect(document.activeElement).toBe(screen.getByRole("region", { name: "社区市场" }));
     expect(screen.getByRole<HTMLInputElement>("checkbox", { name: "只看已固定" }).checked).toBe(false);
   });
 

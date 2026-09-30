@@ -3201,6 +3201,7 @@
     box-shadow: var(--lit), 0 1px 2px rgb(0 0 0 / .07);
   }
   .mkt { display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+  .mkt[tabindex="-1"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
   .mkt.addpkg { border-top: 0; padding: 0 }
   .mkt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
   .mkt-q {
