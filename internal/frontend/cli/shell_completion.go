@@ -112,7 +112,7 @@ func cliCompletionRootSpec() cliCompletionSpec {
 		completionFlag("--output-format", cliCompletionStaticValue, "text", "json", "stream-json"),
 		completionFlag("--add-dir", cliCompletionPathValue),
 		completionFlag("--allowed-tools --allowedTools", cliCompletionStaticValue),
-		completionFlag("--ablate", cliCompletionStaticValue, "none", "all", "evidence", "planner", "subagent", "retrieval", "compaction"),
+		completionFlag("--ablate", cliCompletionStaticValue, "none", "all", "evidence", "planner", "subagent", "retrieval", "compaction", "upstream", "recall-search"),
 		help,
 	}
 	root := cliCompletionSpec{name: "reasonix", flags: append([]cliCompletionFlag{
