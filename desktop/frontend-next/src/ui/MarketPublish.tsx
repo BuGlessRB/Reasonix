@@ -38,9 +38,19 @@ interface Draft {
 
 const EMPTY: Draft = { kind: "skill", name: "", source: "", summary: "", description: "", repoUrl: "", version: "", tags: "", private: false };
 
+interface PublishProps { port: AgentPort; handle: string; onMine: () => void }
+
+export function PublishForm(props: PublishProps) {
+  const [owner, setOwner] = useState({ port: props.port, handle: props.handle, generation: 0 });
+  if (owner.port !== props.port || owner.handle !== props.handle) {
+    setOwner({ port: props.port, handle: props.handle, generation: owner.generation + 1 });
+  }
+  return <PublishDraft key={owner.generation} {...props} />;
+}
+
 // The form only collects; which sources are publishable and what the registry
 // accepts are the kernel's and the registry's answers, shown as they come back.
-export function PublishForm({ port, handle, onMine }: { port: AgentPort; handle: string; onMine: () => void }) {
+function PublishDraft({ port, handle, onMine }: PublishProps) {
   const [d, setD] = useState<Draft>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
