@@ -144,6 +144,10 @@ model = "x"
 				if err != nil || len(tools) != 1 || tools[0].Name() != "mcp__ops__deploy" {
 					t.Fatalf("compatible package tools = %v, err=%v", tools, err)
 				}
+				owned, ok := tools[0].(interface{ MCPPackageName() string })
+				if !ok || owned.MCPPackageName() != "compatible-ops" {
+					t.Fatal("connected tool lost its compatible package owner")
+				}
 				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 				defer cancel()
 				result, err := tools[0].Execute(ctx, json.RawMessage(`{}`))

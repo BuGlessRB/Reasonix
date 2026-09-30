@@ -479,6 +479,7 @@ func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, 
 				return
 			}
 			spec.LaunchManager = specOptions.LaunchManager
+			spec.Package = strings.TrimSpace(specOptions.PackageOwners[spec.Name])
 			if strings.TrimSpace(spec.ConfigSource) == "" {
 				spec.ConfigSource = specOptions.ConfigSource
 			}
