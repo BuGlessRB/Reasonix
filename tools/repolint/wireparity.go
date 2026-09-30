@@ -23,6 +23,7 @@ const (
 	tsShellFile    = "desktop/frontend-next/src/port/shell.ts"
 	tsShareFile    = "desktop/frontend-next/src/port/share.ts"
 	tsProviderFile = "desktop/frontend-next/src/port/provider.ts"
+	tsFeedbackFile = "desktop/frontend-next/src/port/feedback.ts"
 )
 
 // mirroredWireTypes are the Go types the desktop keeps a second, hand-written
@@ -122,6 +123,16 @@ var mirroredWireTypes = []wireMirror{
 	// read puts the config name back on screen after the user renamed it.
 	{"internal/frontend/serve/providers.go", "providerView", tsProviderFile, "ProviderEntry"},
 	{"internal/frontend/serve/settings.go", "modelEntry", tsModelFile, "ModelEntry"},
+	// The report form draws what the kernel will send and reads back what
+	// became of it; a field the page cannot read is a status it cannot show.
+	{"internal/platform/feedback/types.go", "Env", tsFeedbackFile, "FeedbackEnvInfo"},
+	{"internal/platform/feedback/types.go", "Limits", tsFeedbackFile, "FeedbackLimits"},
+	{"internal/platform/feedback/types.go", "Receipt", tsFeedbackFile, "FeedbackReceipt"},
+	{"internal/platform/feedback/types.go", "Item", tsFeedbackFile, "FeedbackItem"},
+	{"internal/platform/feedback/types.go", "Mine", tsFeedbackFile, "FeedbackMine"},
+	{"internal/frontend/serve/feedback.go", "feedbackEnvView", tsFeedbackFile, "FeedbackEnv"},
+	{"internal/frontend/serve/feedback.go", "feedbackSubmitBody", tsFeedbackFile, "FeedbackRequest"},
+	{"internal/frontend/serve/feedback.go", "feedbackImageBody", tsFeedbackFile, "FeedbackImage"},
 }
 
 type wireMirror struct {
