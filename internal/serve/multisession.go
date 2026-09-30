@@ -17,6 +17,7 @@ import (
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/plugin"
+	"reasonix/internal/session"
 )
 
 // sessionTagSink stamps every event from one controller with that
@@ -275,7 +276,7 @@ func (s *Server) buildTaggedMode(ctx context.Context, ref string, inheritTemp, n
 }
 
 func (s *Server) detachedBusy(path string) bool {
-	path = agent.CanonicalSessionPath(path)
+	path = sessionRouteKey(path)
 	s.detachedMu.Lock()
 	defer s.detachedMu.Unlock()
 	_, ok := s.detached[path]
@@ -286,7 +287,7 @@ func (s *Server) detachedBusy(path string) bool {
 // request goroutine. Waiting for done is essential: without the acknowledgement
 // the watcher can close an idle controller just after it is re-attached.
 func (s *Server) takeDetached(path string) *detachedSession {
-	path = agent.CanonicalSessionPath(path)
+	path = sessionRouteKey(path)
 	s.detachedMu.Lock()
 	d := s.detached[path]
 	if d != nil && !d.retiring {
@@ -330,6 +331,14 @@ func (s *Server) registerDetached(ctrl control.SessionAPI, keeper *control.Sessi
 	}
 	s.detachedMu.Lock()
 	path := agent.CanonicalSessionPath(ctrl.SessionPath())
+	if path == "" {
+		// Identity (exclusive v3) sessions deliberately carry no legacy path;
+		// their detached key is the immutable session-id route. Transcript and
+		// runtime reads already resolve detached controllers by identity.
+		if ref, ok := sessionAPIRef(ctrl); ok && ref.SessionID != "" {
+			path = remoteSessionIDQueryPrefix + ref.SessionID
+		}
+	}
 	if path == "" {
 		s.detachedMu.Unlock()
 		return nil, fmt.Errorf("cannot detach a session without a path")
@@ -519,6 +528,69 @@ func (s *Server) busyDetach(ctx context.Context, cur *control.Controller, target
 	return nil
 }
 
+// sessionAPIRef reads the immutable v3 identity off any session API without
+// requiring the concrete controller type.
+func sessionAPIRef(ctrl control.SessionAPI) (session.SessionRef, bool) {
+	identity, ok := ctrl.(interface {
+		SessionRef() (session.SessionRef, bool)
+	})
+	if !ok {
+		return session.SessionRef{}, false
+	}
+	return identity.SessionRef()
+}
+
+// busySwitchIdentity backgrounds a busy exclusive-session controller and
+// brings the target identity session to the foreground — the identity-route
+// counterpart of busyDetach. The replacement controller opens the target
+// through the shared session service; the detached registry (identity-keyed)
+// keeps the running turn observable until it is re-attached. It fails with
+// errIdentityServiceUnavailable when this host cannot build an
+// identity-capable replacement; the caller then keeps the historical refusal.
+func (s *Server) busySwitchIdentity(ctx context.Context, cur *control.Controller, ref session.SessionRef) error {
+	if s.tagFor(cur) == nil {
+		return errSessionTagUnavailable
+	}
+	next, tag, err := s.buildTaggedMode(ctx, currentModelRef(cur), false, false)
+	if err != nil {
+		return err
+	}
+	if next.SessionService() == nil {
+		s.closeTaggedController(next)
+		return errIdentityServiceUnavailable
+	}
+	if _, err := next.OpenSession(ctx, ref); err != nil {
+		s.closeTaggedController(next)
+		return err
+	}
+	if bound, ok := next.SessionRef(); ok {
+		tag.PrimeIdentity("", bound.SessionID)
+	}
+	next.EnableInteractiveApproval()
+	next.SetOnSessionRecovered(s.sessionRecoveryHandler(next, s.leases))
+	if !s.publishControllerSwap(cur, next, "") {
+		s.closeTaggedController(next)
+		return errReplacedDuringBind
+	}
+	var demoted *control.SessionLeaseKeeper
+	if s.leases != nil {
+		demoted = s.leases.Split()
+	}
+	if _, err := s.registerDetached(cur, demoted, nil); err != nil {
+		// bindMu prevents another foreground swap here. Roll publication back so
+		// a registry failure cannot strand a running controller.
+		_ = s.publishControllerSwap(next, cur, cur.SessionPath())
+		s.closeTaggedController(next)
+		if demoted != nil {
+			s.leases.Adopt(demoted)
+		}
+		return err
+	}
+	tag.Activate()
+	slog.Info("serve: busy identity session detached", "session", ref.SessionID)
+	return nil
+}
+
 func (s *Server) announceSessionChanged(path string, reset bool) {
 	e := event.Event{Kind: event.SessionChanged, SessionPath: path, SessionReset: reset}
 	if identity, ok := s.ctl().(control.IdentityLifecycle); ok {
@@ -548,6 +620,7 @@ func (s *sessionTagSink) ActivateRuntime() {
 
 var errReplacedDuringBind = &replacedDuringBindError{}
 var errSessionTagUnavailable = errors.New("multi-session switching requires a session-tagged Serve controller")
+var errIdentityServiceUnavailable = errors.New("identity switching requires a session-service-capable Serve controller")
 
 type replacedDuringBindError struct{}
 
@@ -616,7 +689,11 @@ func (s *Server) reattachDetached(cur control.SessionAPI, detached *detachedSess
 	s.leases.Adopt(detached.keeper)
 	detached.keeper = nil
 	if detached.tag != nil {
-		detached.tag.SetPath(detached.ctrl.SessionPath())
+		if ref, ok := sessionAPIRef(detached.ctrl); ok && ref.SessionID != "" && detached.ctrl.SessionPath() == "" {
+			detached.tag.SetIdentity("", ref.SessionID)
+		} else {
+			detached.tag.SetPath(detached.ctrl.SessionPath())
+		}
 	}
 	if concrete, ok := detached.ctrl.(*control.Controller); ok {
 		concrete.SetOnSessionRecovered(s.sessionRecoveryHandler(concrete, s.leases))
