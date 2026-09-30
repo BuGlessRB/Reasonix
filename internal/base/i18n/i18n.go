@@ -592,6 +592,8 @@ type Messages struct {
 	ProviderErrDroppedReasoning    string
 	ProviderErrAuth                string // 401 — no key configured / sent
 	ProviderErrAuthRejected        string // 401 — a key was sent but the server rejected it
+	ProviderErrDNSNotFound         string // model host name does not resolve
+	ProviderErrDNSTemporary        string // resolver unreachable or timed out
 	ProviderErrInsufficientBalance string // 402
 	ProviderErrUnprocessable       string // 422
 	ProviderErrInputSensitive      string // MiniMax 1026

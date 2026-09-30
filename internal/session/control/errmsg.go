@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 
@@ -22,6 +23,14 @@ func explainError(err error) error {
 	}
 	if provider.IsStreamInterrupted(err) {
 		return fmt.Errorf("model stream interrupted after recovery attempts: %s. The partial response was kept; retry or ask Reasonix to continue", err.Error())
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		msg := i18n.M.ProviderErrDNSTemporary
+		if dnsErr.IsNotFound {
+			msg = i18n.M.ProviderErrDNSNotFound
+		}
+		return fmt.Errorf(msg, dnsErr.Name)
 	}
 	if neterr.IsConnReset(err) {
 		return fmt.Errorf("model stream disconnected before completion after retry attempts: %s. Check the provider/proxy connection, then retry or ask Reasonix to continue", err.Error())

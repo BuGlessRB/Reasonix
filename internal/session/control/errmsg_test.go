@@ -2,8 +2,12 @@ package control
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"strings"
+	"syscall"
 	"testing"
 
 	"reasonix/internal/base/i18n"
@@ -174,5 +178,36 @@ func TestRedactAuthReason(t *testing.T) {
 		if got := redactAuthReason(c.in); got != c.want {
 			t.Errorf("%s: redactAuthReason(%q) = %q, want %q", c.name, c.in, got, c.want)
 		}
+	}
+}
+
+func TestExplainErrorDNSFailureIsNotConnReset(t *testing.T) {
+	wrap := func(dns *net.DNSError) error {
+		return fmt.Errorf("deepseek: %w", &url.Error{Op: "Post", URL: "https://api.deepseek.com/chat/completions", Err: &net.OpError{Op: "dial", Net: "tcp", Err: dns}})
+	}
+	cases := []struct {
+		name string
+		dns  *net.DNSError
+		want string
+	}{
+		{"not found", &net.DNSError{Err: "no such host", Name: "api.deepseek.com", IsNotFound: true}, i18n.M.ProviderErrDNSNotFound},
+		{"temporary", &net.DNSError{Err: "i/o timeout", Name: "api.deepseek.com", IsTimeout: true, IsTemporary: true}, i18n.M.ProviderErrDNSTemporary},
+	}
+	for _, tc := range cases {
+		got := explainError(wrap(tc.dns)).Error()
+		if want := fmt.Sprintf(tc.want, "api.deepseek.com"); !strings.Contains(got, want) {
+			t.Errorf("%s: %q lacks %q", tc.name, got, want)
+		}
+		if strings.Contains(got, "after retry attempts") || strings.Contains(got, "disconnected") {
+			t.Errorf("%s: DNS failure reported as a reset: %q", tc.name, got)
+		}
+		if !strings.Contains(got, "api.deepseek.com") {
+			t.Errorf("%s: host name dropped: %q", tc.name, got)
+		}
+	}
+
+	reset := fmt.Errorf("read: %w", &net.OpError{Op: "read", Err: syscall.ECONNRESET})
+	if got := explainError(reset).Error(); !strings.Contains(got, "disconnected before completion") {
+		t.Errorf("ECONNRESET changed: %q", got)
 	}
 }
