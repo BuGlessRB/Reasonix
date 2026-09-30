@@ -3,6 +3,17 @@
 // code adds one here. i18n.test.ts is what stops one from being forgotten.
 
 export const EN_KERNEL: Record<string, string> = {
+  "反馈通道今日已满，请明天再试": "Feedback is at capacity for today - try again tomorrow",
+  "截图无法清除其中的元数据，请换一张或先用截图工具重新导出": "An image could not be cleaned of its metadata - pick another or re-export it",
+  "反馈内容不符合要求，请检查后重试": "That feedback could not be accepted - check the fields and try again",
+  "反馈内容过大，请缩短文字或减少截图": "That feedback is too large - shorten the text or attach fewer screenshots",
+  "提交太频繁了，请稍后再试": "Too many submissions - try again a little later",
+  "反馈通道暂时关闭，请稍后再试，或直接到 GitHub 提交问题": "Feedback is switched off for now - try again later, or open an issue on GitHub",
+  "相同内容的反馈刚刚提交过了": "The same feedback was just sent",
+  "反馈服务没有接受本机的反馈身份，请重试": "The feedback service did not accept this install's identity - try again",
+  "无法连接反馈服务，请检查网络后重试，已填内容会保留": "The feedback service cannot be reached - check the network and retry; what you wrote is kept",
+  "反馈服务暂时无法处理请求，请稍后再试": "The feedback service could not handle that - try again later",
+  "本机保存反馈记录失败，请重试": "Feedback could not be recorded on this machine - try again",
   "该决定已不符合当前状态：计划在你回答前已发生变更": "That decision is no longer current - the plan changed before you answered",
   "该条已发送给模型，无法撤回": "That line already reached the model - it cannot be taken back",
   // 能力开关：名字、这台机器的存档、以及服务器自己

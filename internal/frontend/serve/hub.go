@@ -284,13 +284,14 @@ func (h *Hub) Open(ctx context.Context, req OpenRequest) (*Runtime, error) {
 	bc := NewBroadcaster()
 	paneSink := h.decorateSink(bc)
 	built, err := boot.BuildRuntime(ctx, boot.Options{
-		Model:         strings.TrimSpace(req.Model),
-		WorkspaceRoot: root,
-		SessionDir:    SessionDirFor(root),
-		Sink:          paneSink,
-		Stderr:        os.Stderr,
-		StatsSource:   h.surface(),
-		BalanceStore:  h.wallets,
+		Model:           strings.TrimSpace(req.Model),
+		WorkspaceRoot:   root,
+		SessionDir:      SessionDirFor(root),
+		Sink:            paneSink,
+		Stderr:          os.Stderr,
+		StatsSource:     h.surface(),
+		FeedbackSurface: feedbackSurface(h.surface()),
+		BalanceStore:    h.wallets,
 
 		ProviderResolver: h.opts.ProviderResolver,
 	})

@@ -15,14 +15,18 @@ func SetClientVersion(v string) {
 	clientVersion.Store(&v)
 }
 
+// ClientVersion is the version SetClientVersion recorded, or "dev".
+func ClientVersion() string {
+	if p := clientVersion.Load(); p != nil && *p != "" {
+		return *p
+	}
+	return "dev"
+}
+
 // ClientUserAgent is the identity a model request presents to the endpoint and
 // any gateway in front of it: Reasonix/<version>.
 func ClientUserAgent() string {
-	v := "dev"
-	if p := clientVersion.Load(); p != nil && *p != "" {
-		v = *p
-	}
-	return "Reasonix/" + v
+	return "Reasonix/" + ClientVersion()
 }
 
 // ApplyClientIdentity sets ClientUserAgent unless a User-Agent is already set,

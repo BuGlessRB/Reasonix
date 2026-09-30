@@ -316,6 +316,7 @@ var Chinese = Messages{
 	CmdMcp:              "MCP 服务器",
 	CmdRemote:           "远程 SSH 主机",
 	CmdHooks:            "管理 hooks",
+	CmdFeedback:         "向维护者提交反馈，或查看我的反馈",
 	CmdPlugins:          "管理插件包",
 	CmdPasteImage:       "粘贴剪贴板图片",
 	CmdOutputStyle:      "列出输出风格",

@@ -372,6 +372,11 @@ func isCrashCaptureFrame(functionName string) bool {
 		strings.Contains(functionName, ".runWithCrashCapture.func")
 }
 
+// Redact masks what a person would not want published from free text: home
+// directories, emails, credentials and long opaque tokens. Every outbound
+// report goes through this one implementation.
+func Redact(value string, max int) string { return sanitizeText(value, max) }
+
 func sanitizeField(value string, max int) string {
 	return sanitizeText(value, max)
 }

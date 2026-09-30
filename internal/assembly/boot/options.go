@@ -7,6 +7,7 @@ import (
 
 	"reasonix/internal/contract/config"
 	"reasonix/internal/platform/browser"
+	"reasonix/internal/platform/feedback"
 	"reasonix/internal/platform/gitcmd"
 
 	"reasonix/internal/contract/ablation"
@@ -61,6 +62,9 @@ type Options struct {
 	// build does not know — disables usage recording rather than filing turns
 	// under a label nothing can read back.
 	StatsSource surface.Surface
+	// FeedbackSurface is the frontend a report from this session names. Empty
+	// leaves /feedback unavailable: a headless run or an editor has no form.
+	FeedbackSurface feedback.Surface
 	// BalanceStore lets a host that builds several runtimes — a window with more
 	// than one pane — read one wallet through one cache. Nil gives each runtime
 	// a private one.

@@ -327,6 +327,17 @@ const SAID: Record<string, string> = {
   "wallet.unauthorized": "该供应商拒绝了当前密钥，无法读取余额",
   "wallet.unreachable": "该供应商的余额接口无响应",
   "wallet.unreadable": "无法解析该供应商余额接口返回的内容",
+  "feedback.invalid": "反馈内容不符合要求，请检查后重试",
+  "feedback.too_large": "反馈内容过大，请缩短文字或减少截图",
+  "feedback.rate_limited": "提交太频繁了，请稍后再试",
+  "feedback.disabled": "反馈通道暂时关闭，请稍后再试，或直接到 GitHub 提交问题",
+  "feedback.duplicate": "相同内容的反馈刚刚提交过了",
+  "feedback.bad_token": "反馈服务没有接受本机的反馈身份，请重试",
+  "feedback.offline": "无法连接反馈服务，请检查网络后重试，已填内容会保留",
+  "feedback.unavailable": "反馈服务暂时无法处理请求，请稍后再试",
+  "feedback.internal": "本机保存反馈记录失败，请重试",
+  "feedback.busy": "反馈通道今日已满，请明天再试",
+  "feedback.image_metadata": "截图无法清除其中的元数据，请换一张或先用截图工具重新导出",
 
   // ── 远程连接停下来问的那一句 ───────────────────────────────────
   "ask.not_found": "不存在该待回答的问题",

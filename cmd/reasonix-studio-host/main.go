@@ -34,6 +34,7 @@ import (
 	"reasonix/internal/frontend/traystate"
 	"reasonix/internal/platform/account"
 	"reasonix/internal/platform/appupdate"
+	"reasonix/internal/platform/feedback"
 	"reasonix/internal/platform/instanceid"
 	"reasonix/internal/platform/notify"
 	"reasonix/internal/platform/remotecloud"
@@ -313,12 +314,13 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 	}
 	root := boot.ResolveWorkspaceRoot("")
 	built, err := boot.BuildRuntime(ctx, boot.Options{
-		Version:       version,
-		WorkspaceRoot: root,
-		SessionDir:    serve.SessionDirFor(root),
-		Sink:          paneSink,
-		Stderr:        logs,
-		StatsSource:   surface.Desktop,
+		Version:         version,
+		WorkspaceRoot:   root,
+		SessionDir:      serve.SessionDirFor(root),
+		Sink:            paneSink,
+		Stderr:          logs,
+		StatsSource:     surface.Desktop,
+		FeedbackSurface: feedback.SurfaceStudio,
 	})
 	if err != nil {
 		return nil, err
