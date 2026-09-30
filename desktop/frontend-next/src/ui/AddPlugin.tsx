@@ -32,13 +32,12 @@ interface Props {
 }
 
 export function AddPlugin({ port, onClose, onInstalled, updating, source }: Props) {
-  // Mounted only while open, so this component is the layer Escape closes.
-  useEscape(true, onClose);
   const [text, setText] = useState(updating?.source ?? source ?? "");
   const [plan, setPlan] = useState<PluginPlan | null>(null);
   const [done, setDone] = useState<PluginPlan | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  useEscape(true, () => { if (!updating || !plan || !busy) onClose(); });
 
   const request = (planId?: string) => ({
     source: text.trim(),
@@ -122,7 +121,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source }: Prop
     })).filter((g) => g.actions.length > 0);
     const gained = updating ? newlyGained(updating, plan.actions ?? []) : [];
     return (
-      <div className="addpkg" data-stage="confirm">
+      <div className="addpkg" data-stage="confirm" aria-busy={busy}>
         {/* What this version brings that the installed one did not. A package
             that was only skills last time and starts a process this time is
             the case the whole confirmation exists for. */}
@@ -154,6 +153,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source }: Prop
           <button
             className="act"
             data-action={updating ? "extensions.cancel" : "extensions.back"}
+            disabled={!!updating && busy}
             onClick={() => (updating ? onClose() : setPlan(null))}
           >
             {t(updating ? "取消" : "返回")}
@@ -177,7 +177,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source }: Prop
   // a failure there is about the recorded source, not about what was typed.
   if (updating) {
     return (
-      <div className="addpkg" data-stage="reading">
+      <div className="addpkg" data-stage="reading" aria-busy={busy}>
         <div className="find" data-lvl={error ? "err" : undefined}>
           <span className="t">{error ? t("无法读取 {name} 的来源", { name: updating.name }) : t("正在读取 {name} 的来源…", { name: updating.name })}</span>
           <span className="why">{error || updating.source}</span>
