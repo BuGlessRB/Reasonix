@@ -214,6 +214,8 @@ export const ACTIONS: UIAction[] = [
   { id: "market.sort", kind: "view", target: "none", proof: "interaction" },
   { id: "market.pinned", kind: "view", target: "none", proof: "interaction" },
   { id: "market.show-all", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.retry", kind: "view", target: "none", proof: "interaction" },
+  { id: "market.detail-retry", kind: "view", target: "none", proof: "interaction" },
   { id: "market.more", kind: "view", target: "none", proof: "interaction" },
   { id: "market.open", kind: "navigation", target: "none", proof: "interaction" },
   { id: "market.back", kind: "navigation", target: "none", proof: "interaction" },
