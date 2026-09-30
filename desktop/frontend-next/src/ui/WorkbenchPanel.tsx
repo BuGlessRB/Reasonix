@@ -143,6 +143,12 @@ export function WorkbenchPanel({
   const [showFiles, setShowFiles] = useState(false);
   const [query, setQuery] = useState(""),
     [selected, setSelected] = useState("");
+  // Docked, the file list hides the canvas a page is drawn in, so choosing any
+  // surface steps the list aside.
+  const pick = useCallback((key: string) => {
+    setShowFiles(false);
+    setSelected(key);
+  }, []);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set()),
     [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   // The explorer's own failure, drawn in the explorer: the file view's error
@@ -257,7 +263,7 @@ export function WorkbenchPanel({
     if (!manual) return;
     if (agentNow.current) {
       dropBlankStart();
-      setSelected(`browser:${agentNow.current}`);
+      pick(`browser:${agentNow.current}`);
       return;
     }
     // A shell that draws views opens a view here too: a framed page is refused
@@ -265,13 +271,13 @@ export function WorkbenchPanel({
     if (host().drawsBrowserViews()) {
       port
         .browserOpen("about:blank", true)
-        .then((tab) => setSelected(`browser:${tab.target}`))
+        .then((tab) => pick(`browser:${tab.target}`))
         .catch((e) => setFailed(reason(e)));
       return;
     }
     setBrowsers((open) => (open.length ? open : ["b0"]));
     setSelected((at) => (at.startsWith("manual:") ? at : "manual:b0"));
-  }, [manual, dropBlankStart, port]);
+  }, [manual, dropBlankStart, pick, port]);
   // A page that has just appeared is the one somebody wants to see, whoever
   // opened it: the agent's popup, or a link the person followed, which opens
   // beside the agent's tab without becoming the one it acts on.
@@ -287,9 +293,9 @@ export function WorkbenchPanel({
     for (const id of ids) known.current.add(id);
     if (fresh.length) {
       dropBlankStart();
-      setSelected(`browser:${fresh[fresh.length - 1]}`);
+      pick(`browser:${fresh[fresh.length - 1]}`);
     }
-  }, [tabs, dropBlankStart]);
+  }, [tabs, dropBlankStart, pick]);
   // Where the agent is looking, followed as it moves: a new page, or the same
   // tab sent somewhere else.
   const lastAgent = useRef<string | null>(null);
@@ -298,8 +304,8 @@ export function WorkbenchPanel({
     lastAgent.current = agentAt;
     if (before === null || !agentAt || before === agentAt) return;
     dropBlankStart();
-    setSelected(`browser:${agentTarget}`);
-  }, [agentAt, agentTarget, dropBlankStart]);
+    pick(`browser:${agentTarget}`);
+  }, [agentAt, agentTarget, dropBlankStart, pick]);
   const noteHost = useCallback(
     (id: string, host: string) =>
       setHosts((v) => (v[id] === host ? v : { ...v, [id]: host })),
@@ -386,14 +392,13 @@ export function WorkbenchPanel({
   // Picking a file is asking to read it. Docked, the list and the file share one
   // column, so the list steps aside; side by side it stays where it is.
   const openFile = (path: string) => {
-    setShowFiles(false);
     setOpenFiles((v) => (v.includes(path) ? v : [...v, path]));
     setDismissed((v) => {
       const n = new Set(v);
       n.delete(`file:${path}`);
       return n;
     });
-    setSelected(`file:${path}`);
+    pick(`file:${path}`);
   };
   // A rendered document's own links open beside it and its images load from the
   // tree. Held stable per document, so typing re-renders the text alone.
@@ -440,12 +445,12 @@ export function WorkbenchPanel({
     if (!host().drawsBrowserViews()) {
       const id = `b${(minted.current += 1)}`;
       setBrowsers((v) => [...v, id]);
-      setSelected(`manual:${id}`);
+      pick(`manual:${id}`);
       return;
     }
     try {
       const tab = await port.browserOpen("about:blank", true);
-      setSelected(`browser:${tab.target}`);
+      pick(`browser:${tab.target}`);
     } catch (e) {
       setFailed(reason(e));
     }
@@ -504,7 +509,7 @@ export function WorkbenchPanel({
 ` : ""}${surface.tab.url}`
                   : labelOf(surface, hosts)
               }
-              onClick={() => setSelected(keyOf(surface))}
+              onClick={() => pick(keyOf(surface))}
             >
               <StudioIcon name={surface.kind === "file" ? "file" : "globe"} />
               <span>{labelOf(surface, hosts)}</span>
