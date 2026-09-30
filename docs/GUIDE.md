@@ -716,6 +716,10 @@ Composer shortcuts:
 | Plain `Up` / `Down` at the prompt boundary | Recalls older or newer submitted prompts | Modified arrows and native text navigation stay with the textarea. |
 | `Esc` while a turn is running | Cancels the running turn | If the turn has not produced a response yet, the draft is restored. |
 
+Remembered projects have Move up / Move down in their project menu. Open it with the keyboard, navigate with arrows or Home/End, and use Escape to return to the trigger. Moving a project changes sidebar order without changing the launch project.
+
+The list holds up to 32 projects; adding another requires removing one first. `serve-workspaces.json` now stores an object with `paths` and `launch`. Older binaries read only arrays and cannot preserve this format: do not share the same state home with an older binary after reordering.
+
 Menus and controls:
 
 | Key or control | What it does | Notes |

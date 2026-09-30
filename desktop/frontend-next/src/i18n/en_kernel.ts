@@ -239,6 +239,7 @@ export const EN_KERNEL: Record<string, string> = {
   "这份备份已不存在": "That backup no longer exists",
   "备份数量已达上限，请先删除一份旧备份": "The backup limit is reached; delete an older backup first",
   "有会在本机运行程序或改变密钥去向的项目，需要逐项确认后才能恢复": "Some items run programs here or change where a key is sent; confirm each one before restoring",
+  "项目列表已满（32 个），请先移除一个项目再添加": "The project list is full (32 projects); remove one before adding another",
   "这台服务器不支持切换工作区": "This server cannot switch workspaces",
   "不存在该预设": "There is no such preset",
   "本次拖入 {count} 个，最多允许 {limit} 个": "{count} dropped at once — the limit is {limit}",

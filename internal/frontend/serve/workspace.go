@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"reasonix/internal/assembly/boot"
@@ -28,94 +27,6 @@ const workspaceRecentMax = 32
 // would otherwise let any client repoint the agent at any directory it can
 // read. The desktop shell asks because its only client is its own window.
 func (s *Server) AllowWorkspaceSwitch() { s.grants.workspaceSwitch = true }
-
-// workspacesPath is where this frontend remembers the folders it has driven.
-// Deliberately not the desktop app's list: that file doubles as its startup
-// chdir pointer, and switching a project here must not move another app.
-func workspacesPath() string {
-	dir := config.MemoryUserDir()
-	if dir == "" {
-		return ""
-	}
-	return filepath.Join(dir, "serve-workspaces.json")
-}
-
-// Workspaces is the most-recent-first list of folders this frontend has opened.
-// Exported for the shell, which reopens the head of the list at launch.
-func Workspaces() []string {
-	p := workspacesPath()
-	if p == "" {
-		return nil
-	}
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return nil
-	}
-	var paths []string
-	if json.Unmarshal(data, &paths) != nil {
-		return nil
-	}
-	out := make([]string, 0, len(paths))
-	seen := map[string]bool{}
-	for _, path := range paths {
-		path = strings.TrimSpace(path)
-		if path == "" || seen[path] {
-			continue
-		}
-		seen[path] = true
-		out = append(out, path)
-	}
-	return out
-}
-
-// rememberWorkspace adds dir to the remembered list, newest first. A folder
-// already on the list keeps its position: the sidebar renders this order, and
-// re-sorting it on every open makes the tree jump under the pointer.
-func rememberWorkspace(dir string) {
-	if dir == "" {
-		return
-	}
-	existing := Workspaces()
-	if slices.Contains(existing, dir) {
-		return
-	}
-	paths := append([]string{dir}, existing...)
-	if len(paths) > workspaceRecentMax {
-		paths = paths[:workspaceRecentMax]
-	}
-	writeWorkspaces(paths)
-}
-
-// forgetWorkspace drops dir from the sidebar. Nothing on disk is touched.
-func forgetWorkspace(dir string) {
-	if dir == "" {
-		return
-	}
-	var paths []string
-	for _, path := range Workspaces() {
-		if path != dir {
-			paths = append(paths, path)
-		}
-	}
-	writeWorkspaces(paths)
-}
-
-func writeWorkspaces(paths []string) {
-	p := workspacesPath()
-	if p == "" {
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return
-	}
-	data, err := json.MarshalIndent(paths, "", "  ")
-	if err != nil {
-		return
-	}
-	if err := fileutil.AtomicWriteFile(p, data, 0o644); err != nil {
-		slog.Warn("serve: remember workspace", "err", err)
-	}
-}
 
 // SessionDirFor is where root's transcripts live. Exported because the shell
 // has to build its first controller with the same answer a later switch uses,
@@ -246,6 +157,11 @@ func (s *Server) switchWorkspaceLocked(ctx context.Context, dir string) error {
 		newCtrl.Close()
 		return fmt.Errorf("session changed during the workspace switch")
 	}
+	if err := addRememberedWorkspace(ctx, dir); err != nil {
+		s.mu.Unlock()
+		newCtrl.Close()
+		return err
+	}
 	s.ctrl = newCtrl
 	s.mu.Unlock()
 	s.nameWorkspaceHolder(newCtrl)
@@ -259,7 +175,6 @@ func (s *Server) switchWorkspaceLocked(ctx context.Context, dir string) error {
 		slog.Warn("serve: rebind session lease after workspace switch", "err", err)
 	}
 	s.bc.ResetSession()
-	rememberWorkspace(dir)
 
 	cur.Close()
 	return nil

@@ -31,6 +31,14 @@ describe("what a reader is told a refusal was", () => {
   // The gate the codes were for. The kernel rewords its own English whenever a
   // sentence reads better in a log; if that moves what a reader sees, wording
   // authority never actually left the kernel.
+  it("explains the project limit in Chinese and English", () => {
+    const error = coded("storage limit", "workspace.limit_reached");
+    expect(reason(error)).toBe("项目列表已满（32 个），请先移除一个项目再添加");
+    localStorage.setItem(STORAGE, "en");
+    boot();
+    expect(reason(error)).toBe("The project list is full (32 projects); remove one before adding another");
+  });
+
   it("does not move when the kernel rewords the same code", () => {
     const before = reason(coded("inbox item not found", "inbox.not_found"));
     const after = reason(coded("no such entry in this session's inbox", "inbox.not_found"));
