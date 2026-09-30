@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useEscape } from "./dismiss";
-import { t } from "../i18n";
+import { current as language, plural, t } from "../i18n";
 import { useFileDrop } from "./filedrop";
 import type { AgentPort, PluginAction, PluginPackage, PluginPlan } from "../port/port";
 import { reason } from "../i18n/kernel";
@@ -133,12 +133,12 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source }: Prop
                 ? `${updating.name} ${updating.version} → ${version(plan.actions)}`
                 : t("重装 {name}", { name: updating.name })}
             </span>
-            <span className="why">{gained.length ? t("本版本新增：{list}", { list: gained.join("、") }) : t("没有新增的可执行内容。")}</span>
+            <span className="why">{gained.length ? t("本版本新增：{list}", { list: gained.join(language() === "zh" ? "、" : " · ") }) : t("没有新增的可执行内容。")}</span>
           </div>
         )}
         {groups.map((g) => (
           <section className="rgrp" key={g.level} data-lvl={g.level}>
-            <h3>{RISK_TITLE[g.level] ?? g.level}</h3>
+            <h3>{t(RISK_TITLE[g.level] ?? g.level)}</h3>
             {g.actions.map((a, i) => (
               <Candidate a={a} key={`${a.kind}:${a.name}:${i}`} />
             ))}
@@ -244,9 +244,9 @@ export function Candidate({ a }: { a: PluginAction }) {
       </div>
       {runs.map((r) => (
         <div className="risk" data-kind="shell" key={r.label}>
-          <span className="lb">{r.label}</span>
+          <span className="lb">{t(r.label)}</span>
           <span className="dt">{r.detail}</span>
-          {r.why && <span className="why">{r.why}</span>}
+          {r.why && <span className="why">{t(r.why)}</span>}
         </div>
       ))}
       {adds.length > 0 && (
@@ -293,13 +293,13 @@ function executes(a: PluginAction): { label: string; detail: string; why?: strin
     });
   }
   if (a.runtime?.tools?.length) {
-    out.push({ label: "新增工具", detail: a.runtime.tools.join("、"), why: "agent 可以调用，每次调用照常经过权限确认" });
+    out.push({ label: "新增工具", detail: a.runtime.tools.join(language() === "zh" ? "、" : ", "), why: "agent 可以调用，每次调用照常经过权限确认" });
   }
   if (a.hookCount) {
-    out.push({ label: "自动化钩子", detail: `${a.hookCount} 条`, why: "在会话生命周期内自动执行" });
+    out.push({ label: "自动化钩子", detail: language() === "zh" ? t("{n} 条", { n: a.hookCount }) : plural(a.hookCount, "1 条钩子", "{n} 条钩子"), why: "在会话生命周期内自动执行" });
   }
   if (a.toolCount) {
-    out.push({ label: "外部服务", detail: `${a.toolCount} 个 MCP 服务`, why: "为 agent 提供的能力与内置工具等同" });
+    out.push({ label: "外部服务", detail: plural(a.toolCount, "1 个 MCP 服务", "{n} 个 MCP 服务"), why: "为 agent 提供的能力与内置工具等同" });
   }
   if (a.kind === "mcp" && a.command) {
     out.push({ label: "将启动", detail: [a.command, ...(a.args ?? [])].join(" ") });
@@ -320,29 +320,29 @@ function version(actions?: PluginAction[]): string {
 function newlyGained(current: PluginPackage, actions: PluginAction[]): string[] {
   const plugin = actions.find((a) => a.kind === "plugin");
   const out: string[] = [];
-  if (plugin?.runtime && !current.runtime) out.push("一个常驻进程");
+  if (plugin?.runtime && !current.runtime) out.push(t("一个常驻进程"));
   const tools = (plugin?.runtime?.tools ?? []).filter((name) => !current.runtime?.tools?.includes(name));
-  if (tools.length > 0) out.push(`工具 ${tools.join("、")}`);
+  if (tools.length > 0) out.push(t("工具 {names}", { names: tools.join(language() === "zh" ? "、" : ", ") }));
   const hooks = (plugin?.hookCount ?? 0) - (current.hooks?.length ?? 0);
-  if (hooks > 0) out.push(`${hooks} 条钩子`);
+  if (hooks > 0) out.push(plural(hooks, "一条钩子", "{n} 条钩子"));
   const servers = (plugin?.toolCount ?? 0) - (current.mcpServers?.length ?? 0);
-  if (servers > 0) out.push(`${servers} 个外部服务`);
+  if (servers > 0) out.push(plural(servers, "一个外部服务", "{n} 个外部服务"));
   // A separate MCP action installs a server of its own, outside the package.
   const standalone = actions.filter((a) => a.kind === "mcp").length;
-  if (standalone > 0) out.push(`${standalone} 个独立的 MCP 服务`);
+  if (standalone > 0) out.push(plural(standalone, "一个独立的 MCP 服务", "{n} 个独立的 MCP 服务"));
   return out;
 }
 
 function contributes(a: PluginAction): string[] {
   const parts: string[] = [];
-  const add = (n: number | undefined, unit: string) => {
-    if (n) parts.push(`${n} ${unit}`);
+  const add = (n: number | undefined, one: string, many: string) => {
+    if (n) parts.push(plural(n, one, many));
   };
-  add(a.skillCount, "个技能");
-  add(a.commandCount, "个命令");
-  add(a.agentCount, "个子代理");
-  add(a.promptCount, "个提示词");
-  add(a.themeCount, "套配色");
+  add(a.skillCount, "1 个技能", "{n} 个技能");
+  add(a.commandCount, "1 个命令", "{n} 个命令");
+  add(a.agentCount, "1 个子代理", "{n} 个子代理");
+  add(a.promptCount, "1 个提示词", "{n} 个提示词");
+  add(a.themeCount, "1 套配色", "{n} 套配色");
   return parts;
 }
 
