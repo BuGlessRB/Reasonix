@@ -311,7 +311,7 @@ func assemble(ctx context.Context, logs, handshakeTo io.Writer, shell shellIdent
 			paneSink = reporter.Wrap(paneSink)
 		}
 	}
-	root := boot.ResolveWorkspaceRoot("")
+	root := launchWorkspace(shell.exe)
 	built, err := boot.BuildRuntime(ctx, boot.Options{
 		Version:       version,
 		WorkspaceRoot: root,
