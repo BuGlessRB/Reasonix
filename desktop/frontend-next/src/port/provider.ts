@@ -49,6 +49,10 @@ export interface ProviderEntry {
   modelEfforts?: Record<string, ModelEffort>;
   inheritedEfforts?: Record<string, ModelEffort>;
   modelProtocols?: Record<string, string>;
+  // Per model: the window and output cap it declares for itself, and the ones
+  // it inherits when it declares none.
+  modelLimits?: Record<string, ModelLimit>;
+  inheritedLimits?: Record<string, ModelLimit>;
   // Removing the one in use would leave the session on a model that no longer
   // resolves, so the row offers no delete.
   inUse: boolean;
@@ -176,6 +180,15 @@ export interface ProviderEdit {
   // The whole per-model answer for the listed models: a model left out
   // inherits the connection's levels again. Omitted leaves every model alone.
   modelEfforts?: Record<string, ModelEffort>;
+  // The whole per-model answer for the listed models: a model left out, or sent
+  // empty, inherits the connection's limits again. Omitted leaves every model alone.
+  modelLimits?: Record<string, ModelLimit>;
+}
+
+// One model's own context window and output cap; an absent field inherits.
+export interface ModelLimit {
+  contextWindow?: number;
+  maxOutputTokens?: number;
 }
 
 // One model's effort vocabulary and the level auto resolves to; no default is

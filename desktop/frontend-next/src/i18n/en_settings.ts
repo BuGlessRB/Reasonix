@@ -268,6 +268,14 @@ export const EN_SETTINGS: Record<string, string> = {
   "推理强度选「自动」时使用的档位。": "The level used when reasoning effort is set to Auto.",
   "{n} 个档位": "{n} levels",
   "{n} 个模型单独设置": "{n} models with their own levels",
+  "按模型设置限制": "Limits per model",
+  "留空的模型沿用上面的值，灰字是它当前继承到的值；填写后只对该模型生效。":
+    "A blank field follows the values above; the grey text is what that model inherits now. A value applies to that model only.",
+  "{model} 的上下文窗口": "Context window for {model}",
+  "{model} 的最大输出": "Max output for {model}",
+  "继承 {n}": "Inherits {n}",
+  "继承：未声明": "Inherits: not declared",
+  "继承：自动": "Inherits: automatic",
   "按模型设置档位": "Levels per model",
   "同一接入下有多家厂商的模型时，可为单个模型指定档位；「继承接入设置」沿用上面的档位。模型自己的档位优先。":
     "When one connection serves several vendors' models, give a model levels of its own. Inherit uses the levels above; a model's own levels win.",
