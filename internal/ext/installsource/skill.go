@@ -321,7 +321,7 @@ func mustRel(base, path string) string {
 // escaping the tree, broken, or a directory — is skipped, never followed:
 // the plugin-package apply path verifies capability counts after the copy,
 // so a skipped link fails the install closed instead of silently shrinking it.
-func copyDir(src, dst string) error {
+func copyDir(src, dst string, byteLimit int64) error {
 	var copied int64
 	srcRoot := src
 	if resolved, err := filepath.EvalSymlinks(src); err == nil {
@@ -365,9 +365,8 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		copied += info.Size()
-		if copied > maxSkillCopyBytes {
-			return newErr(ErrInvalidManifest, "skill directory exceeds %d bytes", maxSkillCopyBytes)
+		if info.Size() > byteLimit-copied {
+			return newErr(ErrInvalidManifest, "directory exceeds %d bytes", byteLimit)
 		}
 		in, err := os.Open(source)
 		if err != nil {
@@ -389,7 +388,11 @@ func copyDir(src, dst string) error {
 			return err
 		}
 		defer out.Close()
-		_, err = io.Copy(out, in)
+		written, err := io.Copy(out, io.LimitReader(in, byteLimit-copied+1))
+		copied += written
+		if copied > byteLimit {
+			return newErr(ErrInvalidManifest, "directory exceeds %d bytes", byteLimit)
+		}
 		return err
 	})
 }
