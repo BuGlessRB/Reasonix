@@ -565,11 +565,13 @@ declarations and do not apply these fallbacks:
   or `TaskOutput.task_id` when Reasonix `wait` covers multiple/all jobs. Each
   structural gap is reported once per hooks file, so a wildcard-matcher
   plugin sees one warning per gap instead of one per hook.
-- A plugin-root `.mcp.json` to installed MCP entries. Claude `local` maps to
-  stdio, non-ASCII display names receive stable internal IDs, and duplicate
-  declarations are deduplicated. Imported servers default to
-  `auto_start=false`; users connect them on demand so startup does not change
-  the provider-visible tool schema.
+- A plugin-root `.mcp.json` maps to installed MCP entries. Claude `local` maps
+  to stdio, non-ASCII display names receive stable internal IDs, and duplicate
+  declarations are deduplicated. Imported servers default to `auto_start=false`
+  and remain inactive until enabled or explicitly connected.
+- With no usable cached schema, enabled servers connect for catalog discovery.
+  With a cached schema, deferred servers connect on demand. Discovery and
+  connection do not change the current session's provider-visible tool schema.
 
 Unsupported Claude hook item types are skipped with a warning. Reasonix does not
 run third-party install scripts.
