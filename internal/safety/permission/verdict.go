@@ -13,12 +13,15 @@ const (
 	RefusalReadOnly   = "permission.read_only"
 	RefusalDeclined   = "permission.declined"
 	RefusalUnattended = "permission.unattended"
+	// RefusalParked is a call that needed a person, was recorded for one, and
+	// did not run. Unlike RefusalUnattended it names a record the model can cite.
+	RefusalParked = "permission.parked"
 )
 
 // IsRefusalCode reports whether code is one a permission gate produces.
 func IsRefusalCode(code string) bool {
 	switch code {
-	case RefusalDenyRule, RefusalReadOnly, RefusalDeclined, RefusalUnattended:
+	case RefusalDenyRule, RefusalReadOnly, RefusalDeclined, RefusalUnattended, RefusalParked:
 		return true
 	}
 	return false

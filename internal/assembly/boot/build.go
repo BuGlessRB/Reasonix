@@ -2,6 +2,7 @@ package boot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -101,6 +102,7 @@ type toolStage struct {
 // Controller.Close releases them.
 func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	b := &builder{timer: newPhaseTimer()}
+	opts = observeOverrides(opts)
 	// The runtime outlives the request that built it (Studio opens a pane with
 	// one), and its MCP servers and sidecars start on that context later.
 	b.ctx, b.opts, b.owner, b.fileWriteReceipt = bindRuntimeOwner(context.WithoutCancel(ctx), opts)
@@ -133,6 +135,9 @@ func (b *builder) retireUnownedSidecars() {
 // the session resources and the system prompt.
 func (b *builder) load() error {
 	opts := b.opts
+	if opts.Observe != nil && opts.Observe.Pending == nil {
+		return errors.New("boot: the read-only posture needs somewhere to park what needs a person")
+	}
 	b.stderr = opts.Stderr
 	if b.stderr == nil {
 		b.stderr = os.Stderr
@@ -144,7 +149,7 @@ func (b *builder) load() error {
 		return err
 	}
 	migrations := runConfigMigrations(b.roots, b.root)
-	if b.cfg, err = b.roots.LoadForRoot(b.root); err != nil {
+	if b.cfg, err = b.loadConfig(); err != nil {
 		return err
 	}
 	cfg := b.cfg
@@ -203,6 +208,21 @@ func (b *builder) load() error {
 	return err
 }
 
+// loadConfig reads the configuration this build runs under. The read-only
+// posture takes the user's own and nothing the workspace declares, and holds no
+// MCP server at all.
+func (b *builder) loadConfig() (*config.Config, error) {
+	if b.opts.Observe == nil {
+		return b.roots.LoadForRoot(b.root)
+	}
+	cfg, err := b.roots.LoadUserScopeForRoot(b.root)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Plugins = nil
+	return cfg, nil
+}
+
 func (b *builder) reportModelNotices() {
 	cfg, entry := b.cfg, b.model.entry
 	if ignored := cfg.IgnoredProjectDefaultModel(); ignored != "" {
@@ -220,7 +240,7 @@ func (b *builder) reportModelNotices() {
 func (b *builder) wireTools() error {
 	opts, cfg, root := b.opts, b.cfg, b.root
 	t := &b.tools
-	t.reg = tool.NewRegistry()
+	t.reg = newToolRegistry(opts)
 	t.env = resolveToolEnvironment(opts, cfg, b.roots, root, b.additionalDirs, b.shell, b.stderr)
 	env := t.env
 	// The full inventory registers for use_capability; the provider-visible surface narrows later.
@@ -346,7 +366,9 @@ func (b *builder) controller() (*control.Controller, error) {
 	ctrl.SetCapabilityProxyRouting(true)
 	// Every role setting sees one provider-visible surface, fixed before the
 	// snapshot freezes registry schemas for cache diagnostics.
-	applyUnifiedProviderToolSurface(t.reg, b.opts.GoalTurnsUnreachable, b.opts.Ablation, pinnedMCPServers(t.mcp.alwaysLoad, t.mcpSchemaKnown))
+	if b.opts.Observe == nil {
+		applyUnifiedProviderToolSurface(t.reg, b.opts.GoalTurnsUnreachable, b.opts.Ablation, pinnedMCPServers(t.mcp.alwaysLoad, t.mcpSchemaKnown))
+	}
 	return ctrl, nil
 }
 
@@ -408,6 +430,7 @@ func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, 
 	opts, cfg, root, entry, t := b.opts, b.cfg, b.root, b.model.entry, &b.tools
 	specOptions := t.specOptions
 	return control.Options{
+		Observe:                        b.observeRun(),
 		TaskBudget:                     taskBudgetFromConfig(cfg),
 		GoalTokenBudget:                cfg.Agent.GoalTokenBudget,
 		Runner:                         runner,
@@ -426,7 +449,7 @@ func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, 
 		AllSkills:                      b.prompt.allSkills,
 		SkillStore:                     b.prompt.skillStore,
 		AllSkillStore:                  b.prompt.allSkillStore,
-		DisableImplicitSkillInvocation: !b.prompt.implicitSkills,
+		DisableImplicitSkillInvocation: !b.prompt.implicitSkills || b.opts.Observe != nil,
 		SkillRunner:                    t.runners.run,
 		ReadOnlySkillRunner:            t.runners.readOnly,
 		SkillProfile:                   t.runners.profile,

@@ -73,7 +73,12 @@ func startExtensions(ctx context.Context, opts Options, roots config.Roots, root
 			slog.Warn("boot: extension UI hub: "+msg, "root", root)
 		},
 	})
-	mgr, err := preflightExtensionRuntimes(ctx, roots.Home(), ext.boot(), opts.Extensions, planForPreflight(opts, ext.generation))
+	home := roots.Home()
+	if opts.Observe != nil {
+		// Extension sidecars are programs the run would start; the posture holds none.
+		home = ""
+	}
+	mgr, err := preflightExtensionRuntimes(ctx, home, ext.boot(), opts.Extensions, planForPreflight(opts, ext.generation))
 	if err != nil {
 		return nil, fmt.Errorf("boot: %w", err)
 	}

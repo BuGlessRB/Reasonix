@@ -47,6 +47,8 @@ func (codeIndex) Schema() json.RawMessage {
 
 func (codeIndex) ReadOnly() bool { return true }
 
+func (codeIndex) Reach() tool.Reach { return tool.ReachLocalRead }
+
 const (
 	codeIndexDefaultLimit = 100
 	codeIndexMaxLimit     = 200

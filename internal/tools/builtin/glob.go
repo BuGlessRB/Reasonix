@@ -42,6 +42,8 @@ func (globTool) Schema() json.RawMessage {
 
 func (globTool) ReadOnly() bool { return true }
 
+func (globTool) Reach() tool.Reach { return tool.ReachLocalRead }
+
 // SnipHint keeps a long head and short tail like grep: the first paths matter
 // most, the tail confirms how many more there were.
 func (globTool) SnipHint() tool.SnipHint {

@@ -101,6 +101,9 @@ type Options struct {
 	// ApplyHeadlessApprovalMode must match, or sub-agent gates diverge.
 	HeadlessApprovalMode string
 
+	// Observe, when set, builds the read-only unattended posture; see ObserveOptions.
+	Observe *ObserveOptions
+
 	GoalTurnsUnreachable bool // this assembly never arms a Goal turn; see GoalOnlyToolNames
 	UnattendedChild      bool // an unattended child run: it offers neither best_of_n nor isolation
 	// SessionRecoveryMeta and OnSessionRecovered let richer frontends attach

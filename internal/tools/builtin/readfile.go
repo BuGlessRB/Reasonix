@@ -66,6 +66,8 @@ func (readFile) Schema() json.RawMessage {
 
 func (readFile) ReadOnly() bool { return true }
 
+func (readFile) Reach() tool.Reach { return tool.ReachLocalRead }
+
 // SnipHint front-loads file content: the most relevant lines are near the top,
 // so keep a generous head and a short tail when an old read is shortened.
 func (readFile) SnipHint() tool.SnipHint {

@@ -145,27 +145,6 @@ func (r Roots) credentialsStoreMode() string {
 	return normalizeCredentialsStore(partial.CredentialsStore)
 }
 
-func (r Roots) credentialEnvNamesForRoot(root string) []string {
-	root = resolveRoot(root)
-	cfg := Default()
-
-	projectTOML := ProjectConfigPath(root)
-	if uc := r.userConfigLoadPath(); uc != "" {
-		_ = mergeFile(cfg, uc)
-	}
-	_ = mergeFile(cfg, projectTOML)
-	var tomlSources []string
-	if uc := r.userConfigLoadPath(); uc != "" {
-		tomlSources = append(tomlSources, uc)
-	}
-	tomlSources = append(tomlSources, projectTOML)
-	if providers, _, _, ok, err := mergeTOMLProviders(tomlSources); err == nil && ok {
-		cfg.Providers = providers
-	}
-
-	return credentialEnvNamesFromConfig(cfg)
-}
-
 func credentialEnvNamesFromConfig(cfg *Config) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -252,16 +231,6 @@ func resolveProviderCredentialWithResolver(entry *ProviderEntry, resolver *Crede
 
 func (e *ProviderEntry) ResolveAPIKeyForRoot(root string) {
 	resolveProviderCredentialWithResolver(e, NewCredentialResolverForRoot(root))
-}
-
-func (r Roots) loadCredentialStoreForRoot(root string) {
-	names := r.credentialEnvNamesForRoot(root)
-	if len(names) == 0 {
-		return
-	}
-	if p := r.UserCredentialsPath(); p != "" {
-		loadDotEnvFileAs(p, CredentialSource{Kind: CredentialSourceCredentials, Path: p, Label: "Reasonix credentials (.env)"})
-	}
 }
 
 // StoreCredentialLines stores KEY=value assignments in Reasonix's global .env

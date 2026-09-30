@@ -35,6 +35,8 @@ func (listDir) Schema() json.RawMessage {
 
 func (listDir) ReadOnly() bool { return true }
 
+func (listDir) Reach() tool.Reach { return tool.ReachLocalRead }
+
 // SnipHint keeps a long head and short tail like grep/glob: the first entries
 // matter most, the tail confirms scope.
 func (listDir) SnipHint() tool.SnipHint {

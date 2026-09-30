@@ -100,6 +100,8 @@ func (grepTool) Schema() json.RawMessage {
 
 func (grepTool) ReadOnly() bool { return true }
 
+func (grepTool) Reach() tool.Reach { return tool.ReachLocalRead }
+
 // SnipHint keeps a long head of matches and a short tail: the first matches are
 // the ones the model usually acts on, the tail just confirms scope.
 func (grepTool) SnipHint() tool.SnipHint {

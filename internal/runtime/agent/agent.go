@@ -61,8 +61,8 @@ type Renderer interface {
 // Asker puts structured multiple-choice questions to the user and blocks for the
 // answers. The agent consults it for the `ask` tool. It is interface-shaped so
 // the agent stays independent of the frontend; a nil asker means no interactive
-// user (headless runs), where `ask` returns a "decide for yourself" result. The
-// interactive frontends wire the controller in as the Asker.
+// user (headless runs), where `ask` returns an unresolved result and never an
+// answer. The interactive frontends wire the controller in as the Asker.
 type Asker interface {
 	Ask(ctx context.Context, questions []event.AskQuestion) ([]event.AskAnswer, error)
 }
