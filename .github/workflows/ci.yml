@@ -80,7 +80,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "22"
-      - run: node --test scripts/release-credits.test.mjs scripts/markdown-refs.test.mjs scripts/studio-release-notes.test.mjs scripts/publish-cli-pointer.test.mjs npm/publish.test.mjs
+      - run: node --test scripts/release-credits.test.mjs scripts/markdown-refs.test.mjs scripts/studio-release-notes.test.mjs scripts/publish-cli-pointer.test.mjs scripts/feedback-sync.test.mjs npm/publish.test.mjs
 
   # The ruleset requires the per-OS check names (test (ubuntu-latest) etc.).
   # A matrix job skipped at job level reports no per-leg checks at all, so
