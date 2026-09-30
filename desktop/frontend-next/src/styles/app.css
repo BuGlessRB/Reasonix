@@ -2808,6 +2808,7 @@
   }
   .act:hover:not(:disabled) { background: var(--overlay); border-color: var(--muted) }
   .act:disabled { color: var(--ghost); cursor: default }
+  .srv .act:disabled { opacity: .45 }
   .act:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
 
   .reload { display: inline-flex; align-items: center; gap: 6px }

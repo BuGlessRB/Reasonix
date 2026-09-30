@@ -376,12 +376,12 @@ export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSig
   );
 }
 
-export function ExtTabs({ at, onPick }: { at: "installed" | "market"; onPick: (at: "installed" | "market") => void }) {
+export function ExtTabs({ at, onPick, disabled }: { at: "installed" | "market"; onPick: (at: "installed" | "market") => void; disabled?: boolean }) {
   const tabs: ["installed" | "market", string][] = [["installed", "已安装"], ["market", "发现"]];
   return (
     <div className="seg mkt-tabs" data-text role="tablist" aria-label={t("扩展")} onKeyDown={arrowTabs}>
       {tabs.map(([id, name]) => (
-        <button key={id} role="tab" aria-selected={at === id} tabIndex={at === id ? 0 : -1} data-action="extensions.tab" data-value={id} onClick={() => onPick(id)}>
+        <button key={id} role="tab" aria-selected={at === id} tabIndex={at === id ? 0 : -1} disabled={disabled} data-action="extensions.tab" data-value={id} onClick={() => onPick(id)}>
           {t(name)}
         </button>
       ))}
