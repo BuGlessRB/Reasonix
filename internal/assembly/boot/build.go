@@ -467,6 +467,7 @@ func (b *builder) controllerOptions(runner agent.Runner, executor *agent.Agent, 
 		// Read at Close time: freeze chains the extension runtime set onto it.
 		Cleanup:               func() { b.cleanup() },
 		Balance:               opts.BalanceStore.Cache(b.balanceClient, entry.BalanceURL, entry.APIKey()),
+		Feedback:              control.FeedbackOptions{Service: feedbackService(b.roots.Home(), b.proxy), ProviderKind: feedbackProviderKind(entry), Surface: opts.FeedbackSurface},
 		Jobs:                  b.session.jobs,
 		TaskStore:             opts.TaskStore,
 		WorkspaceLease:        b.session.lease,

@@ -90,6 +90,8 @@ func SlashArgItems(line string, d ArgData) ([]SlashItem, int) {
 		raw = currencyArgItems(prior)
 	case "/memory":
 		raw = memoryArgItems(prior, d)
+	case "/feedback":
+		raw = feedbackArgItems(prior)
 	default:
 		return nil, from
 	}
@@ -442,6 +444,8 @@ func (c *Controller) managementNotice(trimmed string) bool {
 	case "/memory":
 		args := strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0]))
 		c.notice(MemoryCommandText(c, args))
+	case "/feedback":
+		c.feedbackCommand(strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0])))
 	case "/migrate", "/migration":
 		args := strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0]))
 		migration.RunLegacyRescueCommand(args, c.sink)
@@ -465,32 +469,7 @@ func (c *Controller) managementNotice(trimmed string) bool {
 		}
 		c.notice(c.skillListText())
 	case "/plugin", "/plugins":
-		sub := ""
-		if len(fields) >= 2 {
-			sub = strings.ToLower(fields[1])
-		}
-		switch sub {
-		case "", "list", "ls":
-			text, err := pluginpkg.InstalledListText(config.ReasonixHomeDir())
-			if err != nil {
-				c.notice("plugins: " + err.Error())
-			} else {
-				c.notice(text)
-			}
-		case "show", "cat":
-			if len(fields) < 3 {
-				c.notice("usage: /plugins show <name>")
-				return true
-			}
-			text, err := pluginpkg.InstalledShowText(config.ReasonixHomeDir(), fields[2])
-			if err != nil {
-				c.notice("plugins: " + err.Error())
-			} else {
-				c.notice(text)
-			}
-		default:
-			c.notice("unknown /plugins subcommand " + fields[1] + " - try: /plugins or /plugins show <name>")
-		}
+		c.pluginsNotice(fields)
 	case "/reload-cmd":
 		if c.Running() {
 			c.notice("wait for the current turn to finish, then retry /reload-cmd")
@@ -536,6 +515,36 @@ func (c *Controller) managementNotice(trimmed string) bool {
 		return false
 	}
 	return true
+}
+
+// pluginsNotice answers /plugins: the installed list, or one package's manifest.
+func (c *Controller) pluginsNotice(fields []string) {
+	sub := ""
+	if len(fields) >= 2 {
+		sub = strings.ToLower(fields[1])
+	}
+	switch sub {
+	case "", "list", "ls":
+		text, err := pluginpkg.InstalledListText(config.ReasonixHomeDir())
+		if err != nil {
+			c.notice("plugins: " + err.Error())
+		} else {
+			c.notice(text)
+		}
+	case "show", "cat":
+		if len(fields) < 3 {
+			c.notice("usage: /plugins show <name>")
+			return
+		}
+		text, err := pluginpkg.InstalledShowText(config.ReasonixHomeDir(), fields[2])
+		if err != nil {
+			c.notice("plugins: " + err.Error())
+		} else {
+			c.notice(text)
+		}
+	default:
+		c.notice("unknown /plugins subcommand " + fields[1] + " - try: /plugins or /plugins show <name>")
+	}
 }
 
 func (c *Controller) modelListText() string {

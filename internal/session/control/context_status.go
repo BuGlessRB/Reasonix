@@ -1,7 +1,11 @@
 package control
 
 import (
+	"context"
+	"time"
+
 	"reasonix/internal/contract/provider"
+	"reasonix/internal/model/billing"
 	"reasonix/internal/runtime/agent"
 )
 
@@ -22,4 +26,13 @@ func (c *Controller) ModelVisibleMessages() []provider.Message {
 		return nil
 	}
 	return c.executor.ModelVisibleMessages()
+}
+
+// Balance reads the active provider's wallet. One declaring no balance_url
+// reads back unconfigured rather than failed: "there is no wallet here" and
+// "the wallet did not answer" are opposite answers to why there is no number.
+func (c *Controller) Balance(ctx context.Context) billing.Reading {
+	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+	return c.balance.Read(ctx)
 }

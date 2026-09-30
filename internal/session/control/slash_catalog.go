@@ -34,6 +34,7 @@ func SubmitSlashCommands(m i18n.Messages) []SlashItem {
 		{Label: "/skills", Insert: "/skills ", Hint: m.CmdSkill, Descend: true},
 		{Label: "/plugins", Insert: "/plugins ", Hint: m.CmdPlugins, Descend: true},
 		{Label: "/hooks", Insert: "/hooks ", Hint: m.CmdHooks, Descend: true},
+		{Label: "/feedback", Insert: "/feedback ", Hint: m.CmdFeedback, Descend: true},
 		{Label: "/mcp", Insert: "/mcp ", Hint: m.CmdMcp, Descend: true},
 		{Label: "/docs", Insert: "/docs ", Hint: m.CmdDocs},
 		{Label: "/migrate", Insert: "/migrate", Hint: m.CmdMigrate},

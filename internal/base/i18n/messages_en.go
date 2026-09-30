@@ -315,6 +315,7 @@ var English = Messages{
 	CmdMcp:              "MCP servers",
 	CmdRemote:           "remote SSH hosts",
 	CmdHooks:            "manage hooks",
+	CmdFeedback:         "send feedback to the maintainers, or list yours",
 	CmdPlugins:          "manage plugin packages",
 	CmdPasteImage:       "paste clipboard image",
 	CmdOutputStyle:      "list output styles",

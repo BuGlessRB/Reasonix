@@ -305,6 +305,7 @@ type Messages struct {
 	CmdMcp              string // /mcp
 	CmdRemote           string // /remote
 	CmdHooks            string // /hooks
+	CmdFeedback         string // /feedback
 	CmdPlugins          string // /plugins
 	CmdPasteImage       string // /paste-image
 	CmdOutputStyle      string // /output-style

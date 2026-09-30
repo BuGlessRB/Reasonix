@@ -303,6 +303,7 @@ var ChineseTraditional = Messages{
 	CmdMcp:              "MCP 伺服器",
 	CmdRemote:           "遠端 SSH 主機",
 	CmdHooks:            "管理 hooks",
+	CmdFeedback:         "向維護者提交回饋，或檢視我的回饋",
 	CmdPlugins:          "管理插件包",
 	CmdPasteImage:       "貼上剪貼簿圖片",
 	CmdOutputStyle:      "列出輸出風格",

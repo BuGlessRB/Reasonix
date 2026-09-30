@@ -87,6 +87,8 @@ type controllerDeps struct {
 	// which rebuilds the controller — refreshes it.
 	balance *billing.Cache
 
+	feedback FeedbackOptions
+
 	// jobs is the session-scoped background-job manager. The agent's background
 	// tools spawn into it; Compose drains its completion notes into the next turn;
 	// Close cancels its still-running jobs.
@@ -156,6 +158,7 @@ func newControllerDeps(opts Options, sink event.Sink, usageTee *goalUsageTee, ru
 		onRemember:             opts.OnRemember,
 		sessionRecoveryMeta:    opts.SessionRecoveryMeta,
 		balance:                opts.Balance,
+		feedback:               opts.Feedback,
 		jobs:                   opts.Jobs,
 		workspaceLease:         opts.WorkspaceLease,
 		mcp:                    newMcpManager(opts.Host, opts.Registry, pluginCtx, opts.MCPDefaultCallTimeout),

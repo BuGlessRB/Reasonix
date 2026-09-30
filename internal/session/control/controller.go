@@ -331,7 +331,8 @@ type Options struct {
 	// Balance reads the active provider's optional wallet endpoint. Nil, or a
 	// cache built on an empty URL, means the provider declares none. Hosts that
 	// build several runtimes hand every pane the same cache.
-	Balance *billing.Cache
+	Balance  *billing.Cache
+	Feedback FeedbackOptions // nil service refuses every feedback call
 	// Jobs is the session-scoped background-job manager (nil disables background jobs).
 	Jobs *jobs.Manager
 	// TaskStore remains a FileStore-compatible authority. Desktop injects one
@@ -1060,15 +1061,6 @@ func (c *Controller) ToolResult(toolID string) *ToolResultData {
 		return out
 	}
 	return nil
-}
-
-// Balance reads the active provider's wallet. One declaring no balance_url
-// reads back unconfigured rather than failed: "there is no wallet here" and
-// "the wallet did not answer" are opposite answers to why there is no number.
-func (c *Controller) Balance(ctx context.Context) billing.Reading {
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
-	defer cancel()
-	return c.balance.Read(ctx)
 }
 
 // Host returns the running MCP host (nil when no plugins), for frontends that

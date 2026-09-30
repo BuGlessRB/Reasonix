@@ -403,12 +403,14 @@ type SessionAPI interface {
 	BackgroundJobs
 	LocalShell
 	DiffRendering
+	Feedback
 }
 
 // EditorAPI is what an editor integration drives over ACP: turns, approvals and
 // the inbox, plus the slash dispatch, MCP surface and sidecar extensions it puts on
 // screen, and the goals and persistence it shows. What it does not name is the
-// point — an editor authors no skill, edits no hook, and saves no sandbox rule.
+// point — an editor authors no skill, edits no hook, saves no sandbox rule, and files no
+// feedback: the report form belongs to the surfaces that own a screen for it.
 type EditorAPI interface {
 	Lifecycle
 	TurnControl
@@ -449,5 +451,6 @@ var (
 	_ Provenance         = (*Controller)(nil)
 	_ LocalShell         = (*Controller)(nil)
 	_ DiffRendering      = (*Controller)(nil)
+	_ Feedback           = (*Controller)(nil)
 	_ SessionAPI         = (*Controller)(nil)
 )
