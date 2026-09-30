@@ -26,6 +26,9 @@ interface Props {
 // through and hands the approved version to the same plan-then-install every
 // pasted address goes through; the kernel holds the pin, this only shows it.
 export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) {
+  const [connection, setConnection] = useState({ port, generation: 0 });
+  const currentConnection = useRef(connection);
+  currentConnection.current = connection;
   const [kind, setKind] = useState<MarketKind | "">("");
   const [sort, setSort] = useState<Sort>("recommended");
   const [q, setQ] = useState("");
@@ -40,6 +43,15 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
   const nextOffset = useRef(0);
   const panel = useRef<HTMLDivElement>(null);
 
+  if (connection.port !== port) {
+    setConnection({ port, generation: connection.generation + 1 });
+    setRows(null);
+    setMore(false);
+    setError("");
+    setFilterUnsupported(false);
+    setLoadingMore(false);
+  }
+
   const load = (offset: number) => {
     const n = ++asked.current;
     setError("");
@@ -49,7 +61,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
     port
       .marketList({ kind, q: q.trim(), sort, offset, pinned })
       .then((page) => {
-        if (n !== asked.current) return;
+        if (n !== asked.current || currentConnection.current !== connection) return;
         nextOffset.current = offset + page.packages.length;
         setRows((prev) => {
           if (offset === 0 || !prev) return page.packages;
@@ -60,7 +72,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
         setLoadingMore(false);
       })
       .catch((e) => {
-        if (n !== asked.current) return;
+        if (n !== asked.current || currentConnection.current !== connection) return;
         setError(reason(e));
         setFilterUnsupported(pinned && e instanceof HttpError && e.reason?.code === "market.filter_unsupported");
         setLoadingMore(false);
@@ -77,17 +89,19 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
     setLoadingMore(false);
     const timer = setTimeout(() => load(0), q ? 250 : 0);
     return () => { clearTimeout(timer); ++asked.current; };
-  }, [kind, sort, q, pinned]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [port, kind, sort, q, pinned]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (open) {
     return (
       <Entry
+        key={connection.generation}
         port={port}
         slug={open}
         onSignIn={onSignIn}
         onViewInstalled={onViewInstalled}
         onBack={() => setOpen("")}
         onInstalled={() => {
+          if (currentConnection.current !== connection) return;
           onInstalled();
           load(0);
         }}
