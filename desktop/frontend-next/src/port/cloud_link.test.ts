@@ -254,4 +254,46 @@ describe("remote link", () => {
     expect(dial).toHaveBeenCalledTimes(2);
     expect(ends[0]?.kind).toBe("ended");
   });
+
+  it("ends with the last attempt's failure code, and with idle when the relay reclaimed the lease", async () => {
+    const limited = connection();
+    const dialLimited = vi.fn(async () => {
+      throw new RemoteLinkError("transient", "wait", { code: "rate_limited", retryAfterS: 30 });
+    });
+    new RemoteLink(limited.conn, dialLimited, (end) => ends.push(end), { retryDelaysMs: [10] });
+    limited.socket.close(1006, "");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(ends[0]).toMatchObject({ kind: "ended", failure: { code: "rate_limited", retryAfterS: 30 } });
+
+    const idle = connection();
+    const dialIdle = vi.fn(async () => { throw new RemoteLinkError("transient", "down"); });
+    new RemoteLink(idle.conn, dialIdle, (end) => ends.push(end), { retryDelaysMs: [10] });
+    idle.socket.close(CLOSE_IDLE, "Idle timeout");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(ends[1]).toMatchObject({ kind: "ended", failure: { code: "idle" } });
+
+    const plain = connection();
+    new RemoteLink(plain.conn, dialIdle, (end) => ends.push(end), { retryDelaysMs: [10] });
+    plain.socket.close(1006, "");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(ends[2]?.failure).toBeUndefined();
+  });
+
+  it("waits out a Retry-After before dialling again and reports only the last attempt's cause", async () => {
+    const first = connection();
+    const dial = vi.fn()
+      .mockRejectedValueOnce(new RemoteLinkError("transient", "wait", { code: "rate_limited", retryAfterS: 5 }))
+      .mockRejectedValueOnce(new RemoteLinkError("transient", "down"));
+    new RemoteLink(first.conn, dial, (end) => ends.push(end), { retryDelaysMs: [10, 10] });
+    first.socket.close(1006, "");
+
+    await vi.advanceTimersByTimeAsync(10);
+    expect(dial).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(dial).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(dial).toHaveBeenCalledTimes(2);
+    expect(ends[0]?.kind).toBe("ended");
+    expect(ends[0]?.failure).toBeUndefined();
+  });
 });
