@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useRuntimeSession } from "./useRuntimeState";
 import { createLegacyRemotePolicyNoticeTracker } from "./legacyRemotePolicyNotice";
 import { app, onRemoteTabEvent, onRemoteTabState } from "./bridge";
+import { queuedFollowupOutcome } from "./pendingFollowup";
 import { onRemoteTabUpdated } from "./remoteTabEvents";
 import { hydrateRemoteTelemetry, loadRemoteStatusSnapshot } from "./remoteTelemetry";
 import { remoteStatusTakenOver, remoteStatusToAction } from "./remoteStatus";
@@ -495,6 +496,13 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
       else await app.SubmitRemoteTab(tabId, trimmed);
       if (current()) setTranscript(s => reducer(s, { type: "send_confirmed", submissionId }));
     } catch (e) {
+      // A busy-window submit is durably queued by the desktop. The queue strip
+      // is its representation, so retract the optimistic bubble instead of
+      // reporting a failure; the receipt rides the error for the composer.
+      if (queuedFollowupOutcome(e) !== undefined) {
+        if (current()) setTranscript((s) => reducer(s, { type: "send_queued", submissionId }));
+        throw e;
+      }
       // Roll the optimistic running flag back — a refused/failed submit must
       // never leave the pill spinning (same contract as the local send path).
       const error = `Send failed: ${e instanceof Error ? e.message : String(e)}`;

@@ -3,7 +3,7 @@ import { SessionInputRecovery } from "./SessionInputRecovery";
 import { recoveryStatusText, type RecoveryRetry } from "../lib/recoveryStatus";
 import { useRuntimeSession } from "../lib/useRuntimeState";
 import { isCompactCommand } from "../lib/sessionMaintenanceOperation";
-import { pendingFollowups, confirmFollowup, followupNotSubmitted, followupSessionKey, type PendingFollowup } from "../lib/pendingFollowup";
+import { pendingFollowups, confirmFollowup, followupNotSubmitted, followupSessionKey, queuedFollowupOutcome, type PendingFollowup } from "../lib/pendingFollowup";
 import { useAppNavigationStore } from "../store/appNavigation";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, ClipboardEvent, DragEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
@@ -2410,6 +2410,25 @@ export function Composer({
         submit: submittedSubmitText || trimmedText,
         structured: submittedStructured,
       })) return;
+      // A busy-window submit was durably queued instead of starting a turn:
+      // show the queue entry immediately and confirm the message left the
+      // composer, rather than reporting a conflict.
+      const queued = queuedFollowupOutcome(error);
+      if (queued) {
+        updatePendingGuidanceForDraft(submitDraftKey, (items) => items.some((item) => item.id === queued.itemId) ? items : [...items, {
+          id: queued.itemId,
+          text: trimmedText.slice(0, 120),
+          submitText: "",
+          intent: "followup",
+          state: "queued",
+          source: "desktop",
+          paused: queued.paused,
+        }]);
+        if (ownsDraft() && followupDraftFingerprint(submitDraftKey) === submittedDraft) clearSubmittedDraft(submitDraftKey);
+        setGuidanceRetryNonce((value) => value + 1);
+        showToast(t("runtime.queued"), "info");
+        return;
+      }
       if (definitelyNotAccepted(error) || followupNotSubmitted(error)) attachmentSubmit?.settleImageSubmission(submitDraftKey, attachmentSubmissionId);
       if (savedInput.target && modelApplicationError(error)) savedInput.reportSubmissionError(error);
       else if (savedInput.target) showToast(formatInboxError(error, locale), "warn");

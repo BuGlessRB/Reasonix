@@ -30,7 +30,7 @@ import type { MessageActionScope, MessageActionState } from "./messageActions";
 import { mergeRateBand, type AggregatedRateBand } from "./costRateBand";
 import { requestSessionCancel, type CancelOutcome } from "./inboxCancel";
 import { normalizeTurnSubmit, resolveActiveTurnId } from "./inboxSubmit";
-import { findTabAfterSubmitFailure, reduceManagementConfirmation, reduceSubmitFailure } from "./turnSubmissionFailure";
+import { findTabAfterSubmitFailure, reduceManagementConfirmation, reduceSubmitFailure, reduceSubmitQueued } from "./turnSubmissionFailure";
 import {
   checkpointLocalSubmission,
   settleLocalSubmissions,
@@ -809,6 +809,7 @@ export type Action =
   | { type: "turn_submit_rejected"; submissionId: string; error: string }
   | { type: "turn_submit_unknown"; submissionId: string; error: string }
   | { type: "send_failed"; submissionId: string; error: string }
+  | { type: "send_queued"; submissionId: string }
   | { type: "turn_interrupted" }
   | { type: "backend_status"; running: boolean; turnStartedAt?: number; pendingPrompt?: boolean; backgroundJobs?: number; cancelRequested?: boolean; cancellable?: boolean; turnId?: string; turnStatus?: string; snapshotAt?: number; runtimeEpoch?: string; turnEventSeq?: number }
   | { type: "cancel_requested" }
@@ -1948,6 +1949,7 @@ function reduceState(s: State, a: Action): State {
         : s;
     case "turn_submit_rejected":
     case "send_failed": return reduceSubmitFailure(s, a.submissionId, a.error, a.type === "turn_submit_rejected", promptEventClock());
+    case "send_queued": return reduceSubmitQueued(s, a.submissionId, promptEventClock());
     case "turn_submit_unknown": {
       const local = s.localSubmissions[a.submissionId];
       if (!local || local.settled || local.status === "failed") return s;

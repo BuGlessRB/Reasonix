@@ -46,6 +46,30 @@ export function reduceSubmitFailure(
   };
 }
 
+export function reduceSubmitQueued(state: State, submissionId: string, observedAt: number): State {
+  const ownsRequest = state.pendingSubmissionId === submissionId;
+  if (!ownsRequest) return removeLocalSubmission(state, submissionId);
+  // The message lives in the durable queue now; retract the optimistic bubble
+  // so it cannot duplicate the record the queued turn will install later.
+  return removeLocalSubmission({
+    ...state,
+    pendingUser: undefined,
+    pendingSubmissionId: undefined,
+    running: false,
+    turnActive: false,
+    pendingPrompt: false,
+    cancelRequested: false,
+    cancellable: false,
+    activeTurnId: undefined,
+    currentAssistant: undefined,
+    assistantSegmentOrdinal: 0,
+    live: undefined,
+    streamAttemptJournal: undefined,
+    deliveryRecoveryActive: false,
+    turnLifecycleObservedAt: observedAt,
+  }, submissionId);
+}
+
 export function reduceManagementConfirmation(state: State, submissionId: string, observedAt: number, receipt?: ManagementReceipt): State {
   const ownsRequest = state.pendingSubmissionId === submissionId;
   // Compact requests do not create optimistic chat turns. Only legacy
