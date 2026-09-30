@@ -67,7 +67,7 @@ func LoadCachedToolsForSpecs(specs []plugin.Spec) (map[string][]plugin.CachedToo
 		if !ok || len(cs.Tools) == 0 {
 			continue
 		}
-		cached[name] = cs.Tools
+		cached[name] = s.EnabledCachedTools(cs.Tools)
 		keyOK[name] = match
 	}
 	return cached, keyOK

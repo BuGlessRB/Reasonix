@@ -321,6 +321,7 @@ func mcpIdentitySpec(e config.PluginEntry, root string) plugin.Spec {
 		Env:           exp.Env,
 		URL:           exp.URL,
 		Headers:       exp.Headers,
+		DisabledTools: append([]string(nil), exp.DisabledTools...),
 		WorkspaceRoot: root,
 		ConfigSource:  strings.TrimSpace(string(exp.Source)),
 	}, root)
@@ -341,6 +342,9 @@ func mcpCachedFacts(spec plugin.Spec) (description string, tools []plugin.ToolIn
 	}
 	tools = make([]plugin.ToolInfo, 0, len(cs.Tools))
 	for _, t := range cs.Tools {
+		if !spec.ToolEnabled(t.Name) {
+			continue
+		}
 		tools = append(tools, plugin.ToolInfo{
 			Name:            t.Name,
 			Description:     t.Description,

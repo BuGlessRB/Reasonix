@@ -86,3 +86,13 @@ func TestIdentitySpecMatchesTheKeyTheSessionWouldUse(t *testing.T) {
 		t.Fatalf("identity key = %q, want the key the live spec produces", got)
 	}
 }
+
+func TestDisabledToolsStayOutOfMCPStatusFromStaleCache(t *testing.T) {
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
+	saveFacts(t, plugin.SchemaCacheKey(factsSpec()))
+	entry := config.PluginEntry{Name: "atlas", Command: "atlas-mcp", Args: []string{"--serve"}, DisabledTools: []string{"find_symbol"}}
+	desc, tools, stale := mcpCachedFacts(mcpIdentitySpec(entry, ""))
+	if desc == "" || len(tools) != 0 || !stale {
+		t.Fatalf("filtered stale facts = %q %+v %v", desc, tools, stale)
+	}
+}

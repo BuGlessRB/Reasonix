@@ -63,6 +63,7 @@ func FromEntry(e config.PluginEntry, workspaceRoot string, opts Options) plugin.
 		Env:                           e.Env,
 		URL:                           e.URL,
 		Headers:                       e.Headers,
+		DisabledTools:                 append([]string(nil), e.DisabledTools...),
 		DefaultStartupTimeout:         opts.DefaultStartupTimeout,
 		StartupTimeout:                secondsDuration(e.StartupTimeoutSeconds),
 		DefaultCallTimeout:            opts.DefaultCallTimeout,

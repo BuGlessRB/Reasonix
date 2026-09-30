@@ -1154,6 +1154,13 @@ restarted; retry the tool after it comes online. `mcp_startup_timeout_seconds`
 `tools/list` sequence. `mcp_call_timeout_seconds` applies only after the server
 is connected. Either value can be overridden per server.
 
+Set `disabled_tools = ["write_file", "delete_file"]` in a server's `[[plugins]]` entry to hide selected tools. `.mcp.json` accepts the same extension.
+
+- Names match `tools/list` exactly, before namespacing or prefix stripping. An empty list leaves every tool enabled.
+- Hidden tools stay out of the registry, capability catalog, `/mcp` tool lists and schema token counts, including cached schemas. Config saves preserve the list.
+- Restart the session or disconnect and reconnect the server after editing it. An active session keeps its existing schema prefix.
+- This controls the tools Reasonix exposes; it does not sandbox the server process.
+
 **Already have an `.mcp.json`?** Drop it in the project root and Reasonix
 reads it as-is — the `mcpServers` spec (`command`/`args`/`env`, `type`/`url`/
 `headers`, `${VAR}` expansion) maps field-for-field onto `[[plugins]]`. Both

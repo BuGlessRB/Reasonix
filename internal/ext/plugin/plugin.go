@@ -15,8 +15,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -78,6 +78,8 @@ type Spec struct {
 	Env     map[string]string
 	URL     string
 	Headers map[string]string
+	// DisabledTools excludes exact server-local names before schema registration.
+	DisabledTools []string
 	// DefaultStartupTimeout is the background initialize + tools/list safety cap
 	// for this server. Zero keeps Reasonix's built-in default.
 	DefaultStartupTimeout time.Duration
@@ -846,14 +848,6 @@ func (h *Host) ToolsForSpec(ctx context.Context, spec Spec) ([]tool.Tool, error)
 	return c.listTools(ctx)
 }
 
-// MCPRuntimeSpecMatches compares the complete host-local runtime behavior of
-// two specs while deliberately excluding non-behavioral handles such as the
-// stderr writer and LaunchManager pointer. Secret values are compared only in
-// memory and are never serialized into diagnostics or provider-visible state.
-func MCPRuntimeSpecMatches(a, b Spec) bool {
-	return reflect.DeepEqual(mcpRuntimeSpecIdentityOf(a), mcpRuntimeSpecIdentityOf(b))
-}
-
 // MCPToolMatchesSpec reports whether a concrete plugin adapter or pinned lazy
 // placeholder belongs to the requested runtime spec. Unknown tool
 // implementations fail closed when a runtime-bound capability frontend asks.
@@ -882,6 +876,7 @@ type mcpRuntimeSpecIdentity struct {
 	DefaultCallTimeout      time.Duration
 	CallTimeout             time.Duration
 	ToolTimeouts            map[string]time.Duration
+	DisabledTools           []string
 	Dir                     string
 	WorkspaceRoot           string
 	LaunchWorkspace         string
@@ -918,6 +913,7 @@ func mcpRuntimeSpecIdentityOf(s Spec) mcpRuntimeSpecIdentity {
 		DefaultCallTimeout:      s.DefaultCallTimeout,
 		CallTimeout:             s.CallTimeout,
 		ToolTimeouts:            nonEmptyDurationMap(s.ToolTimeouts),
+		DisabledTools:           disabledToolNames(s.DisabledTools),
 		Dir:                     s.Dir,
 		WorkspaceRoot:           s.WorkspaceRoot,
 		LaunchWorkspace:         launchWorkspace,
@@ -1004,14 +1000,17 @@ func (h *Host) EnsureConnectedWithLifecycle(lifeCtx, callCtx context.Context, s 
 	if deferredGeneration != 0 && !h.deferredGenerationCurrent(s.Name, deferredGeneration) {
 		return nil, ErrDeferredSpawnCancelled
 	}
-	if tools, err := h.ToolsFor(callCtx, s.Name); err == nil {
+	if tools, err := h.ToolsForSpec(callCtx, s); err == nil {
 		return tools, nil
 	}
-	tools, err := h.addWithLifecycle(lifeCtx, callCtx, s, deferredGeneration)
+	_, err := h.addWithLifecycle(lifeCtx, callCtx, s, deferredGeneration)
 	if IsServerAlreadyConnected(err) {
-		return h.ToolsFor(callCtx, s.Name)
+		return h.ToolsForSpec(callCtx, s)
 	}
-	return tools, err
+	if err != nil {
+		return nil, err
+	}
+	return h.ToolsForSpec(callCtx, s)
 }
 
 // AddWithLifecycle connects one server live, allowing caller to specify separate
@@ -1039,7 +1038,7 @@ func (h *Host) addWithLifecycle(lifeCtx, callCtx context.Context, s Spec, deferr
 			if attempt.err != nil {
 				return nil, attempt.err
 			}
-			return append([]tool.Tool(nil), attempt.tools...), nil
+			return h.ToolsForSpec(callCtx, s)
 		case <-callCtx.Done():
 			return nil, callCtx.Err()
 		case <-lifeCtx.Done():
@@ -1336,6 +1335,7 @@ func (c *Client) listTools(ctx context.Context) ([]tool.Tool, error) {
 	if err != nil {
 		return nil, err
 	}
+	out = slices.DeleteFunc(out, func(t mcpTool) bool { return !c.spec.ToolEnabled(t.Name) })
 	if err := validateMCPToolNames(out); err != nil {
 		return nil, fmt.Errorf("plugin %q: %w", c.name, err)
 	}
