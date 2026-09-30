@@ -17,6 +17,9 @@ how a plugin keeps a required reference file with its skill.
 For an issue-to-PR-draft exercise with a deliberately failing local fixture,
 see the [repository workflow example](../examples/issue-fix-kit/README.md).
 
+The [API documentation example](../examples/api-notes-kit/README.md) adds local
+OpenAPI inputs, a reference checker, and a source-linked guide format.
+
 ## CLI Mode
 
 Use `reasonix plugin` when installing or managing plugin packages from a
