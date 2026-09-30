@@ -62,6 +62,8 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         env:
           FEEDBACK_ADMIN_TOKEN: ${{ secrets.FEEDBACK_ADMIN_TOKEN }}
+          # crash.reasonix.io answers runner IPs with a managed challenge; workers.dev serves only the converter's admin paths.
+          FEEDBACK_BASE_URL: https://reasonix-crash-report.reasonix.workers.dev
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
           FULL: ${{ github.event.inputs.full || 'false' }}
