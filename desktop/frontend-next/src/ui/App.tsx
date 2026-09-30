@@ -106,6 +106,7 @@ export function App({ hub }: { hub: HubPort }) {
   // false = closed, true = open at its last section, a string = open there.
   const [settings, setSettings] = useState<string | boolean>(false);
   const [feedback, setFeedback] = useState<FeedbackTab | null>(null);
+  const [feedbackUnread, setFeedbackUnread] = useState(0);
   const [browser, setBrowser] = useState(false);
   const [setup, setSetup] = useState<ProviderSetup | null | undefined>(undefined);
   // undefined until asked; false means the opening sequence is still owed.
@@ -255,6 +256,20 @@ export function App({ hub }: { hub: HubPort }) {
   const networkHost = localRt ? "" : runtimes.find((rt) => rt.id === active)?.host ?? "";
 
   useLaunchHealth(activePort, setup, welcomed);
+
+  // Asked once when the app opens and again each time the page is opened,
+  // never on a timer: there is no push channel to keep honest.
+  const feedbackPort = networkPort ?? activePort;
+  const feedbackAsk = useRef(feedbackPort);
+  feedbackAsk.current = feedbackPort;
+  const feedbackReady = feedbackPort !== null;
+  useEffect(() => {
+    let alive = true;
+    feedbackAsk.current?.myFeedback().then((m) => alive && setFeedbackUnread(m.unread)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [feedbackReady]);
 
   useEffect(() => {
     if (!activePort) return;
@@ -641,6 +656,7 @@ export function App({ hub }: { hub: HubPort }) {
           wallet={report.wallet}
           onSettings={showPrefs}
           onFeedback={(tab) => setFeedback(tab ?? "send")}
+          feedbackUnread={feedbackUnread}
           onFind={openFind}
           onError={fail}
         />
@@ -739,7 +755,7 @@ export function App({ hub }: { hub: HubPort }) {
       </div>
 
       {feedback && (networkPort ?? activePort) && (
-        <Feedback port={(networkPort ?? activePort)!} tab={feedback} onClose={() => setFeedback(null)} onError={setError} />
+        <Feedback port={(networkPort ?? activePort)!} tab={feedback} onClose={() => setFeedback(null)} onError={setError} onUnread={setFeedbackUnread} />
       )}
 
       {settings && activePort && (

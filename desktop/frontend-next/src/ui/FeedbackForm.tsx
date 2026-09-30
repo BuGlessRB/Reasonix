@@ -173,7 +173,7 @@ export function FeedbackForm({ port, onMine, onClose, onFile }: Props) {
       <div className="fbk-sent" data-stage="sent">
         <StudioIcon name="check" />
         <h3 ref={done} tabIndex={-1}>{t("已收到你的反馈")}</h3>
-        <p className="fbk-hint">{t("回执号是这份反馈的凭据，请留着它。我们会把它记成一个 GitHub 议题，进展会出现在「我的反馈」里。")}</p>
+        <p className="fbk-hint">{t("回执号是这份反馈的凭据，请留着它。我们会先看一遍，只有被登记为 GitHub 议题的内容才会公开。进展、议题链接，以及我们的回复或提问，都会出现在「我的反馈」里。")}</p>
         <div className="fbk-receipt">
           <code aria-label={t("回执号")}>{sent.receipt}</code>
           <CopyButton text={sent.receipt} label={t("复制回执号")} />
@@ -213,8 +213,9 @@ export function FeedbackForm({ port, onMine, onClose, onFile }: Props) {
       <section className="fbk-notice" aria-labelledby="fbk-public-t">
         <StudioIcon name="warning" />
         <div>
-          <h3 id="fbk-public-t">{t("这里写的一切都会成为公开的 GitHub 议题")}</h3>
-          <p>{t("文字、截图和昵称都会发布在 esengine/DeepSeek-Reasonix 仓库，任何人都看得到。请不要写入密钥、账号密码或私有代码，截图里也一样。")}</p>
+          <h3 id="fbk-public-t">{t("只有被我们登记为议题的反馈才会公开")}</h3>
+          <p>{t("如果登记为 GitHub 议题，你的文字、昵称和截图会发布在 esengine/DeepSeek-Reasonix 仓库，任何人都看得到；不登记就不会公开。你会在这里收到回执，登记后还会看到议题链接，我们也可能在这里回复或向你提问。")}</p>
+          <p data-tone="warn">{t("请不要在文字或截图里写入密钥、账号密码、聊天记录或私有代码：一旦公开就收不回来。")}</p>
           <p>
             {tx("发现的是安全漏洞？请不要在这里提交，{link}。", {
               link: (
@@ -266,7 +267,7 @@ export function FeedbackForm({ port, onMine, onClose, onFile }: Props) {
 
         <div className="fbk-row">
           <label className="fbk-field">
-            <span className="fbk-label">{t("昵称（公开）")}</span>
+            <span className="fbk-label">{t("昵称（登记为议题时公开）")}</span>
             <input
               data-action="feedback.name"
               value={name}
@@ -274,7 +275,7 @@ export function FeedbackForm({ port, onMine, onClose, onFile }: Props) {
               aria-invalid={problem === "name-long" ? true : undefined}
               onChange={(e) => setName(e.target.value)}
             />
-            <span className="fbk-hint">{t("会显示在议题里：「由 {name} 提交」。用昵称即可，不必真名。", { name: name.trim() || "…" })}</span>
+            <span className="fbk-hint">{t("如果登记为议题，会显示为「由 {name} 提交」。用昵称即可，不必真名。", { name: name.trim() || "…" })}</span>
           </label>
           <label className="fbk-field">
             <span className="fbk-label">{t("联系方式（可选，私密）")}</span>
@@ -290,7 +291,7 @@ export function FeedbackForm({ port, onMine, onClose, onFile }: Props) {
         </div>
 
         <div className="fbk-field">
-          <span className="fbk-label" id="fbk-shots-t">{t("截图（可选，公开）")}</span>
+          <span className="fbk-label" id="fbk-shots-t">{t("截图（可选，登记为议题时公开）")}</span>
           <div className="fbk-drop" role="group" aria-labelledby="fbk-shots-t">
             {shots.length > 0 && (
               <ul className="fbk-shots">
@@ -338,7 +339,7 @@ export function FeedbackForm({ port, onMine, onClose, onFile }: Props) {
               }}
             />
           </div>
-          <span className="fbk-hint" data-tone="warn">{t("截图会和文字一起公开发布，发送前请确认没有露出密钥、聊天记录或私有代码。")}</span>
+          <span className="fbk-hint" data-tone="warn">{t("如果这份反馈被登记为公开议题，截图会和文字一起公开。发送前请确认没有露出密钥、聊天记录或私有代码。")}</span>
           {refused.length > 0 && (
             <ul className="fbk-refused" role="status">
               {refused.map((r, i) => (

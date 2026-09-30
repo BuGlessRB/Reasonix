@@ -129,6 +129,8 @@ var mirroredWireTypes = []wireMirror{
 	{"internal/platform/feedback/types.go", "Limits", tsFeedbackFile, "FeedbackLimits"},
 	{"internal/platform/feedback/types.go", "Receipt", tsFeedbackFile, "FeedbackReceipt"},
 	{"internal/platform/feedback/types.go", "Item", tsFeedbackFile, "FeedbackItem"},
+	{"internal/platform/feedback/types.go", "Reply", tsFeedbackFile, "FeedbackReply"},
+	{"internal/platform/feedback/types.go", "ReplyReceipt", tsFeedbackFile, "FeedbackReplyReceipt"},
 	{"internal/platform/feedback/types.go", "Mine", tsFeedbackFile, "FeedbackMine"},
 	{"internal/frontend/serve/feedback.go", "feedbackEnvView", tsFeedbackFile, "FeedbackEnv"},
 	{"internal/frontend/serve/feedback.go", "feedbackSubmitBody", tsFeedbackFile, "FeedbackRequest"},
