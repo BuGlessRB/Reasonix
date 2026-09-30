@@ -151,6 +151,29 @@ describe("WorkbenchPanel", () => {
     expect(screen.getByRole("tab", { name: "README.md" }).getAttribute("aria-selected")).toBe("true");
   });
 
+  it("steps the file list aside when a browser tab is picked", async () => {
+    const user = userEvent.setup();
+    const pages = [
+      { id: "b1", target: "t1", url: "https://top.baidu.com", title: "Agent page", active: true },
+      { id: "b2", target: "t2", url: "https://example.com", title: "My page", active: false },
+    ];
+    const { container } = render(<WorkbenchPanel port={new MockPort()} tabs={pages} manual shown={false} scheme="dark" changes={[]} onCloseManual={vi.fn()} onSurfaces={vi.fn()} onExternal={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "文件" }));
+    expect(container.querySelector(".workbench-body")?.hasAttribute("data-files")).toBe(true);
+    await user.click(screen.getByRole("tab", { name: "Agent page" }).querySelector("button") ?? screen.getByRole("tab", { name: "Agent page" }));
+    expect(container.querySelector(".workbench-body")?.hasAttribute("data-files")).toBe(false);
+    expect(screen.getByRole("tab", { name: "Agent page" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("steps the file list aside when a new browser tab is opened", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<WorkbenchPanel port={new MockPort()} tabs={[]} manual={false} shown scheme="light" changes={[]} onCloseManual={vi.fn()} onSurfaces={vi.fn()} onExternal={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "文件" }));
+    expect(container.querySelector(".workbench-body")?.hasAttribute("data-files")).toBe(true);
+    await user.click(screen.getByRole("button", { name: "新建浏览器标签" }));
+    await waitFor(() => expect(container.querySelector(".workbench-body")?.hasAttribute("data-files")).toBe(false));
+  });
+
   // The port answers from a disk the test owns, and the delete goes around every
   // port call — the way a file manager does it — so nothing announces it.
   it("drops a folder deleted outside the app once the window is looked at again", async () => {
