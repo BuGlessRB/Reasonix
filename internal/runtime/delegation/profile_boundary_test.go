@@ -1,6 +1,7 @@
 package delegation
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -75,7 +76,7 @@ func TestProfileDefinitionStaysWorkerIdentityOnly(t *testing.T) {
 	// and two fields because one field made the report's own label the
 	// permission.
 	assertFieldSet(t, "ProfileDefinition", ProfileDefinition{}, []string{
-		"Name", "Body", "AllowedTools", "Model", "Effort", "ReadOnly", "Invocation", "NamedBuiltin", "Delivery", "Authority",
+		"Name", "Body", "AllowedTools", "Model", "Effort", "ReadOnly", "Invocation", "DisableModelInvocation", "NamedBuiltin", "Delivery", "Authority",
 	})
 }
 
@@ -94,15 +95,16 @@ func TestProfileFromSkillLeavesRoutingMetadataBehind(t *testing.T) {
 // declared on both types but never wired through, so profiles silently lose it.
 func TestProfileFromSkillPopulatesEveryIdentityField(t *testing.T) {
 	got := ProfileFromSkill(skill.Skill{
-		Name:         "reviewer",
-		Body:         "you review code",
-		AllowedTools: []string{"read_file"},
-		Model:        "some-model",
-		Effort:       "high",
-		ReadOnly:     true,
-		Invocation:   "manual",
-		Delivery:     skill.DeliveryContract{ReviewReport: skill.ReviewReportReview},
-		Authority:    skill.AuthorityContract{Satisfies: []string{skill.ReviewReportReview}},
+		Name:            "reviewer",
+		Body:            "you review code",
+		AllowedTools:    []string{"read_file"},
+		Model:           "some-model",
+		Effort:          "high",
+		ReadOnly:        true,
+		Invocation:      "manual",
+		InvocationFlags: skill.InvocationFlags{DisableModelInvocation: true},
+		Delivery:        skill.DeliveryContract{ReviewReport: skill.ReviewReportReview},
+		Authority:       skill.AuthorityContract{Satisfies: []string{skill.ReviewReportReview}},
 	})
 	rv := reflect.ValueOf(got)
 	rt := rv.Type()
@@ -116,5 +118,20 @@ func TestProfileFromSkillPopulatesEveryIdentityField(t *testing.T) {
 	}
 	if got.NamedBuiltin {
 		t.Error("a custom profile must not be flagged as a named built-in")
+	}
+}
+
+func TestResolveProfileDefinitionRefusesUserOnlyWorkerWithTypedError(t *testing.T) {
+	lookup := func(name string) (ProfileDefinition, bool) {
+		return ProfileFromSkill(skill.Skill{
+			Name: name, RunAs: skill.RunSubagent,
+			InvocationFlags: skill.InvocationFlags{DisableModelInvocation: name == "ship-sub"},
+		}), true
+	}
+	if _, err := ResolveProfileDefinition(lookup, "ship-sub"); !errors.Is(err, skill.ErrModelInvocationDisabled) {
+		t.Fatalf("user-only profile error = %v, want skill.ErrModelInvocationDisabled", err)
+	}
+	if _, err := ResolveProfileDefinition(lookup, "open-sub"); err != nil {
+		t.Fatalf("ordinary profile refused: %v", err)
 	}
 }

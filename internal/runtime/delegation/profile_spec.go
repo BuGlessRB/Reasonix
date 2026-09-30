@@ -28,6 +28,9 @@ type ProfileDefinition struct {
 	// Invocation is "auto" or "manual". Explicit profile= on task/fleet may
 	// call manual profiles; automatic discovery still respects the index.
 	Invocation string
+	// DisableModelInvocation marks a worker its author reserved for the user;
+	// ResolveProfileDefinition serves the model's profile= calls only.
+	DisableModelInvocation bool
 	// NamedBuiltin is true for the built-in explore/research/review/
 	// security-review profiles. Their body is still the full system prompt
 	// (no implicit concise default), matching custom profiles.
@@ -67,16 +70,17 @@ type ProfileLookup func(name string) (ProfileDefinition, bool)
 // here is the first step from a profile toward a workflow language.
 func ProfileFromSkill(sk skill.Skill) ProfileDefinition {
 	return ProfileDefinition{
-		Name:         sk.Name,
-		Body:         sk.Body,
-		AllowedTools: sk.AllowedTools,
-		Model:        sk.Model,
-		Effort:       sk.Effort,
-		ReadOnly:     sk.ReadOnly,
-		Invocation:   sk.Invocation,
-		NamedBuiltin: NamedBuiltinProfile(sk.Name),
-		Delivery:     DeliveryContract{ReviewReport: evidence.ReviewKind(sk.Delivery.ReviewReport)},
-		Authority:    AuthorityContract{Review: reviewAuthorityOf(sk.Authority)},
+		Name:                   sk.Name,
+		Body:                   sk.Body,
+		AllowedTools:           sk.AllowedTools,
+		Model:                  sk.Model,
+		Effort:                 sk.Effort,
+		ReadOnly:               sk.ReadOnly,
+		Invocation:             sk.Invocation,
+		DisableModelInvocation: sk.DisableModelInvocation,
+		NamedBuiltin:           NamedBuiltinProfile(sk.Name),
+		Delivery:               DeliveryContract{ReviewReport: evidence.ReviewKind(sk.Delivery.ReviewReport)},
+		Authority:              AuthorityContract{Review: reviewAuthorityOf(sk.Authority)},
 	}
 }
 
@@ -206,6 +210,9 @@ func ResolveProfileDefinition(lookup ProfileLookup, name string) (ProfileDefinit
 	}
 	if strings.TrimSpace(def.Name) == "" {
 		def.Name = name
+	}
+	if def.DisableModelInvocation {
+		return ProfileDefinition{}, fmt.Errorf("%w: profile %q runs only when the user invokes it; do not delegate to it", skill.ErrModelInvocationDisabled, def.Name)
 	}
 	return def, nil
 }

@@ -681,7 +681,7 @@ func collapseSpaces(s string) string {
 
 // availableNames lists the discoverable skill names for an error message.
 func availableNames(store *Store) string {
-	skills := store.List()
+	skills := ModelInvocable(store.List())
 	if len(skills) == 0 {
 		return "(none — no skills defined)"
 	}

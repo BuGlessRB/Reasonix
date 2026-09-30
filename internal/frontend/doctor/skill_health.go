@@ -85,6 +85,9 @@ func CollectSkillHealthWarnings(opts SkillHealthOptions) []string {
 		}
 		// The parser drops illegal profiles values from Profiles but preserves
 		// them in InvalidProfiles precisely so this check can reach them.
+		for _, issue := range sk.Invalid {
+			out = append(out, fmt.Sprintf("skill %q: %s", name, issue))
+		}
 		for _, p := range sk.InvalidProfiles {
 			out = append(out, fmt.Sprintf("skill %q has illegal profiles value %q (valid: economy, balanced, delivery)", name, p))
 		}

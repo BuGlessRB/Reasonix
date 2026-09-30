@@ -102,6 +102,28 @@ func (s *skillSet) prepare(sk skill.Skill) skill.Skill {
 	return sk
 }
 
+// forModel is the skill as the model may use it now, by the slash name its
+// entry was registered under: re-read from the live store when there is one,
+// and refused when its author reserved it for the user.
+func (s *skillSet) forModel(sk skill.Skill) (skill.Skill, error) {
+	if s.store != nil {
+		return s.store.ForModel(sk.SlashName())
+	}
+	if err := s.store.ValidateInvocation(sk); err != nil {
+		return skill.Skill{}, err
+	}
+	return sk, nil
+}
+
+// modelGate judges the model's slash entries once per call; a session with no
+// live store has nothing that can change, so its entries were judged at build.
+func (s *skillSet) modelGate() func() func(string) error {
+	if s.store != nil {
+		return s.store.ModelGate()
+	}
+	return nil
+}
+
 func (s *skillSet) renderInvocation(sk skill.Skill, args string) string {
 	return skill.RenderInvocation(s.prepare(sk), args)
 }
