@@ -91,7 +91,7 @@ func (h shellHost) bash() (Shell, bool) {
 		return Shell{Kind: ShellBash, Path: p}, true
 	}
 	for _, p := range h.winBash {
-		if h.exists(p) && h.probe(p) {
+		if h.exists(p) && !h.isWSL(p) && h.probe(p) {
 			return Shell{Kind: ShellBash, Path: p}, true
 		}
 	}
@@ -147,7 +147,7 @@ func (h shellHost) available() []Shell {
 		add(sh)
 	}
 	for _, p := range h.winBash {
-		if h.exists(p) && h.probe(p) {
+		if h.exists(p) && !h.isWSL(p) && h.probe(p) {
 			add(Shell{Kind: ShellBash, Path: p})
 		}
 	}
@@ -238,19 +238,33 @@ func warnMissingShell(warn io.Writer, prefer string) {
 // a /mnt/<drive> path — so it must never be chosen for a native Windows workspace;
 // the only bash.exe Microsoft places under the Windows dir is that launcher.
 func isWindowsWSLBash(path string) bool {
-	if runtime.GOOS != "windows" || path == "" {
+	if runtime.GOOS != "windows" {
 		return false
 	}
-	win := os.Getenv("SystemRoot")
-	if win == "" {
-		win = os.Getenv("windir")
-	}
-	if win == "" {
+	return isWSLLauncherPath(path, systemWindowsDir())
+}
+
+// isWSLLauncherPath judges by file identity, not spelling. A Store app-execution
+// alias is a reparse point Go reports as irregular; the launchers Windows ships are
+// the bash.exe in System32 and SysWOW64, and os.Stat follows every link to them, so
+// short names, junctions, symlinks and hard links all compare equal.
+func isWSLLauncherPath(path, winDir string) bool {
+	if path == "" {
 		return false
 	}
-	p := strings.ToLower(filepath.Clean(path))
-	root := strings.ToLower(filepath.Clean(win)) + string(filepath.Separator)
-	return strings.HasPrefix(p, root)
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeIrregular != 0 {
+		return true
+	}
+	fi, err := os.Stat(path)
+	if err != nil || winDir == "" {
+		return false
+	}
+	for _, dir := range []string{"System32", "SysWOW64"} {
+		if ref, err := os.Stat(filepath.Join(winDir, dir, "bash.exe")); err == nil && os.SameFile(fi, ref) {
+			return true
+		}
+	}
+	return false
 }
 
 // Windows ships a bash.exe launcher stub in %SystemRoot% that opens the WSL
@@ -283,21 +297,46 @@ func pathBase(p string) string {
 // windowsBashCandidates lists the bash.exe paths a Git-for-Windows install
 // ships, across the usual program-files roots and a per-user install.
 func windowsBashCandidates() []string {
+	return bashCandidates(os.Getenv, exec.LookPath)
+}
+
+// bashCandidates adds to the standard roots every absolute PATH directory and the
+// Git tree the git.exe on PATH sits in: exec.LookPath sees only the first
+// bash.exe (usually the WSL launcher). Relative entries would resolve against the
+// workspace, and duplicates would be probed twice, so both are dropped.
+func bashCandidates(getenv func(string) string, lookPath func(string) (string, error)) []string {
 	var roots []string
 	for _, env := range []string{"ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"} {
-		if v := os.Getenv(env); v != "" {
-			roots = append(roots, v)
+		if v := getenv(env); v != "" {
+			roots = append(roots, filepath.Join(v, "Git"))
 		}
 	}
-	if v := os.Getenv("LOCALAPPDATA"); v != "" {
-		roots = append(roots, filepath.Join(v, "Programs"))
+	if v := getenv("LOCALAPPDATA"); v != "" {
+		roots = append(roots, filepath.Join(v, "Programs", "Git"))
+	}
+	if g, err := lookPath("git"); err == nil && filepath.IsAbs(g) {
+		// git.exe is in <root>\cmd or <root>\bin, or one level deeper in
+		// <root>\mingw64\bin.
+		dir := filepath.Dir(g)
+		roots = append(roots, filepath.Dir(dir), filepath.Dir(filepath.Dir(dir)))
 	}
 	var out []string
+	seen := map[string]bool{}
+	add := func(p string) {
+		key := strings.ToLower(filepath.Clean(p))
+		if !seen[key] {
+			seen[key] = true
+			out = append(out, p)
+		}
+	}
 	for _, r := range roots {
-		out = append(out,
-			filepath.Join(r, "Git", "bin", "bash.exe"),
-			filepath.Join(r, "Git", "usr", "bin", "bash.exe"),
-		)
+		add(filepath.Join(r, "bin", "bash.exe"))
+		add(filepath.Join(r, "usr", "bin", "bash.exe"))
+	}
+	for _, d := range filepath.SplitList(getenv("PATH")) {
+		if filepath.IsAbs(d) {
+			add(filepath.Join(d, "bash.exe"))
+		}
 	}
 	return out
 }
