@@ -11,6 +11,7 @@ import (
 	"os"
 	"reasonix/internal/safety/redirectguard"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -42,6 +43,8 @@ type Service struct {
 	store   *store
 	backoff []time.Duration
 	limits  Limits
+	// replying holds the receipts whose reply is on its way.
+	replying sync.Map
 }
 
 func New(cfg Config) (*Service, error) {
@@ -186,6 +189,7 @@ func (s *Service) prepare(d Draft) (wireSubmit, bool, error) {
 	wire := wireSubmit{
 		Category: d.Category, Body: redactedBody,
 		DisplayName: name, Contact: contact, Env: env,
+		TurnstileToken: strings.TrimSpace(d.TurnstileToken),
 	}
 	for _, a := range imgs {
 		wire.Attachments = append(wire.Attachments, wireAttachment{
@@ -209,7 +213,7 @@ func (s *Service) ListMine(ctx context.Context) (Mine, error) {
 		return Mine{}, err
 	}
 	if st.InstallID == "" || st.InstallToken == "" {
-		return Mine{Items: nonNil(st.Items)}, nil
+		return st.mine(false), nil
 	}
 	var resp struct {
 		Items []Item `json:"items"`
@@ -218,13 +222,13 @@ func (s *Service) ListMine(ctx context.Context) (Mine, error) {
 	switch {
 	case err == nil:
 	case isOffline(err):
-		return Mine{Items: nonNil(st.Items), Offline: true}, nil
+		return st.mine(true), nil
 	case errors.Is(err, ErrBadToken):
 		if err := s.store.update(func(st *state) error { st.retire(); return nil }); err != nil {
 			return Mine{}, err
 		}
 		st, err = s.store.load()
-		return Mine{Items: nonNil(st.Items)}, err
+		return st.mine(false), err
 	default:
 		return Mine{}, err
 	}
@@ -235,17 +239,10 @@ func (s *Service) ListMine(ctx context.Context) (Mine, error) {
 	if err != nil {
 		return Mine{}, err
 	}
-	return Mine{Items: nonNil(st.Items)}, nil
+	return st.mine(false), nil
 }
 
 func isOffline(err error) bool { return errors.Is(err, ErrOffline) || errors.Is(err, ErrUnavailable) }
-
-func nonNil(items []Item) []Item {
-	if items == nil {
-		return []Item{}
-	}
-	return items
-}
 
 // safeBase accepts https, and plain http only to a loopback address for tests
 // and local stubs: a report and the install token must not cross the network

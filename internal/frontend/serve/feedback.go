@@ -16,17 +16,20 @@ import (
 const uploadCeiling = 16 << 20
 
 const (
-	codeFeedbackInvalid     = "feedback.invalid"
-	codeFeedbackTooLarge    = "feedback.too_large"
-	codeFeedbackRateLimited = "feedback.rate_limited"
-	codeFeedbackDisabled    = "feedback.disabled"
-	codeFeedbackDuplicate   = "feedback.duplicate"
-	codeFeedbackBadToken    = "feedback.bad_token"
-	codeFeedbackOffline     = "feedback.offline"
-	codeFeedbackUnavailable = "feedback.unavailable"
-	codeFeedbackInternal    = "feedback.internal"
-	codeFeedbackBusy        = "feedback.busy"
-	codeFeedbackImageMeta   = "feedback.image_metadata"
+	codeFeedbackInvalid      = "feedback.invalid"
+	codeFeedbackTooLarge     = "feedback.too_large"
+	codeFeedbackRateLimited  = "feedback.rate_limited"
+	codeFeedbackDisabled     = "feedback.disabled"
+	codeFeedbackDuplicate    = "feedback.duplicate"
+	codeFeedbackBadToken     = "feedback.bad_token"
+	codeFeedbackOffline      = "feedback.offline"
+	codeFeedbackUnavailable  = "feedback.unavailable"
+	codeFeedbackInternal     = "feedback.internal"
+	codeFeedbackBusy         = "feedback.busy"
+	codeFeedbackImageMeta    = "feedback.image_metadata"
+	codeFeedbackReplyLimit   = "feedback.reply_limit"
+	codeFeedbackNotReplyable = "feedback.not_replyable"
+	codeFeedbackChallenge    = "feedback.challenge_required"
 )
 
 // feedbackSurface names where a report from a hub or pane of surface from
@@ -47,6 +50,8 @@ func (s *Server) registerFeedbackRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /feedback/mine", s.feedbackMine)
 	mux.HandleFunc("POST /feedback", s.feedbackSubmit)
 	mux.HandleFunc("POST /feedback/name", s.feedbackName)
+	mux.HandleFunc("POST /feedback/{receipt}/reply", s.feedbackReply)
+	mux.HandleFunc("POST /feedback/{receipt}/seen", s.feedbackSeen)
 }
 
 func (s *Server) feedbackEnv(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +81,7 @@ type feedbackSubmitBody struct {
 	DisplayName    string              `json:"displayName"`
 	Contact        string              `json:"contact"`
 	Locale         string              `json:"locale"`
+	TurnstileToken string              `json:"turnstileToken,omitempty"`
 	Images         []feedbackImageBody `json:"images"`
 }
 
@@ -93,7 +99,7 @@ func (s *Server) feedbackSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	d := feedback.Draft{
 		IdempotencyKey: req.IdempotencyKey, Category: req.Category, Body: req.Body,
-		DisplayName: req.DisplayName, Contact: req.Contact,
+		DisplayName: req.DisplayName, Contact: req.Contact, TurnstileToken: req.TurnstileToken,
 		Env: feedback.EnvContext{Surface: feedback.SurfaceStudio, Locale: req.Locale},
 	}
 	for _, img := range req.Images {
@@ -119,6 +125,39 @@ func (s *Server) feedbackMine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, got)
+}
+
+type feedbackReplyBody struct {
+	Body string `json:"body"`
+}
+
+func (s *Server) feedbackReply(w http.ResponseWriter, r *http.Request) {
+	var req feedbackReplyBody
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	got, err := s.ctl().ReplyFeedback(r.Context(), r.PathValue("receipt"), req.Body)
+	if err != nil {
+		refuseFeedback(w, err)
+		return
+	}
+	writeJSON(w, got)
+}
+
+type feedbackSeenBody struct {
+	UpTo feedback.ReplyID `json:"upTo"`
+}
+
+func (s *Server) feedbackSeen(w http.ResponseWriter, r *http.Request) {
+	var req feedbackSeenBody
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if err := s.ctl().MarkFeedbackSeen(r.PathValue("receipt"), req.UpTo); err != nil {
+		refuseFeedback(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) feedbackName(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +201,12 @@ func refuseFeedback(w http.ResponseWriter, err error) {
 		refuse(w, http.StatusConflict, codeFeedbackBadToken, err.Error(), nil)
 	case errors.Is(err, feedback.ErrBusy):
 		refuse(w, http.StatusServiceUnavailable, codeFeedbackBusy, err.Error(), nil)
+	case errors.Is(err, feedback.ErrReplyLimit):
+		refuse(w, http.StatusTooManyRequests, codeFeedbackReplyLimit, err.Error(), nil)
+	case errors.Is(err, feedback.ErrNotReplyable):
+		refuse(w, http.StatusConflict, codeFeedbackNotReplyable, err.Error(), nil)
+	case errors.Is(err, feedback.ErrChallengeRequired):
+		refuse(w, http.StatusForbidden, codeFeedbackChallenge, err.Error(), nil)
 	case errors.Is(err, feedback.ErrImageMetadata):
 		refuse(w, http.StatusBadRequest, codeFeedbackImageMeta, err.Error(), nil)
 	case errors.Is(err, feedback.ErrOffline):

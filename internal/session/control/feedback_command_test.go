@@ -98,7 +98,7 @@ func TestFeedbackCommandNeedsANicknameThenAnExplicitYes(t *testing.T) {
 	r.c.Submit("/feedback name kim")
 	r.last(t, "nickname set to kim")
 	r.c.Submit("/feedback bug the sidebar forgets me")
-	if got := r.last(t, "PUBLIC GitHub issue"); !strings.Contains(got, "kim") || !strings.Contains(got, "--yes") {
+	if got := r.last(t, "only if we file your report as an issue"); !strings.Contains(got, "kim") || !strings.Contains(got, "--yes") {
 		t.Fatalf("notice = %q", got)
 	}
 	if r.postCount() != 0 {
@@ -156,7 +156,7 @@ func TestFeedbackIsCompletedAsACommand(t *testing.T) {
 	for _, it := range items {
 		labels = append(labels, it.Label)
 	}
-	if strings.Join(labels, ",") != "bug,idea,question,other,list,name" {
+	if strings.Join(labels, ",") != "bug,idea,question,other,list,show,reply,name" {
 		t.Fatalf("labels = %v", labels)
 	}
 	found := false
@@ -191,5 +191,109 @@ func TestFeedbackKeepsTheLinesOfAMultiLineReport(t *testing.T) {
 	r.last(t, "Receipt")
 	if !strings.Contains(got, `line one\n  indented line two\n\nline four`) {
 		t.Fatalf("body on the wire = %s", got)
+	}
+}
+
+const rigThread = `{"items":[{"receipt":"FB-7K3M-9QX2","category":"bug","titleSnippet":"Sidebar","status":"needs_info","needsInput":true,
+"replies":[{"id":7,"author":"maintainer","body":"Which OS?\u001b[2J\nAnd which version?","createdAt":"2026-10-01T08:00:00Z"},{"id":8,"author":"user","body":"macOS","createdAt":"2026-10-01T09:00:00Z"}],
+"createdAt":"2026-09-30T08:00:00Z","updatedAt":"2026-10-01T09:00:00Z"},
+{"receipt":"FB-2H8P-4WD7","category":"idea","titleSnippet":"Export","status":"closed","createdAt":"2026-09-29T08:00:00Z","updatedAt":"2026-09-29T08:00:00Z"},
+{"receipt":"FB-9A9A-1B1B","category":"bug","titleSnippet":"Crash","status":"recorded","issueNumber":11350,"createdAt":"2026-09-28T08:00:00Z","updatedAt":"2026-09-28T08:00:00Z"}]}`
+
+func sentRig(t *testing.T) *feedbackRig {
+	t.Helper()
+	r := newFeedbackRig(t, feedback.SurfaceTUI, true)
+	r.c.Submit("/feedback name kim")
+	r.last(t, "nickname set")
+	r.c.Submit("/feedback bug --yes x")
+	r.last(t, "Receipt")
+	r.mine = rigThread
+	return r
+}
+
+func TestFeedbackListMarksNeedsInputAndNewReplies(t *testing.T) {
+	r := sentRig(t)
+	r.c.Submit("/feedback list")
+	got := r.last(t, "needs info")
+	for _, want := range []string{"[needs your input]", "[1 new]", "closed", "1 need your attention"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("list lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestFeedbackShowPrintsTheThreadAsPlainTextAndMarksItRead(t *testing.T) {
+	r := sentRig(t)
+	r.c.Submit("/feedback show fb-7k3m-9qx2")
+	got := r.last(t, "maintainer,")
+	if strings.ContainsRune(got, 0x1b) || !strings.Contains(got, "Which OS?") || !strings.Contains(got, "And which version?") || !strings.Contains(got, "you,") || !strings.Contains(got, "/feedback reply FB-7K3M-9QX2") {
+		t.Fatalf("thread = %q", got)
+	}
+	r.c.Submit("/feedback list")
+	if list := r.last(t, "need your attention"); strings.Contains(list, "[1 new]") {
+		t.Fatalf("a shown thread still reads as new: %s", list)
+	}
+	r.c.Submit("/feedback show FB-NOPE")
+	r.last(t, "no feedback with receipt FB-NOPE")
+}
+
+func TestFeedbackReplyNeedsAnExplicitYesAndSaysWhenItBecomesPublic(t *testing.T) {
+	r := sentRig(t)
+	r.c.Submit("/feedback list")
+	r.last(t, "FB-9A9A-1B1B")
+	before := r.postCount()
+	r.c.Submit("/feedback reply FB-9A9A-1B1B macOS 15")
+	if got := r.last(t, "Nothing was sent"); !strings.Contains(got, "#11350") || !strings.Contains(got, "publicly") {
+		t.Fatalf("notice = %q", got)
+	}
+	r.c.Submit("/feedback reply FB-9A9A-1B1B please --yes")
+	r.last(t, "Nothing was sent")
+	if r.postCount() != before {
+		t.Fatal("a reply was sent without --yes directly after the receipt")
+	}
+	r.c.Submit("/feedback reply FB-9A9A-1B1B --yes macOS 15")
+	r.last(t, "Reply sent")
+	if r.postCount() != before+1 {
+		t.Fatalf("posts = %d, want %d", r.postCount(), before+1)
+	}
+}
+
+func TestFeedbackReplyRefusalsAreSaidFromTheirIdentity(t *testing.T) {
+	r := sentRig(t)
+	r.c.Submit("/feedback list")
+	r.last(t, "FB-7K3M-9QX2")
+	for _, c := range []struct {
+		status int
+		code   string
+		says   string
+	}{
+		{429, "feedback.reply_limit", "reply limit"},
+		{409, "feedback.not_replyable", "takes no reply"},
+	} {
+		r.status = c.status
+		r.respond = `{"error":{"code":"` + c.code + `"}}`
+		r.c.Submit("/feedback reply FB-7K3M-9QX2 --yes hello")
+		r.last(t, c.says)
+	}
+	r.c.Submit("/feedback reply")
+	r.last(t, "usage:")
+}
+
+func TestFeedbackReplyFailuresNeverTellYouToJustRetry(t *testing.T) {
+	r := sentRig(t)
+	r.c.Submit("/feedback list")
+	r.last(t, "FB-7K3M-9QX2")
+	for _, c := range []struct {
+		status int
+		code   string
+		says   string
+	}{
+		{502, "", "may or may not have been sent - check /feedback show FB-7K3M-9QX2"},
+		{401, "feedback.bad_token", "send a new report instead"},
+	} {
+		r.status = c.status
+		r.respond = `{"error":{"code":"` + c.code + `"}}`
+		r.c.Submit("/feedback reply FB-7K3M-9QX2 --yes hello")
+		r.last(t, c.says)
 	}
 }

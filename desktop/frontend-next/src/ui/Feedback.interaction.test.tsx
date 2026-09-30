@@ -58,7 +58,7 @@ describe("feedback form", () => {
   });
 
   it("refuses text past the byte limit before it is sent", async () => {
-    setup({ limits: { bodyBytes: 10, nameChars: 40, contactChars: 120, images: 3, imageBytes: 2 << 20, uploadBytes: 10 << 20 } });
+    setup({ limits: { bodyBytes: 10, nameChars: 40, contactChars: 120, images: 3, imageBytes: 2 << 20, uploadBytes: 10 << 20, replyBytes: 4096 } });
     await ready();
     await userEvent.type(name(), "ada");
     await userEvent.type(body(), "你你你你");
@@ -146,7 +146,7 @@ describe("screenshots", () => {
   });
 
   it("stops at the image limit and past the upload size", async () => {
-    setup({ limits: { bodyBytes: 8192, nameChars: 40, contactChars: 120, images: 2, imageBytes: 2 << 20, uploadBytes: 100 } });
+    setup({ limits: { bodyBytes: 8192, nameChars: 40, contactChars: 120, images: 2, imageBytes: 2 << 20, uploadBytes: 100, replyBytes: 4096 } });
     await ready();
     const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
     fireEvent.change(input, { target: { files: [png("a.png", 10), png("b.png", 10), png("c.png", 10), png("huge.png", 500)] } });

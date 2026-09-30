@@ -338,6 +338,9 @@ const SAID: Record<string, string> = {
   "feedback.internal": "本机保存反馈记录失败，请重试",
   "feedback.busy": "反馈通道今日已满，请明天再试",
   "feedback.image_metadata": "截图无法清除其中的元数据，请换一张或先用截图工具重新导出",
+  "feedback.reply_limit": "这份反馈的回复次数已到上限，或回复太频繁了，请稍后再试",
+  "feedback.not_replyable": "这份反馈现在不接收回复",
+  "feedback.challenge_required": "反馈服务要求额外验证，请稍后再试",
 
   // ── 远程连接停下来问的那一句 ───────────────────────────────────
   "ask.not_found": "不存在该待回答的问题",

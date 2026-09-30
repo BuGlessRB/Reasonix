@@ -17,8 +17,15 @@ var (
 	ErrBadToken      = errors.New("feedback: install token rejected")
 	ErrBusy          = errors.New("feedback: service is at capacity")
 	ErrImageMetadata = errors.New("feedback: image carries metadata")
-	ErrOffline       = errors.New("feedback: service unreachable")
-	ErrUnavailable   = errors.New("feedback: service failed")
+	// ErrReplyLimit: the report's thread is full or the install replied too
+	// often. ErrNotReplyable: the report is in a state that takes no reply.
+	// ErrChallengeRequired: the service wants a verification token with the
+	// submit.
+	ErrReplyLimit        = errors.New("feedback: reply limit reached")
+	ErrNotReplyable      = errors.New("feedback: report takes no reply")
+	ErrChallengeRequired = errors.New("feedback: verification required")
+	ErrOffline           = errors.New("feedback: service unreachable")
+	ErrUnavailable       = errors.New("feedback: service failed")
 )
 
 // Field names an InvalidError can carry.
@@ -28,6 +35,8 @@ const (
 	FieldContact     = "contact"
 	FieldCategory    = "category"
 	FieldImages      = "images"
+	FieldReceipt     = "receipt"
+	FieldReplyID     = "replyId"
 )
 
 // Reasons an InvalidError can carry.

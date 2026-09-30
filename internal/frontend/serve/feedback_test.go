@@ -25,6 +25,7 @@ type feedbackStub struct {
 	posts  []map[string]any
 	status int
 	body   string
+	mine   string
 }
 
 func (f *feedbackStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -38,6 +39,15 @@ func (f *feedbackStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if f.status != 0 {
 		w.WriteHeader(f.status)
 		_, _ = io.WriteString(w, f.body)
+		return
+	}
+	if r.Method == http.MethodGet && f.mine != "" {
+		_, _ = io.WriteString(w, f.mine)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/reply") {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"replyId":55,"createdAt":"2026-10-02T09:00:00Z"}`)
 		return
 	}
 	if r.Method == http.MethodGet {
@@ -151,6 +161,7 @@ func TestFeedbackRefusalsCarryTheirOwnCodes(t *testing.T) {
 		{502, "", "feedback.unavailable", 502},
 		{503, "feedback.busy", "feedback.busy", 503},
 		{400, "feedback.image_metadata", "feedback.image_metadata", 400},
+		{403, "feedback.challenge_required", "feedback.challenge_required", 403},
 	}
 	for _, c := range cases {
 		stub := &feedbackStub{status: c.status, body: `{"error":{"code":"` + c.upstream + `"}}`}
@@ -278,5 +289,132 @@ func TestFeedbackWithoutAServiceIsDisabled(t *testing.T) {
 	resp, out := feedbackPost(t, srv.URL+"/feedback", map[string]any{"category": "bug", "body": "x", "displayName": "k"})
 	if resp.StatusCode != http.StatusServiceUnavailable || reasonOf(t, out).Code != "feedback.disabled" {
 		t.Fatalf("%d %s", resp.StatusCode, out)
+	}
+}
+
+const feedbackThread = `{"items":[{"receipt":"FB-7K3M-9QX2","category":"bug","titleSnippet":"x","status":"needs_info","needsInput":true,
+"replies":[{"id":7,"author":"maintainer","body":"Which OS?","createdAt":"2026-10-01T08:00:00Z"}],
+"createdAt":"2026-09-30T08:00:00Z","updatedAt":"2026-10-01T08:00:00Z"}]}`
+
+func feedbackGetMine(t *testing.T, url string) feedback.Mine {
+	t.Helper()
+	resp, err := http.Get(url + "/feedback/mine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got feedback.Mine
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func TestFeedbackThreadReplyAndSeenRoundTrip(t *testing.T) {
+	stub := &feedbackStub{mine: feedbackThread}
+	srv := feedbackServer(t, stub, true)
+	if _, out := feedbackPost(t, srv.URL+"/feedback", map[string]any{"category": "bug", "body": "x", "displayName": "kim"}); !strings.Contains(string(out), "FB-7K3M-9QX2") {
+		t.Fatalf("submit: %s", out)
+	}
+	got := feedbackGetMine(t, srv.URL)
+	if !got.HasNew || got.Unread != 1 || !got.Items[0].NeedsInput || got.Items[0].UnreadReplies != 1 || len(got.Items[0].Replies) != 1 {
+		t.Fatalf("mine = %+v", got)
+	}
+	if resp, out := feedbackPost(t, srv.URL+"/feedback/FB-7K3M-9QX2/seen", map[string]int{"upTo": 7}); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("seen: %d %s", resp.StatusCode, out)
+	}
+	if got := feedbackGetMine(t, srv.URL); got.Items[0].UnreadReplies != 0 || got.Unread != 1 {
+		t.Fatalf("after seen, mine = %+v", got)
+	}
+	resp, out := feedbackPost(t, srv.URL+"/feedback/FB-7K3M-9QX2/reply", map[string]string{"body": "macOS 15"})
+	var rep feedback.ReplyReceipt
+	_ = json.Unmarshal(out, &rep)
+	if resp.StatusCode != http.StatusOK || rep.ReplyID != 55 {
+		t.Fatalf("reply: %d %s", resp.StatusCode, out)
+	}
+	stub.mu.Lock()
+	last := stub.posts[len(stub.posts)-1]
+	stub.mu.Unlock()
+	if last["body"] != "macOS 15" {
+		t.Fatalf("upstream saw %v", last)
+	}
+}
+
+func TestFeedbackReplyRefusalsCarryTheirOwnCodes(t *testing.T) {
+	cases := []struct {
+		status   int
+		upstream string
+		code     string
+		want     int
+	}{
+		{429, "feedback.reply_limit", "feedback.reply_limit", 429},
+		{409, "feedback.not_replyable", "feedback.not_replyable", 409},
+		{429, "feedback.rate_limited", "feedback.rate_limited", 429},
+		{401, "feedback.bad_token", "feedback.bad_token", 409},
+		{502, "", "feedback.unavailable", 502},
+	}
+	for _, c := range cases {
+		stub := &feedbackStub{}
+		srv := feedbackServer(t, stub, true)
+		feedbackPost(t, srv.URL+"/feedback", map[string]any{"category": "bug", "body": "x", "displayName": "kim"})
+		stub.status, stub.body = c.status, `{"error":{"code":"`+c.upstream+`"}}`
+		resp, out := feedbackPost(t, srv.URL+"/feedback/FB-7K3M-9QX2/reply", map[string]string{"body": "hi"})
+		if resp.StatusCode != c.want || reasonOf(t, out).Code != c.code {
+			t.Errorf("%s: %d %s", c.upstream, resp.StatusCode, out)
+		}
+	}
+}
+
+func TestFeedbackReplyRefusesLocallyAndWithoutAService(t *testing.T) {
+	srv := feedbackServer(t, &feedbackStub{}, true)
+	for _, c := range []struct {
+		path, body, field string
+	}{
+		{"/feedback/FB-7K3M-9QX2/reply", `{"body":"hi"}`, "receipt"},
+		{"/feedback/FB-7K3M-9QX2/reply", `{"body":"  "}`, "body"},
+	} {
+		resp, err := http.Post(srv.URL+c.path, "application/json", strings.NewReader(c.body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		r := reasonOf(t, raw)
+		if resp.StatusCode != http.StatusBadRequest || r.Code != "feedback.invalid" || r.Params["field"] != c.field {
+			t.Errorf("%s: %d %s", c.body, resp.StatusCode, raw)
+		}
+	}
+	bare := feedbackServer(t, &feedbackStub{}, false)
+	if resp, out := feedbackPost(t, bare.URL+"/feedback/FB-7K3M-9QX2/reply", map[string]string{"body": "hi"}); reasonOf(t, out).Code != "feedback.disabled" {
+		t.Fatalf("%d %s", resp.StatusCode, out)
+	}
+	if resp, out := feedbackPost(t, bare.URL+"/feedback/FB-7K3M-9QX2/seen", map[string]int{"upTo": 7}); reasonOf(t, out).Code != "feedback.disabled" {
+		t.Fatalf("%d %s", resp.StatusCode, out)
+	}
+}
+
+func TestFeedbackSubmitForwardsTheChallengeToken(t *testing.T) {
+	stub := &feedbackStub{}
+	srv := feedbackServer(t, stub, true)
+	feedbackPost(t, srv.URL+"/feedback", map[string]any{"category": "bug", "body": "x", "displayName": "kim", "turnstileToken": "tok-abc"})
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	if len(stub.posts) != 1 || stub.posts[0]["turnstileToken"] != "tok-abc" {
+		t.Fatalf("upstream saw %v", stub.posts)
+	}
+}
+
+func TestFeedbackSeenNeedsTheReplyItWasShownUpTo(t *testing.T) {
+	srv := feedbackServer(t, &feedbackStub{mine: feedbackThread}, true)
+	feedbackPost(t, srv.URL+"/feedback", map[string]any{"category": "bug", "body": "x", "displayName": "kim"})
+	resp, out := feedbackPost(t, srv.URL+"/feedback/FB-7K3M-9QX2/seen", map[string]int{})
+	r := reasonOf(t, out)
+	if resp.StatusCode != http.StatusBadRequest || r.Code != "feedback.invalid" || r.Params["field"] != "replyId" {
+		t.Fatalf("%d %s", resp.StatusCode, out)
+	}
+	feedbackGetMine(t, srv.URL)
+	feedbackPost(t, srv.URL+"/feedback/FB-7K3M-9QX2/seen", map[string]int{"upTo": 3})
+	if got := feedbackGetMine(t, srv.URL); got.Items[0].UnreadReplies != 1 {
+		t.Fatalf("a mark up to 3 cleared reply 7: %+v", got.Items[0])
 	}
 }
