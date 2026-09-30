@@ -126,13 +126,16 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
         </label>
       </div>
       {error && (
-        <div className="find" data-lvl="err">
+        <div className="find" data-lvl="err" role="alert">
           <span className="t">{t("无法读取社区市场")}</span>
           <span className="why">{error}</span>
-          {filterUnsupported && <button className="act" data-action="market.show-all" onClick={() => setPinned(false)}>{t("查看全部包")}</button>}
+          {(filterUnsupported || rows?.length === 0) && <div className="acts">
+            {filterUnsupported && <button className="act" data-action="market.show-all" onClick={() => setPinned(false)}>{t("查看全部包")}</button>}
+            {!filterUnsupported && <button className="act" data-action="market.retry" onClick={() => { setRows(null); load(0); }}>{t("重试")}</button>}
+          </div>}
         </div>
       )}
-      {rows === null && !error && <div className="empty">{t("正在读取…")}</div>}
+      {(rows === null || loadingMore) && !error && <div className="empty" role="status">{t("正在读取…")}</div>}
       {rows?.length === 0 && !error && <div className="empty">{t(pinned ? "没有找到已固定内容的包。可关闭筛选查看全部包。" : "没有找到匹配的包。")}</div>}
       <ul className="mkt-list">
         {rows?.map((p) => (
@@ -164,7 +167,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
       </ul>
       {more && (
         <button className="act" data-action="market.more" disabled={loadingMore} onClick={() => load(nextOffset.current)}>
-          {t("加载更多")}
+          {t(loadingMore ? "正在读取…" : error && !filterUnsupported ? "重试" : "加载更多")}
         </button>
       )}
     </div>
@@ -177,10 +180,17 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
   const [done, setDone] = useState<MarketPlan | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    port.marketDetail(slug).then(setD).catch((e) => setError(reason(e)));
-  }, [port, slug]);
+    let live = true;
+    setD(null);
+    setError("");
+    port.marketDetail(slug)
+      .then((detail) => { if (live) setD(detail); })
+      .catch((e) => { if (live) setError(reason(e)); });
+    return () => { live = false; };
+  }, [port, slug, attempt]);
 
   const update = !!d?.installed && d.installed.version !== d.package.latestVersion;
   // trust is the person accepting a version no reviewer pinned; the kernel
@@ -244,14 +254,17 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
     return (
       <div className="mkt">
         {error ? (
-          <div className="find" data-lvl="err">
+          <div className="find" data-lvl="err" role="alert">
             <span className="t">{t("无法读取 {name}", { name: slug })}</span>
             <span className="why">{error}</span>
           </div>
         ) : (
-          <div className="empty">{t("正在读取…")}</div>
+          <div className="empty" role="status">{t("正在读取…")}</div>
         )}
-        <div className="acts">{back}</div>
+        <div className="acts">
+          {back}
+          {error && <button className="act" data-action="market.detail-retry" onClick={() => setAttempt((n) => n + 1)}>{t("重试")}</button>}
+        </div>
       </div>
     );
   }
