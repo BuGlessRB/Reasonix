@@ -169,6 +169,9 @@ func (r readFile) read(ctx context.Context, args json.RawMessage) (string, error
 		return "", fmt.Errorf("read %s: %w", displayPath, err)
 	}
 	defer f.Close()
+	if err := confineOpened(r.readRoots, f); err != nil {
+		return "", err
+	}
 
 	// Peek the first 8 KiB to reject binary files cheaply (a NUL byte) before
 	// reading further — keeps a multi-GB archive from being slurped just to be

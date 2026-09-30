@@ -27,6 +27,8 @@ type ObserveRun struct {
 	Context observe.RunContext
 	// stopped is set once the run parked more than it may; see ObserveStopped.
 	stopped *atomic.Bool
+	// sealed is set once assembly has installed the tools and extensions.
+	sealed *atomic.Bool
 }
 
 // ObserveStopped reports the identity of what ended the run: observe.ErrParkLimit
@@ -52,7 +54,7 @@ func cloneObserveRun(o *ObserveRun) *ObserveRun {
 		return nil
 	}
 	cp := *o
-	cp.stopped = new(atomic.Bool)
+	cp.stopped, cp.sealed = new(atomic.Bool), new(atomic.Bool)
 	return &cp
 }
 
@@ -127,8 +129,8 @@ func (g *observeGate) park(toolName string, args json.RawMessage, risk observe.R
 	stored, err := g.sink.Park(observe.Pending{
 		Kind:      observe.KindApproval,
 		Source:    toolName,
-		Summary:   "The run asked to use " + toolName + ".",
-		Detail:    clipUTF8(strings.TrimSpace(toolName+" "+permission.Subject(args)), 400),
+		Summary:   observe.Sanitize("The run asked to use " + toolName + "."),
+		Detail:    observe.Sanitize(clipUTF8(strings.TrimSpace(toolName+" "+permission.Subject(args)), 400)),
 		Untrusted: true,
 		Risk:      risk,
 		Digest:    observe.DigestOf(observe.KindApproval, toolName, string(args)),
@@ -158,7 +160,7 @@ func (a parkingAsker) Ask(_ context.Context, questions []event.AskQuestion) ([]e
 		Kind:      observe.KindAsk,
 		Source:    "ask",
 		Summary:   "The run asked a question that only a person can answer.",
-		Detail:    clipUTF8(renderQuestions(questions), 4000),
+		Detail:    observe.Sanitize(clipUTF8(renderQuestions(questions), 4000)),
 		Untrusted: true,
 		Risk:      observe.RiskLow,
 		Digest:    observe.DigestOf(observe.KindAsk, "ask", renderQuestions(questions)),
@@ -187,4 +189,21 @@ func renderQuestions(questions []event.AskQuestion) string {
 		}
 	}
 	return b.String()
+}
+
+// SealObserveSurface is called by assembly after it has installed the tool
+// registry and the extension dispatcher. From then on neither the agent nor the
+// controller replaces them. It does nothing for an ordinary controller.
+func (c *Controller) SealObserveSurface() {
+	if c == nil || c.observe == nil {
+		return
+	}
+	c.observe.sealed.Store(true)
+	if c.executor != nil {
+		c.executor.LockSurface()
+	}
+}
+
+func (c *Controller) observeSealed() bool {
+	return c.observe != nil && c.observe.sealed.Load()
 }

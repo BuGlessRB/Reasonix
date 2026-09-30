@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -226,6 +227,21 @@ func readOutsideScope(scope []string, target string) bool {
 	return true
 }
 
+// confineOpened re-checks the scope against the file that was actually opened.
+// The check made before opening resolved a name; this one reads the open file,
+// so a link swapped in between cannot carry the read outside. Where the
+// platform cannot report an open file's path the earlier check stands alone.
+func confineOpened(scope []string, f *os.File) error {
+	if len(scope) == 0 {
+		return nil
+	}
+	real, ok := openedPath(f)
+	if !ok {
+		return nil
+	}
+	return confineScope(scope, real)
+}
+
 // confineScope is readOutsideScope with the typed refusal a read tool returns.
 func confineScope(scope []string, target string) error {
 	if !readOutsideScope(scope, target) {
@@ -346,29 +362,49 @@ func confinePreview(roots []string, guard SessionDataGuard, managed ManagedConfi
 	return guard.Check(target)
 }
 
-// realPath resolves path to an absolute, symlink-free form. Because a write
-// target need not exist yet (write_file creates it), it resolves the deepest
-// existing ancestor with EvalSymlinks and re-appends the not-yet-existing tail.
-// This stops a symlinked directory from smuggling a write outside a root.
+// realPath resolves path as the system would when opening it, links and (on
+// Windows) junctions followed, re-appending a tail that does not exist yet. A
+// POSIX path is not cleaned first: a `..` after a link names the target's parent.
 func realPath(path string) (string, error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
+	abs := path
+	if runtime.GOOS == "windows" || !filepath.IsAbs(path) {
+		var err error
+		if abs, err = filepath.Abs(path); err != nil {
+			return "", err
+		}
 	}
-	abs = filepath.Clean(abs)
-	tail := ""
+	var tail []string
 	cur := abs
 	for {
-		if real, err := filepath.EvalSymlinks(cur); err == nil {
-			return filepath.Join(real, tail), nil
+		if real, err := resolveExisting(cur); err == nil {
+			return filepath.Join(append([]string{real}, tail...)...), nil
 		}
-		parent := filepath.Dir(cur)
-		if parent == cur {
-			return abs, nil // nothing along the path exists; use the cleaned abs
+		parent, last := splitLastComponent(cur)
+		if parent == "" || parent == cur {
+			return filepath.Clean(abs), nil // nothing along the path exists
 		}
-		tail = filepath.Join(filepath.Base(cur), tail)
+		tail = append([]string{last}, tail...)
 		cur = parent
 	}
+}
+
+// splitLastComponent drops the final path element without cleaning what is left.
+func splitLastComponent(p string) (parent, last string) {
+	trimmed := strings.TrimRight(p, `/\`)
+	if runtime.GOOS != "windows" {
+		trimmed = strings.TrimRight(p, "/")
+	}
+	i := strings.LastIndexAny(trimmed, pathSeparators)
+	if i < 0 {
+		return "", trimmed
+	}
+	if i == 0 {
+		return trimmed[:1], trimmed[1:]
+	}
+	if runtime.GOOS == "windows" && i == 2 && trimmed[1] == ':' {
+		return trimmed[:3], trimmed[3:]
+	}
+	return trimmed[:i], trimmed[i+1:]
 }
 
 // within reports whether path is at or below root. Both must be absolute,

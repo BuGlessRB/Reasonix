@@ -573,6 +573,7 @@ func (b *builder) freeze(ctrl *control.Controller) (*BuildResult, error) {
 			ctrl.ApplyExtensionSystemPrompt(final)
 		}
 	}
+	ctrl.SealObserveSurface()
 	assembly := &ReusedAssembly{
 		SystemPrompt:            b.prompt.prompt,
 		Skills:                  b.prompt.skills,

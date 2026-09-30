@@ -357,7 +357,9 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	// directories are invisible to the ripgrep subprocess.
 	args := []string{
 		g.rg,
-		"--no-heading", "--line-number", "--with-filename", "--color", "never", "--no-follow",
+		"--no-heading", "--line-number", "--with-filename", "--color", "never",
+		// Ripgrep does not follow links unless told to; stated so that stays true.
+		"--no-follow",
 	}
 	if wide {
 		// The ignore rules and nothing else: the VCS store is history rather

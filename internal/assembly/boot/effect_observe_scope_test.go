@@ -146,6 +146,35 @@ func TestEffectObserveReadsStayInsideTheWorkspace(t *testing.T) {
 
 // The [secrets] switches are the user's to turn off for their own sessions; the
 // posture turns them back on.
+// On POSIX a `..` after a link names the link target's parent, so a path that
+// looks like it stays in the workspace can end in the folder beside it.
+func TestEffectObserveDotDotAfterALinkStaysInside(t *testing.T) {
+	w := newScopeWorld(t)
+	sub := filepath.Join(w.other, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, w.other, "notes.txt", outsideMark)
+	w.link(t, sub, "sublink")
+	via := filepath.ToSlash(w.root) + "/sublink/.."
+	calls := map[string][2]string{
+		"read": {"read_file", fmt.Sprintf(`{"path":%q}`, via+"/notes.txt")},
+		"ls":   {"ls", fmt.Sprintf(`{"path":%q}`, via)},
+		"grep": {"grep", fmt.Sprintf(`{"pattern":"OUTSIDE","path":%q}`, via)},
+		"glob": {"glob", fmt.Sprintf(`{"pattern":%q}`, via+"/*")},
+		"idx":  {"code_index", fmt.Sprintf(`{"action":"outline","path":%q}`, via)},
+	}
+	results := w.run(t, calls, []string{"read", "ls", "grep", "glob", "idx"})
+	for id, got := range results {
+		if strings.Contains(got, outsideMark) || (!strings.Contains(got, refusedText) && (strings.Contains(got, "notes.txt") || strings.Contains(got, "data.go"))) {
+			t.Errorf("%s reached the folder beside the workspace: %q", id, got)
+		}
+	}
+	if runtime.GOOS != "windows" {
+		mustRefuse(t, results, "read", "ls", "grep", "glob", "idx")
+	}
+}
+
 func TestEffectObserveKeepsSecretProtectionOn(t *testing.T) {
 	w := newScopeWorld(t)
 	writeUserConfig(t, userModel+"\n[secrets]\nprotect_sensitive_files = false\nprotect_credential_files = false\n")
@@ -203,6 +232,11 @@ func TestBuildRefusesAWorkspaceContainingHomeOrRoot(t *testing.T) {
 	}
 	if err := checkObserveRoot(root); err != nil {
 		t.Errorf("an ordinary workspace was refused: %v", err)
+	}
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	if err := checkObserveRoot(root); !errors.Is(err, ErrObserveRootTooBroad) {
+		t.Errorf("with no home directory known, checkObserveRoot = %v, want a refusal", err)
 	}
 	_ = config.Roots{}
 }

@@ -21,6 +21,7 @@ import (
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/observe"
 	"reasonix/internal/contract/provider"
+	"reasonix/internal/contract/tool"
 	"reasonix/internal/ext/hook"
 	"reasonix/internal/runtime/agent/testutil"
 	"reasonix/internal/session/control"
@@ -247,8 +248,7 @@ func TestEffectObserveIgnoresTheCheckout(t *testing.T) {
 
 // The control for the test above: an ordinary run does run what the observed
 // run leaves alone, so the observed run's silence is not an artefact of the
-// marker never working. On Windows the hook interpreter is not one the test can
-// rely on, so a silent control there is reported and not failed.
+// marker never working, on every platform.
 func TestEffectOrdinaryRunRunsApprovedHooksAndServers(t *testing.T) {
 	root := observeProject(t)
 	markers := writeHostileCheckout(t, root)
@@ -264,10 +264,6 @@ func TestEffectOrdinaryRunRunsApprovedHooksAndServers(t *testing.T) {
 	}
 	for _, who := range []string{"project hook", "user hook", "user MCP"} {
 		if !waitForMarker(markers[who]) {
-			if runtime.GOOS == "windows" {
-				t.Logf("control: the %s did not run on windows; the observed test's silence for it proves nothing here", who)
-				continue
-			}
 			t.Fatalf("the control build never ran the %s, so the observed run's silence proves nothing", who)
 		}
 	}
@@ -527,10 +523,20 @@ func TestEffectObserveGateAndAskerCannotBeSwappedOnTheAgent(t *testing.T) {
 	ctrl, ledger := buildObserved(t, root, prov, observe.RunContext{ScheduleID: "s", TriggerID: "t"})
 	ctrl.Executor().SetGate(allowEverything{})
 	ctrl.Executor().SetAsker(answersYes{})
+	// Not even a registry that holds every tool can be swapped in.
+	wide := tool.NewRegistry()
+	for _, tl := range tool.Builtins() {
+		wide.Add(tl)
+	}
+	ctrl.Executor().SetTools(wide)
+	ctrl.ReplaceExtensions(nil)
 	if err := ctrl.Run(context.Background(), "go"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	results := toolResults(prov.Requests())
+	if names := toolNameList(agentRequests(prov.Requests())[0]); !slices.Equal(names, observeCeiling) {
+		t.Fatalf("SetTools changed what the model is offered: %v", names)
+	}
 	if strings.Contains(results["c-read"], "SECRET-CONTENTS") || strings.Contains(results["c-ask"], "The user answered") || len(ledger.List()) != 2 {
 		t.Fatalf("replacing the gate or asker changed the posture: %v / %v / %+v", results["c-read"], results["c-ask"], ledger.List())
 	}

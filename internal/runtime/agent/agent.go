@@ -377,7 +377,7 @@ func (a *Agent) SetTools(tools *tool.Registry) {
 	if a == nil {
 		return
 	}
-	a.svc.tools = tools
+	a.svc.setTools(tools)
 }
 
 // SetReasoningLanguage updates the visible reasoning language preference for
@@ -416,7 +416,7 @@ func (a *Agent) SetExtensions(d *dispatch.Dispatcher) {
 	if a == nil {
 		return
 	}
-	a.svc.extensions = d
+	a.svc.setExtensions(d)
 }
 
 // SetRecoveryGate installs Auto Guard. Safe to call before the run loop starts;

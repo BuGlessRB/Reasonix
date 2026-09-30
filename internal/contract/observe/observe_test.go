@@ -95,8 +95,8 @@ func TestBlockCannotCloseItsOwnTag(t *testing.T) {
 }
 
 func TestSanitizeRemovesControlAndBidiCharacters(t *testing.T) {
-	in := "a\x00b\u202ec\u2066d\u200fe\x1b[31mf\tg\nh"
-	if got := Sanitize(in); got != "abcde[31mf\tg\nh" {
+	in := "a\x00b\u202ec\u2066d\u200fe\x1b[31mf\tg\nh\u200bi\u200cj\u200dk\u2060l\ufeffm\U000e0041n\u2028o\u2029p"
+	if got := Sanitize(in); got != "abcde[31mf\tg\nhijklmnop" {
 		t.Fatalf("Sanitize = %q", got)
 	}
 	l := NewLedger(nil)

@@ -2,6 +2,7 @@ package boot
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -88,7 +89,7 @@ func checkObserveRoot(root string) error {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
-		return nil
+		return fmt.Errorf("%w: the home directory is unknown, so the scope cannot be shown to exclude it", ErrObserveRootTooBroad)
 	}
 	if h, err := filepath.EvalSymlinks(home); err == nil {
 		home = h

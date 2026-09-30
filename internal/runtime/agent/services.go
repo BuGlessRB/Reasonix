@@ -66,6 +66,8 @@ type agentServices struct {
 	asker Asker
 	// postureLocked freezes gate and asker; see LockPosture.
 	postureLocked atomic.Bool
+	// surfaceLocked freezes the tool registry and dispatcher; see LockSurface.
+	surfaceLocked atomic.Bool
 	// preEdit is the seam the checkpoint store uses to snapshot pre-edit
 	// content. Only non-ReadOnly tool.Previewer tools fire it, so bash — whose
 	// targets are unknowable — is never tracked. Prefer mutationObserver.

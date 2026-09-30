@@ -169,3 +169,30 @@ func TestObserveGateIgnoresSessionAllowAndModes(t *testing.T) {
 		t.Fatal("the observe gate must report that it denies writers")
 	}
 }
+
+// captureSink keeps what a store would be handed.
+type captureSink struct{ got []observe.Pending }
+
+func (c *captureSink) Park(p observe.Pending) (observe.Pending, error) {
+	c.got = append(c.got, p)
+	p.ID = "p1"
+	return p, nil
+}
+
+func TestParkedTextIsCleanedBeforeItReachesAnyStore(t *testing.T) {
+	sink := &captureSink{}
+	dirty := "x\u202ey\u200bz\x00\U000e0041"
+	_, _ = parkingAsker{sink: sink}.Ask(context.Background(), []event.AskQuestion{{Header: "H", Prompt: "Which" + dirty, Options: []event.AskOption{{Label: "A" + dirty}, {Label: "B"}}}})
+	gate := newObserveGate(permission.New("ask", nil, []string{"read_file"}, nil), sink, nil)
+	_, _ = gate.Verdict(context.Background(), "read_file", json.RawMessage(`{"path":"a`+strings.ReplaceAll(dirty, "\x00", "")+`"}`), true)
+	if len(sink.got) != 2 {
+		t.Fatalf("stored %d records", len(sink.got))
+	}
+	for _, p := range sink.got {
+		for _, r := range p.Summary + p.Detail {
+			if r == 0x202e || r == 0x200b || r == 0 || r >= 0xe0000 {
+				t.Fatalf("a hidden character reached the store: %+v", p)
+			}
+		}
+	}
+}
