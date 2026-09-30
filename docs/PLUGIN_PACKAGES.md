@@ -423,15 +423,39 @@ imported hook can make is honored. `PreToolUse`/`PermissionRequest` "deny" and
 `PreToolUse`'s `ask`/`defer` decisions are chosen by the script's stdout at
 call time, not by anything in the manifest, so they can't be flagged during
 install; see the hook bullet below for what's implemented.
+
 GitHub-hosted multi-plugin marketplaces with a
 `.claude-plugin/marketplace.json` can be installed from the repository root
 when their plugin entries use relative string sources such as
 `./plugins/example` or `plugins/example`; preview shows one action per plugin
-before anything is written. Set the optional install name to a marketplace
-plugin name to select only that entry. Object sources are accepted only for a
-GitHub repository URL pinned to a full commit SHA. Unpinned external strings,
+before anything is written. Set the optional install name to select one plugin.
+
+Object sources support `source: "url"`
+with a GitHub repository URL pinned to a full commit SHA, and
+`source: "git-subdir"` with a GitHub repository `url` and a relative `path`.
+
+`git-subdir` uses the repository's default branch unless `ref` or a full
+40-character `sha` is supplied; `sha` takes precedence. All `git-subdir`
+sources require a working Git installation, including default-branch and
+SHA-pinned entries. The no-Git tarball fallback used by other GitHub plugin
+sources does not resolve these entries. In a bulk install, an unavailable or
+invalid `git-subdir` entry is skipped with a warning; selecting it by name
+returns the error.
+
+The preview binds the resolved commit and subdirectory to its plan ID,
+and installation still requires approval of that plan.
+The installed source URL is pinned to that commit: updating the plugin keeps
+the same commit, rather than following subsequent changes to the default branch
+or `ref`. Preview the marketplace again to select a newer commit.
+
+Copied plugin packages use the same 256 MiB total budget as plugin archives;
+individual skill installs retain their 20 MiB budget.
+
+Unpinned external strings,
 npm, `strict: false`, and other advanced marketplace protocols are skipped in
-a bulk install and rejected when selected by name. For packages such as
+a bulk install and rejected when selected by name.
+
+For packages such as
 Superpowers and Claude-style skill packs, Reasonix maps the following
 compatibility conventions. Native v2 manifests use only their explicit
 declarations and do not apply these fallbacks:

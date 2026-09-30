@@ -113,7 +113,7 @@ func (t *Tool) applyCopySkill(req request, act *action) error {
 		}
 	}
 	if act.skill.IsDir {
-		if err := copyDir(act.skill.SourcePath, targetDir); err != nil {
+		if err := copyDir(act.skill.SourcePath, targetDir, maxSkillCopyBytes); err != nil {
 			return err
 		}
 	} else {

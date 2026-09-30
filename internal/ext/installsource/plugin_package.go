@@ -37,6 +37,8 @@ type claudeMarketplaceURLSource struct {
 	Source string `json:"source"`
 	URL    string `json:"url"`
 	SHA    string `json:"sha"`
+	Path   string `json:"path"`
+	Ref    string `json:"ref"`
 }
 
 var fullGitSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
@@ -82,7 +84,7 @@ func (t *Tool) planGitHubPluginPackage(ctx context.Context, req request) ([]acti
 	warnings = append(warnings, marketplaceWarnings...)
 	if marketplaceErr != nil {
 		cleanup()
-		if errors.Is(marketplaceErr, ErrNoCompatibleCapabilities) {
+		if errors.Is(marketplaceErr, ErrNoCompatibleCapabilities) || errors.Is(marketplaceErr, ErrBinaryMissing) {
 			return nil, warnings, marketplaceErr
 		}
 		return nil, warnings, newErr(ErrManifestMissing, "no plugin manifest or supported Claude marketplace found in GitHub repository %s/%s: plugin: %v; marketplace: %v", src.Owner, src.Repo, err, marketplaceErr)
@@ -187,33 +189,15 @@ func (t *Tool) planClaudeMarketplace(ctx context.Context, req request, src githu
 			pluginSource = fmt.Sprintf("https://github.com/%s/%s/tree/%s/%s", src.Owner, src.Repo, branch, repoPath)
 			actionCommit = commit
 		} else {
-			var pinned claudeMarketplaceURLSource
-			if objectErr := json.Unmarshal(entry.Source, &pinned); objectErr != nil || pinned.Source != "url" || !fullGitSHA.MatchString(strings.TrimSpace(pinned.SHA)) {
-				if selected != "" {
-					return nil, warnings, fmt.Errorf("marketplace plugin %q: object source requires source=url, a GitHub URL, and a full 40-character SHA", entryName)
-				}
-				warnings = append(warnings, fmt.Sprintf("skipped Claude marketplace plugin %q: object source is not a pinned GitHub URL", entryName))
-				continue
-			}
-			if _, ok := parseGitHubRepoSource(strings.TrimSpace(pinned.URL)); !ok {
-				if selected != "" {
-					return nil, warnings, fmt.Errorf("marketplace plugin %q: pinned URL %q is not a GitHub repository", entryName, pinned.URL)
-				}
-				warnings = append(warnings, fmt.Sprintf("skipped Claude marketplace plugin %q: pinned URL is not a GitHub repository", entryName))
-				continue
-			}
-			var resolvedCommit string
-			pluginRoot, resolvedCommit, entryCleanup, err = t.pluginSource(ctx, pinned.URL, "copy")
+			pluginRoot, pluginSource, actionCommit, entryCleanup, err = t.marketplaceObjectSource(ctx, entry.Source)
 			if err != nil {
+				var unsupported *unsupportedMarketplaceObject
+				if selected == "" && errors.As(err, &unsupported) {
+					warnings = append(warnings, fmt.Sprintf("skipped Claude marketplace plugin %q: %s", entryName, unsupported.warning))
+					continue
+				}
 				return nil, warnings, fmt.Errorf("marketplace plugin %q: %w", entryName, err)
 			}
-			if !strings.EqualFold(resolvedCommit, pinned.SHA) {
-				if err := checkoutPluginCommit(ctx, pluginRoot, pinned.SHA); err != nil {
-					entryCleanup()
-					return nil, warnings, fmt.Errorf("marketplace plugin %q: %w", entryName, err)
-				}
-			}
-			pluginSource, actionCommit = strings.TrimSpace(pinned.URL), strings.ToLower(strings.TrimSpace(pinned.SHA))
 		}
 		pkg, pkgWarnings, err := pluginpkg.ParseDir(pluginRoot)
 		warnings = append(warnings, pkgWarnings...)
@@ -660,7 +644,7 @@ func installCopiedPlugin(pkg pluginpkg.Package, sourceRoot, target string, repla
 		return err
 	}
 	defer os.RemoveAll(staging)
-	if err := copyDir(sourceRoot, staging); err != nil {
+	if err := copyDir(sourceRoot, staging, tarballTotalLimit); err != nil {
 		return err
 	}
 	// Fail closed when the copied tree resolves to a different capability set
