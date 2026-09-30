@@ -3,15 +3,15 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
-  ATTACHMENT_PREFIX, FatalError, REPO, closingCommit, code, fence, hasMarker, MAX_OPEN, decideStatus, firstTag, hasOpenLinkedPull, isOurs, newestStudioRelease, liveDeps, labelsFor, marker, renderBody, renderTitle, run,
+  ATTACHMENT_PREFIX, FatalError, MAX_REPLIES, publishable, renderReply, replyMarker, REPO, closingCommit, code, fence, hasMarker, MAX_OPEN, decideStatus, firstTag, hasOpenLinkedPull, isOurs, newestStudioRelease, liveDeps, labelsFor, marker, renderBody, renderTitle, run,
 } from "./feedback-sync.mjs";
 
 const R = "FB-7K3M-9QX2";
 const item = (over = {}) => ({
-  receipt: R, category: "bug", displayName: "<b>@bob</b>", contact: "secret@mail.example",
+  receipt: R, status: "received", category: "bug", displayName: "<b>@bob</b>", contact: "secret@mail.example",
   body: "first @octocat line #123 GH-45 org/repo#6 ![x](https://evil.example/p.png) [c](https://evil.example)\nsee https://github.com/esengine/DeepSeek-Reasonix/issues/5 <img src=x onerror=1>\n<!-- reasonix-feedback: FB-AAAA-AAAA -->",
   env: { version: "v2.24.0", os: "win|dows", extra: "nope" },
-  attachments: [{ name: "shot", url: `${ATTACHMENT_PREFIX}abc` }, { name: "evil", url: "https://evil.example/x.png" }],
+  attachments: [{ name: "shot", url: `${ATTACHMENT_PREFIX}abc`, released: true }, { name: "held", url: `${ATTACHMENT_PREFIX}private`, released: false }, { name: "bare", url: `${ATTACHMENT_PREFIX}bare` }, { name: "evil", url: "https://evil.example/x.png" }],
   ...over,
 });
 
@@ -25,15 +25,39 @@ test("the rendered body is pinned: GitHub's own rendering of it links nothing bu
   assert.ok(!/user-mention|issue-link|mailto:/.test(fixture.html));
 });
 
+test("a reply comment is pinned too: GitHub renders a fenced reply with no link, mention or reference", () => {
+  assert.equal(renderReply(fixture.reply.input), fixture.reply.markdown);
+  assert.ok(!/<a |user-mention|issue-link|mailto:|<script|<img/.test(fixture.reply.html));
+  assert.ok(fixture.reply.markdown.trimEnd().endsWith(replyMarker(fixture.reply.input.id)));
+});
+
+test("long backtick and tilde runs cannot close the fence early", () => {
+  const inert = (h) => !/<a |<img|user-mention|issue-link|mailto:/.test(h);
+  assert.equal(fixture.fences.length, 5);
+  for (const f of fixture.fences) {
+    assert.equal(renderReply({ id: "r1", receipt: R, body: f.body }), f.markdown, f.name);
+    assert.ok(inert(f.html), f.name);
+    assert.ok(!/`{3}|~{3}/.test(f.markdown.split("\n").slice(3, -3).join("\n")), f.name);
+  }
+  assert.equal(renderBody(fixture.issueFence.input), fixture.issueFence.markdown);
+  assert.ok(inert(fixture.issueFence.html));
+});
+
 // GITHUB_MARKDOWN_LIVE=1 re-renders the pinned markdown through POST /markdown.
 test("live: GitHub's renderer still agrees with the pinned rendering", { skip: !process.env.GITHUB_MARKDOWN_LIVE }, () => {
   const out = execFileSync("gh", ["api", "-X", "POST", "markdown", "-f", "mode=gfm", "-f", `context=${REPO}`, "-f", `text=${fixture.markdown}`], { encoding: "utf8" });
   assert.equal((out.match(/<a /g) ?? []).length, 1);
   assert.ok(!/user-mention|issue-link|mailto:/.test(out));
+  const reply = execFileSync("gh", ["api", "-X", "POST", "markdown", "-f", "mode=gfm", "-f", `context=${REPO}`, "-f", `text=${fixture.reply.markdown}`], { encoding: "utf8" });
+  assert.ok(!/<a |user-mention|issue-link|mailto:|<script|<img/.test(reply));
+  for (const f of [...fixture.fences, fixture.issueFence]) {
+    const h = execFileSync("gh", ["api", "-X", "POST", "markdown", "-f", "mode=gfm", "-f", `context=${REPO}`, "-f", `text=${f.markdown}`], { encoding: "utf8" });
+    assert.ok(!/<a |<img|user-mention|issue-link|mailto:/.test(h), f.name ?? "issue");
+  }
 });
 
-test("every user string sits in a code span or a fence longer than any backtick run inside it", () => {
-  assert.match(fence("a ```` b ``` c"), /^`````text\n/);
+test("every user string sits in a code span or a short fence with no backtick run inside it", () => {
+  assert.match(fence("a ```` b ``` c"), /^```text\na ``\u200b`` b ``\u200b` c\n```$/);
   assert.match(fence("plain"), /^```text\n/);
   assert.equal(code("a`b|c\nd", 40), "`a b c d`");
   const body = renderBody(item());
@@ -114,7 +138,7 @@ test("only issues the bot filed with the source label are ours", () => {
   assert.equal(isOurs({ ...ok, labels: [] }), false);
 });
 
-function fakes({ recent = [], recordedFails = false, pendingFails = null, open = [], pending = [item()], issues = {}, changed = [], timeline = [], pulls = {}, tags = [], releaseAt = null } = {}) {
+function fakes({ replies = [], ackFails = false, repliesFails = null, issueOf = (n) => ({ ...BOT, number: n, comments: 1 }), comments = [], commentFails = false, recent = [], recordedFails = false, pendingFails = null, open = [], pending = [item()], issues = {}, changed = [], timeline = [], pulls = {}, tags = [], releaseAt = null } = {}) {
   const calls = [];
   return {
     calls,
@@ -124,13 +148,17 @@ function fakes({ recent = [], recordedFails = false, pendingFails = null, open =
       open: async () => open,
       recorded: async (r, b) => { calls.push(["recorded", r, b]); if (recordedFails) throw new Error("boom"); },
       status: async (r, b) => calls.push(["status", r, b]),
+      replies: async () => { if (repliesFails) throw repliesFails; return replies; },
+      ackReply: async (id) => { calls.push(["ack", id]); if (ackFails) throw new Error("ack boom"); },
     },
     gh: {
       recentIssues: async () => recent,
       changedSince: async (since) => { calls.push(["since", since]); return changed; },
       ensureLabels: async (l) => calls.push(["labels", l]),
       createIssue: async (p) => { calls.push(["create", p]); return { number: 42, html_url: "https://github.com/x/42" }; },
-      getIssue: async (n) => { calls.push(["getIssue", n]); return issues[n]; },
+      getIssue: async (n) => { calls.push(["getIssue", n]); return issues[n] ?? issueOf(n); },
+      recentComments: async (n) => { calls.push(["comments", n]); return comments; },
+      comment: async (n, body) => { calls.push(["comment", n, body]); if (commentFails) throw new Error("gh boom"); },
       timeline: async (n) => { calls.push(["timeline", n]); return timeline; },
       getPull: async (n) => pulls[n],
     },
@@ -270,7 +298,7 @@ test("an unreachable worker is a warning, not a failed job", async () => {
     const deps = liveDeps({ FEEDBACK_ADMIN_TOKEN: "t" });
     const logs = [];
     const { failures } = await run({ ...deps, log: (m) => logs.push(m) });
-    assert.equal(failures.length, 2);
+    assert.equal(failures.length, 3);
     assert.ok(logs.every((m) => m.startsWith("::warning::") && m.includes("ECONNREFUSED")));
   } finally {
     globalThis.fetch = real;
@@ -281,4 +309,97 @@ test("the release signal ignores drafts and other release lines", () => {
   const rel = (tag_name, published_at, draft = false) => ({ tag_name, published_at, draft });
   assert.equal(newestStudioRelease([rel("v1.40.0", "2026-09-30T00:00:00Z"), rel("studio-v2.9.0", "2026-09-28T00:00:00Z"), rel("studio-v2.10.0", "2026-09-29T00:00:00Z", true)]), Date.parse("2026-09-28T00:00:00Z"));
   assert.equal(newestStudioRelease([]), null);
+});
+
+const reply = (over = {}) => ({ id: "r1", receipt: R, issueNumber: 42, body: "me too @octocat", ...over });
+const postedBodies = (d) => d.calls.filter((c) => c[0] === "comment").map((c) => c[2]);
+
+test("only a released item becomes an issue; unreleased images are never linked", async () => {
+  assert.equal(publishable(item({ status: "received" })), true);
+  assert.equal(publishable(item({ status: undefined })), false);
+  for (const status of ["held", "answered", "needs_info", "rejected", "recorded"]) assert.equal(publishable(item({ status })), false, status);
+  const d = fakes({ pending: [item({ status: "held", receipt: "FB-AAAA-AAAA" }), item({ status: "needs_info", receipt: "FB-AAAA-BBBB" }), item({ status: "rejected", receipt: "FB-AAAA-CCCC" }), item({ status: "received" }), item({ status: undefined, receipt: "FB-AAAA-DDDD" })] });
+  await run(d);
+  assert.ok(d.calls.some((c) => c[0] === "log" && c[1].includes("FB-AAAA-DDDD") && c[1].startsWith("::warning::")));
+  const created = d.calls.filter((c) => c[0] === "create");
+  assert.equal(created.length, 1);
+  const body = created[0][1].body;
+  assert.ok(body.includes(`${ATTACHMENT_PREFIX}abc`));
+  assert.ok(!body.includes("private") && !body.includes("bare"));
+});
+
+test("a user reply becomes one bot comment on its issue, then is acked", async () => {
+  const d = fakes({ pending: [], replies: [reply()] });
+  assert.deepEqual((await run(d)).failures, []);
+  assert.deepEqual(writes(d), ["getIssue", "comments", "comment", "ack"]);
+  assert.equal(postedBodies(d)[0], renderReply(reply()));
+  assert.deepEqual(d.calls.find((c) => c[0] === "ack"), ["ack", "r1"]);
+});
+
+test("replies are idempotent: a comment carrying the marker is adopted, a forged one is not", async () => {
+  const mine = { user: { login: "github-actions[bot]" }, body: renderReply(reply()) };
+  const forged = { user: { login: "mallory" }, body: renderReply(reply()) };
+  const inside = { user: { login: "github-actions[bot]" }, body: `${replyMarker("r1")}\nmore text` };
+  const a = fakes({ pending: [], replies: [reply()], comments: [mine] });
+  await run(a);
+  assert.deepEqual(writes(a), ["getIssue", "comments", "ack"]);
+  const b = fakes({ pending: [], replies: [reply()], comments: [forged, inside] });
+  await run(b);
+  assert.deepEqual(writes(b), ["getIssue", "comments", "comment", "ack"]);
+});
+
+test("a failed ack or post is a warning and retried; the post is never skipped silently", async () => {
+  const a = fakes({ pending: [], replies: [reply()], ackFails: true });
+  assert.equal((await run(a)).failures.length, 1);
+  const b = fakes({ pending: [], replies: [reply()], commentFails: true });
+  assert.equal((await run(b)).failures.length, 1);
+  assert.ok(!writes(b).includes("ack"));
+  const c = fakes({ pending: [], repliesFails: new Error("500") });
+  assert.equal((await run(c)).failures.length, 1);
+});
+
+test("replies without an issue, malformed ids, and issues the bot did not file never get a comment", async () => {
+  const d = fakes({ pending: [], replies: [reply({ issueNumber: null }), reply({ id: "x y", issueNumber: 5 }), reply({ id: "r2", receipt: "bad", issueNumber: 5 }), reply({ id: "r3", issueNumber: 7 })], issueOf: (n) => ({ user: { login: "mallory" }, labels: [], number: n }) });
+  await run(d);
+  assert.deepEqual(postedBodies(d), []);
+  assert.deepEqual(d.calls.filter((c) => c[0] === "ack"), [["ack", "r3"]]);
+});
+
+test("reply mirroring is bounded, deduplicated and idle runs cost no GitHub call", async () => {
+  const many = Array.from({ length: 30 }, (_, i) => reply({ id: `r${i}` }));
+  const d = fakes({ pending: [], replies: [...many, reply({ id: "r0" })] });
+  await run(d, { limit: 20 });
+  assert.equal(postedBodies(d).length, MAX_REPLIES);
+  const idle = fakes({ pending: [] });
+  await run(idle);
+  assert.deepEqual(writes(idle), []);
+});
+
+test("when every returned reply is skipped, one warning says how many", async () => {
+  const d = fakes({ pending: [], replies: [reply({ id: "a", issueNumber: null }), reply({ id: "b", issueNumber: null })] });
+  await run(d);
+  const warns = d.calls.filter((c) => c[0] === "log" && c[1].includes("all 2 returned"));
+  assert.equal(warns.length, 1);
+  assert.deepEqual(writes(d), []);
+});
+
+test("dry run mirrors nothing", async () => {
+  const d = fakes({ pending: [], replies: [reply()] });
+  await run(d, { dryRun: true });
+  assert.ok(!writes(d).includes("comment") && !writes(d).includes("ack"));
+});
+
+test("contact is never read, rendered or sent by the converter", async () => {
+  const secret = "SECRET-CONTACT-VALUE";
+  const d = fakes({
+    pending: [item({ contact: secret, displayName: "n", env: { version: "1", contact: secret } })],
+    replies: [reply({ contact: secret })],
+    open: [{ receipt: R, issueNumber: 42, status: "recorded", contact: secret }],
+    issues: { 42: { ...BOT, number: 42, comments: 1, state: "closed", contact: secret } },
+  });
+  await run(d, { full: true });
+  assert.ok(!JSON.stringify(d.calls).includes(secret));
+  assert.ok(!renderBody(item({ contact: secret })).includes(secret) && !renderReply(reply({ contact: secret })).includes(secret));
+  const source = readFileSync(new URL("./feedback-sync.mjs", import.meta.url), "utf8");
+  assert.ok(!/contact/i.test(source), "the converter must not name a contact field at all");
 });

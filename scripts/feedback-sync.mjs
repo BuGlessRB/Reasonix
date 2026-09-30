@@ -30,12 +30,13 @@ const ZWSP = "​";
 export const marker = (receipt) => `<!-- reasonix-feedback: ${receipt} -->`;
 
 // GitHub decodes entities before it looks for mentions and references, so
-// escaping cannot make text inert. Code spans and fences are the one place it
-// recognises none of them: every string a user wrote goes in one.
+// escaping cannot make text inert. Code fences are the one place it recognises
+// none of them. A renderer closes a fence of 256+ backticks early, so runs of
+// three or more are broken and the fence stays fixed and short.
+export const breakRuns = (text) => String(text).replace(/`{3,}|~{3,}/g, (m) => m.match(/.{1,2}/g).join(ZWSP));
+
 export function fence(text) {
-  const longest = Math.max(0, ...[...String(text).matchAll(/`+/g)].map((m) => m[0].length));
-  const ticks = "`".repeat(Math.max(3, longest + 1));
-  return `${ticks}text\n${text}\n${ticks}`;
+  return `\`\`\`text\n${breakRuns(text)}\n\`\`\``;
 }
 
 // Single-line values (nickname, environment): no backticks or pipes to break out of.
@@ -47,15 +48,30 @@ export function renderTitle(body) {
   return `[Studio feedback] ${line.replace(/@/g, `@${ZWSP}`).replace(/#(?=\d)/g, `#${ZWSP}`).replace(/(?<=[A-Za-z])-(?=\d)/g, `-${ZWSP}`)}`;
 }
 
+// An image is linked only when the worker marks it released; anything else is still private.
 export function attachmentUrls(item) {
   const urls = [];
   for (const a of item.attachments ?? []) {
-    const url = typeof a === "string" ? a : a?.url;
+    if (a?.released !== true) continue;
+    const url = a.url;
     if (typeof url === "string" && url.startsWith(ATTACHMENT_PREFIX) && !/[\s()<>]/.test(url)) {
-      urls.push({ name: typeof a === "string" ? "image" : a.name || "image", url });
+      urls.push({ name: a.name || "image", url });
     }
   }
   return urls;
+}
+
+// Fails closed: an item without the exact `received` status is not released.
+export const publishable = (item) => item?.status === "received";
+
+export const REPLY_ID = /^[A-Za-z0-9_-]{1,64}$/;
+export const MAX_REPLIES = 5;
+export const MAX_REPLY_CHARS = 4096;
+export const replyMarker = (id) => `<!-- reasonix-feedback-reply: ${id} -->`;
+
+export function renderReply(reply) {
+  const text = String(reply.body ?? "").replace(/\r\n?/g, "\n").slice(0, MAX_REPLY_CHARS);
+  return [`Reply from the reporter (receipt ${reply.receipt})`, fence(text), replyMarker(reply.id)].join("\n\n");
 }
 
 export function renderBody(item) {
@@ -71,6 +87,7 @@ export function renderBody(item) {
 
 // The marker is the last line of a body we wrote; text before it cannot forge it.
 export const hasMarker = (body, receipt) => (body ?? "").trimEnd().endsWith(marker(receipt));
+export const isReplyComment = (c, id) => c?.user?.login === BOT_LOGIN && (c.body ?? "").trimEnd().endsWith(replyMarker(id));
 
 export function labelsFor(item) {
   const cat = CATEGORY_LABEL[item.category] ?? null;
@@ -180,6 +197,37 @@ async function syncOne(row, issue, deps, dry) {
   deps.log(`${row.receipt} (#${number}) -> ${update.status}${update.resolvedVersion ? ` ${update.resolvedVersion}` : ""}`);
 }
 
+async function mirrorOne(reply, deps, dry) {
+  const number = Number(reply.issueNumber);
+  const issue = await deps.gh.getIssue(number);
+  if (!isOurs(issue) || issue.pull_request) {
+    deps.log(`::warning::reply ${reply.id}: #${number} is not a feedback issue; dropped`);
+    if (!dry) await deps.worker.ackReply(reply.id);
+    return;
+  }
+  const comments = await deps.gh.recentComments(number, issue.comments ?? 0);
+  if (comments.some((c) => isReplyComment(c, reply.id))) deps.log(`found comment for reply ${reply.id}`);
+  else if (dry) return deps.log(`[dry-run] would comment on #${number} for reply ${reply.id}`);
+  else {
+    await deps.gh.comment(number, renderReply(reply));
+    deps.log(`commented on #${number} for reply ${reply.id}`);
+  }
+  if (dry) return deps.log(`[dry-run] would ack reply ${reply.id}`);
+  await deps.worker.ackReply(reply.id);
+}
+
+// Replies of items without an issue stay with the maintainer; nothing is posted or acked for them.
+async function mirrorReplies(deps, { dryRun, limit, each, guarded }) {
+  const cap = Math.min(limit, MAX_REPLIES);
+  const listed = ((await guarded("replies", () => deps.worker.replies(cap))) ?? []).slice(0, cap);
+  const rows = listed
+    .filter((r) => REPLY_ID.test(String(r?.id)) && RECEIPT.test(r.receipt) && Number.isInteger(Number(r.issueNumber)) && Number(r.issueNumber) > 0);
+  if (rows.length === 0 && listed.length > 0) deps.log(`::warning::replies: all ${listed.length} returned reply(ies) skipped (no issue or malformed); later replies may be starved`);
+  const seen = new Set();
+  const fresh = rows.filter((r) => !seen.has(r.id) && seen.add(r.id));
+  await each("reply", fresh, (r) => mirrorOne(r, deps, dryRun));
+}
+
 export async function run(deps, { dryRun = false, limit = 20, full = false, now = Date.now() } = {}) {
   const failures = [];
   const each = async (label, rows, fn) => {
@@ -204,8 +252,13 @@ export async function run(deps, { dryRun = false, limit = 20, full = false, now 
     }
   };
   const state = {};
-  const pending = ((await guarded("pending", () => deps.worker.pending(limit))) ?? []).slice(0, limit).filter((i) => RECEIPT.test(i.receipt));
+  const pending = ((await guarded("pending", () => deps.worker.pending(limit))) ?? []).slice(0, limit).filter((i) => {
+    if (!RECEIPT.test(i?.receipt) || publishable(i)) return RECEIPT.test(i?.receipt);
+    if (i.status === undefined) deps.log(`::warning::pending ${i.receipt}: no status; skipped`);
+    return false;
+  });
   await each("create", pending, (item) => createOne(item, deps, dryRun, state));
+  await mirrorReplies(deps, { dryRun, limit, each, guarded });
 
   const open = ((await guarded("open", () => deps.worker.open())) ?? []).slice(0, MAX_OPEN).filter((r) => RECEIPT.test(r.receipt) && Number.isInteger(Number(r.issueNumber)) && Number(r.issueNumber) > 0);
   const waiting = (r) => r.status === "fixed" && r.resolvedVersion === "next";
@@ -262,6 +315,8 @@ export function liveDeps(env) {
       open: async () => (await call("GET", "/v1/admin/feedback/open")).items ?? [],
       recorded: (r, b) => call("POST", `/v1/admin/feedback/${r}/recorded`, b),
       status: (r, b) => call("POST", `/v1/admin/feedback/${r}/status`, b),
+      replies: async (limit) => (await call("GET", `/v1/admin/feedback/replies/pending?limit=${limit}`)).items ?? [],
+      ackReply: (id) => call("POST", `/v1/admin/feedback/replies/${encodeURIComponent(id)}/ack`),
     },
     gh: {
       recentIssues: async () => gh(["api", `repos/${REPO}/issues?labels=${SOURCE_LABEL.name}&state=all&sort=created&direction=desc&per_page=100`]),
@@ -277,6 +332,12 @@ export function liveDeps(env) {
       createIssue: async (payload) => gh(["api", "-X", "POST", `repos/${REPO}/issues`, "--input", "-"], JSON.stringify(payload)),
       getIssue: async (n) => gh(["api", `repos/${REPO}/issues/${n}`]),
       timeline: async (n) => paginate(`repos/${REPO}/issues/${n}/timeline?per_page=100`),
+      async recentComments(n, total) {
+        const last = Math.max(1, Math.ceil(total / 100));
+        const pages = last > 1 ? [last - 1, last] : [last];
+        return pages.flatMap((p) => gh(["api", `repos/${REPO}/issues/${n}/comments?per_page=100&page=${p}`]) ?? []);
+      },
+      comment: async (n, body) => gh(["api", "-X", "POST", `repos/${REPO}/issues/${n}/comments`, "--input", "-"], JSON.stringify({ body })),
       getPull: async (n) => gh(["api", `repos/${REPO}/pulls/${n}`]),
     },
     async newestReleaseAt() {
