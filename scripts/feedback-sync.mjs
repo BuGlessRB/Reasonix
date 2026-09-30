@@ -304,7 +304,11 @@ export function liveDeps(env) {
     } catch (err) {
       throw new Error(`${method} ${path} unreachable: ${err.cause?.code ?? err.message}`);
     }
-    if (res.status === 401 || res.status === 403) throw new FatalError(`${method} ${path} -> ${res.status} (check FEEDBACK_ADMIN_TOKEN)`);
+    if (res.status === 401 || res.status === 403) {
+      const ray = res.headers.get("cf-ray") ?? "-";
+      const snippet = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160);
+      throw new FatalError(`${method} ${path} -> ${res.status} (check FEEDBACK_ADMIN_TOKEN) cf-ray=${ray} body=${snippet}`);
+    }
     if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}`);
     return res.status === 204 ? null : res.json().catch(() => null);
   };
