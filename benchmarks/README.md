@@ -7,9 +7,9 @@ SWE-bench Verified mode:
   [`cmd/e2ebench`](../cmd/e2ebench/main.go). It runs each task against a real
   provider and emits a markdown + JSON report (accuracy, cache-hit rate, token
   use, cost) suitable for pasting into a PR.
-- `context-maintenance-e2e/` — a standalone seed → resume → comprehension
-  harness that A/B-compares cold-restart cache behavior with and without
-  context pruning.
+- `context-maintenance-e2e/` — a standalone seed → resume → continue smoke that
+  checks a session seeds below the compaction trigger, resumes without paying
+  for a summary, and folds exactly once past it.
 - `compaction/` — CompactionBench: grows a session one generation at a time and
   folds it after each, measuring what repeated compaction costs and what it
   loses. See [CompactionBench](#compactionbench) below.
@@ -541,33 +541,32 @@ writer.
 
 ## context-maintenance-e2e
 
-This harness measures what happens when a long session goes idle past the
-provider's cache TTL and then resumes: it A/B-compares cold-restart miss tokens
-with and without pruning, and checks that the agent re-reads a file behind a
-prune placeholder instead of hallucinating.
+A cost-capped smoke for content-driven maintenance, in three legs over one state
+directory: seed a session just below the compaction trigger, load it back and
+check nothing is re-derived, then grow it past the trigger and check exactly one
+summary lands.
 
-It is hardcoded to the `deepseek-v4-flash` model at `https://api.deepseek.com`
-and requires the `DEEPSEEK_API_KEY` environment variable.
+Seed and resume take no provider; `continue` samples and needs
+`DEEPSEEK_API_KEY`. The model is hardcoded to `deepseek-v4-flash` at
+`https://api.deepseek.com`.
 
 ```sh
-export DEEPSEEK_API_KEY=...
+# Seed below the trigger: no checkpoint installed, no summary started
+go run ./benchmarks/context-maintenance-e2e -offline seed
 
-# Seed both arms (pruned + control) with a large session and warm the cache
-go run ./benchmarks/context-maintenance-e2e seed
-
-# Wait past the provider's cache TTL, then resume: prune the "pruned" arm and
-# compare cold-restart miss tokens
+# Reload: the projection version must not move and no summary may run
 go run ./benchmarks/context-maintenance-e2e resume
 
-# Run the comprehension trials (agent must re-read a pruned file and answer
-# from it); exits non-zero unless every trial passes
-go run ./benchmarks/context-maintenance-e2e comprehension
+# Grow past the trigger: one summary, version +1, then no further summary
+export DEEPSEEK_API_KEY=...
+go run ./benchmarks/context-maintenance-e2e continue
 ```
 
 | Flag | Default | Purpose |
 | --- | --- | --- |
-| `-dir` | `benchmarks/context-maintenance-e2e/run` | State directory for `seed`/`resume` (sessions + `meta.json`, `resume-<ts>.json`). |
-| `-trials` | `5` | Number of comprehension trials. |
+| `-dir` | `benchmarks/context-maintenance-e2e/run` | State directory shared by the three legs (session + `meta.json`). |
+| `-max-usd` | `0.50` | Hard cost cap for the live legs. |
+| `-offline` | off | Skip the live provider; `seed` only. |
 
 ## See also
 

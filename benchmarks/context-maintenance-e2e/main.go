@@ -1,6 +1,6 @@
 // Cost-capped seed → resume → continue smoke for content-driven maintenance.
-// Offline covers seed/resume; live continue needs DEEPSEEK_API_KEY and allows
-// at most one summary after growing past compact_ratio=0.85.
+// Seed and resume run without a provider; live continue needs DEEPSEEK_API_KEY
+// and starts exactly one summary after growing past compact_ratio=0.85.
 package main
 
 import (
@@ -70,7 +70,7 @@ func (s *recordSink) Emit(e event.Event) {
 func prov() (provider.Provider, *provider.Pricing) {
 	key := os.Getenv("DEEPSEEK_API_KEY")
 	if key == "" {
-		fmt.Fprintln(os.Stderr, "DEEPSEEK_API_KEY not set (use -offline for seed/resume)")
+		fmt.Fprintln(os.Stderr, "DEEPSEEK_API_KEY not set (use -offline for seed)")
 		os.Exit(1)
 	}
 	p, err := provider.New("openai", provider.Config{
@@ -193,7 +193,10 @@ func seed(dir string, offline bool, cap *costCap) {
 		m.ProjectedTokens, m.TriggerTokens, m.ProjectionVersion, m.SummaryCalls, m.SpentUSD)
 }
 
-func resume(dir string, offline bool) {
+// resume reads the seeded session back and checks that loading it neither
+// advances the projection version nor pays for a summary. It never samples, so
+// it takes no provider and needs no API key.
+func resume(dir string) {
 	path := filepath.Join(dir, "session.jsonl")
 	m := readMeta(dir)
 	sess, err := sessionstore.LoadSession(path)
@@ -202,11 +205,7 @@ func resume(dir string, offline bool) {
 		os.Exit(1)
 	}
 	sink := &recordSink{}
-	var p provider.Provider
-	if !offline {
-		p, _ = prov()
-	}
-	a := newAgent(p, sess, path, sink)
+	a := newAgent(nil, sess, path, sink)
 	snap := a.ContextMaintenanceSnapshot()
 	if snap.ProjectionVersion != m.ProjectionVersion {
 		fmt.Fprintf(os.Stderr, "resume version = %d, want %d\n", snap.ProjectionVersion, m.ProjectionVersion)
@@ -258,12 +257,14 @@ func cont(dir string, offline bool, cap *costCap) {
 		fmt.Fprintln(os.Stderr, "continue prepare:", err)
 		os.Exit(1)
 	}
-	if sink.summaryStarts > 1 {
-		fmt.Fprintf(os.Stderr, "continue started %d summaries, want ≤1\n", sink.summaryStarts)
+	// The fixture is already above the trigger it was grown past, so a leg that
+	// starts no summary has not observed the fold it exists to test.
+	if sink.summaryStarts != 1 {
+		fmt.Fprintf(os.Stderr, "continue started %d summaries, want exactly 1\n", sink.summaryStarts)
 		os.Exit(1)
 	}
 	after := a.ContextMaintenanceSnapshot()
-	if sink.summaryStarts == 1 && after.ProjectionVersion != m.ProjectionVersion+1 {
+	if after.ProjectionVersion != m.ProjectionVersion+1 {
 		fmt.Fprintf(os.Stderr, "continue version = %d, want %d after one summary\n",
 			after.ProjectionVersion, m.ProjectionVersion+1)
 		os.Exit(1)
@@ -306,14 +307,14 @@ func cont(dir string, offline bool, cap *costCap) {
 func main() {
 	dir := flag.String("dir", "benchmarks/context-maintenance-e2e/run", "state directory")
 	maxUSD := flag.Float64("max-usd", defaultMaxUSD, "hard cost cap for live API legs")
-	offline := flag.Bool("offline", false, "skip live provider (seed/resume only)")
+	offline := flag.Bool("offline", false, "skip live provider (seed only)")
 	flag.Parse()
 	cap := &costCap{maxUSD: *maxUSD}
 	switch flag.Arg(0) {
 	case "seed":
 		seed(*dir, *offline, cap)
 	case "resume":
-		resume(*dir, *offline)
+		resume(*dir)
 	case "continue":
 		cont(*dir, *offline, cap)
 	default:
