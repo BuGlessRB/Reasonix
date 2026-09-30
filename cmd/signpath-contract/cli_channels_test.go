@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -11,10 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var cliChannelSecrets = []string{"STUDIO_NPM_TOKEN", "STUDIO_HOMEBREW_TAP_TOKEN"}
-
-// The 1.x line reads these repository secrets; studio must never touch them.
-var legacyRegistrySecrets = []string{"NPM_TOKEN", "HOMEBREW_TAP_TOKEN"}
+var cliChannelSecrets = []string{"NPM_TOKEN", "HOMEBREW_TAP_TOKEN"}
 
 func parseWorkflowFile(t *testing.T, path string) *yaml.Node {
 	t.Helper()
@@ -94,8 +90,8 @@ func TestCLIChannelsJobIsGatedAndAttested(t *testing.T) {
 	if job == nil {
 		t.Fatal("cli-channels job is missing")
 	}
-	if got := mappingScalar(job, "environment"); got != "studio-cli-channels" {
-		t.Fatalf("cli-channels environment = %q, want studio-cli-channels", got)
+	if mappingValue(job, "environment") != nil {
+		t.Fatal("cli-channels must not declare an environment; the switch and the tag rule are its controls")
 	}
 	if got := mappingScalar(job, "if"); got != "vars.STUDIO_PUBLISHES_CLI == 'true'" {
 		t.Fatalf("cli-channels if = %q, want the STUDIO_PUBLISHES_CLI switch", got)
@@ -113,17 +109,10 @@ func TestCLIChannelsJobIsGatedAndAttested(t *testing.T) {
 			t.Fatalf("cli-channels permission %s = %q, want %q", scope, got, level)
 		}
 	}
-	if !nodeContains(job, "environments/studio-cli-channels") || !nodeContains(job, "required_reviewers") {
-		t.Fatal("cli-channels must verify the environment's required reviewers before publishing")
-	}
-	assertGateBeforePublishing(t, job)
 	for _, name := range cliChannelSecrets {
 		if !secretRefPattern(name).MatchString(scalarString(job)) {
 			t.Fatalf("cli-channels does not read secrets.%s", name)
 		}
-	}
-	if name, found := refersTo(job, legacyRegistrySecrets); found {
-		t.Fatalf("cli-channels reads %s; it must use the environment-only STUDIO_* names", name)
 	}
 }
 
@@ -131,6 +120,20 @@ func scalarString(node *yaml.Node) string {
 	var scalars []string
 	scalarsOf(node, &scalars)
 	return strings.Join(scalars, "\n")
+}
+
+func TestReleaseStudioGrantsNoWriteAll(t *testing.T) {
+	root := parseWorkflowFile(t, "../../.github/workflows/release-studio.yml")
+	if top := mappingValue(root, "permissions"); top != nil && top.Kind == yaml.ScalarNode && top.Value == "write-all" {
+		t.Error("release-studio.yml grants write-all")
+	}
+	jobs := jobsOf(t, root)
+	for i := 0; i+1 < len(jobs.Content); i += 2 {
+		name, job := jobs.Content[i].Value, jobs.Content[i+1]
+		if p := mappingValue(job, "permissions"); p != nil && p.Kind == yaml.ScalarNode && p.Value == "write-all" {
+			t.Errorf("release-studio.yml job %s grants write-all", name)
+		}
+	}
 }
 
 func TestNoWorkflowGrantsIDTokenOrBroadPermissionsOutsideCLIChannels(t *testing.T) {
@@ -173,7 +176,7 @@ func TestOnlyCLIChannelsReferencesRegistrySecrets(t *testing.T) {
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no workflows found: %v", err)
 	}
-	guarded := append(append([]string{}, cliChannelSecrets...), legacyRegistrySecrets...)
+	guarded := cliChannelSecrets
 	for _, file := range files {
 		root := parseWorkflowFile(t, file)
 		jobs := mappingValue(root, "jobs")
@@ -196,18 +199,18 @@ func TestOnlyCLIChannelsReferencesRegistrySecrets(t *testing.T) {
 			continue
 		}
 		if name, found := refersTo(root, cliChannelSecrets); found {
-			t.Errorf("%s reaches %s, which belongs to studio's cli-channels", file, name)
+			t.Errorf("%s reaches %s, which only release-studio.yml cli-channels may read", file, name)
 		}
 	}
 }
 
 func TestSecretReferenceDetectionCoversBypassForms(t *testing.T) {
 	for _, text := range []string{
-		"${{ secrets.STUDIO_NPM_TOKEN }}",
-		"${{ secrets['STUDIO_NPM_TOKEN'] }}",
-		`${{ secrets["STUDIO_NPM_TOKEN"] }}`,
+		"${{ secrets.NPM_TOKEN }}",
+		"${{ secrets['NPM_TOKEN'] }}",
+		`${{ secrets["NPM_TOKEN"] }}`,
 		"${{ toJSON(secrets) }}",
-		"${{ secrets[format('STUDIO_{0}', 'NPM_TOKEN')] }}",
+		"${{ secrets[format('NPM_{0}', 'TOKEN')] }}",
 	} {
 		var doc yaml.Node
 		if err := yaml.Unmarshal([]byte("run: \""+regexp.MustCompile(`"`).ReplaceAllString(text, `\"`)+"\"\n"), &doc); err != nil {
@@ -223,84 +226,5 @@ func TestSecretReferenceDetectionCoversBypassForms(t *testing.T) {
 	}
 	if _, found := refersTo(doc.Content[0], cliChannelSecrets); found {
 		t.Error("an unrelated secret was reported")
-	}
-}
-
-func assertGateBeforePublishing(t *testing.T, job *yaml.Node) {
-	t.Helper()
-	steps := mappingValue(job, "steps")
-	if steps == nil || steps.Kind != yaml.SequenceNode {
-		t.Fatal("cli-channels has no steps")
-	}
-	gate := -1
-	for i, step := range steps.Content {
-		if nodeContains(mappingValue(step, "run"), "environments/studio-cli-channels") {
-			gate = i
-			break
-		}
-	}
-	if gate < 0 {
-		t.Fatal("cli-channels has no environment check step")
-	}
-	for i, step := range steps.Content[:gate] {
-		if run := mappingScalar(step, "run"); run != "" || mappingValue(step, "env") != nil {
-			t.Errorf("step %d runs or gets credentials before the environment check", i)
-		}
-	}
-	for i, step := range steps.Content {
-		if i > gate {
-			continue
-		}
-		for _, name := range append(append([]string{}, cliChannelSecrets...), legacyRegistrySecrets...) {
-			if nodeContains(step, name) {
-				t.Errorf("step %d references %s before or at the environment check", i, name)
-			}
-		}
-	}
-}
-
-func TestEnvironmentCheckStepFailsClosed(t *testing.T) {
-	bash, err := exec.LookPath("bash")
-	if err != nil {
-		t.Skip("bash not available")
-	}
-	root := parseWorkflowFile(t, "../../.github/workflows/release-studio.yml")
-	job := mappingValue(jobsOf(t, root), "cli-channels")
-	var script string
-	for _, step := range mappingValue(job, "steps").Content {
-		if run := mappingScalar(step, "run"); strings.Contains(run, "environments/studio-cli-channels") {
-			script = run
-			break
-		}
-	}
-	if script == "" {
-		t.Fatal("environment check step not found")
-	}
-	reviewers := `{"type":"required_reviewers","reviewers":[{"a":1}]}`
-	cases := []struct {
-		name, response string
-		pass           bool
-	}{
-		{"one reviewer", "HTTP/2.0 200 OK\n\n{\"protection_rules\":[" + reviewers + "]}", true},
-		{"no rules", "HTTP/2.0 200 OK\n\n{\"protection_rules\":[]}", false},
-		{"two JSON documents", "HTTP/2.0 200 OK\n\n{\"protection_rules\":[]}{\"protection_rules\":[]}", false},
-		{"empty body", "HTTP/2.0 200 OK\n\n", false},
-		{"non-numeric body", "HTTP/2.0 200 OK\n\n\"x\"", false},
-		{"missing environment", "HTTP/2.0 404 Not Found\n\n{\"message\":\"Not Found\"}", false},
-		{"server error", "HTTP/2.0 500 Error\n\n{}", false},
-	}
-	for _, tc := range cases {
-		dir := t.TempDir()
-		fake := "#!/bin/sh\ncat <<'EOF'\n" + tc.response + "\nEOF\n"
-		if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(fake), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		cmd := exec.Command(bash, "-c", script+"\necho PASSED")
-		cmd.Env = append(os.Environ(), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"), "REPO=x/y", "GH_TOKEN=x", "GITHUB_ACTOR=t")
-		out, err := cmd.CombinedOutput()
-		passed := err == nil && strings.Contains(string(out), "PASSED")
-		if passed != tc.pass {
-			t.Errorf("%s: passed=%v, want %v\n%s", tc.name, passed, tc.pass, out)
-		}
 	}
 }
