@@ -34,8 +34,10 @@ const (
 // it parked. Every string in it is sanitized on the way in and Untrusted stays
 // set on model-authored text, so a reader never has to remember to do either.
 type Result struct {
-	TriggerID       string            `json:"triggerId"`
-	Report          string            `json:"report"`
+	TriggerID string `json:"triggerId"`
+	Report    string `json:"report"`
+	// ReportUntrusted is always true: the report is model text.
+	ReportUntrusted bool              `json:"reportUntrusted"`
 	ReportTruncated bool              `json:"reportTruncated,omitempty"`
 	Pending         []observe.Pending `json:"pending"`
 	PendingDropped  int               `json:"pendingDropped,omitempty"`
@@ -58,6 +60,7 @@ func (s *Store) resultsDir() string { return filepath.Join(s.dir, resultsDirName
 func (s *Store) PutResult(ctx context.Context, triggerID string, r Result) error {
 	r = boundResult(r)
 	r.TriggerID = triggerID
+	r.SessionPath = s.sessionPathOrEmpty(r.SessionPath)
 	return s.locked(ctx, func() error {
 		m, _, err := s.loadLocked()
 		if err != nil {
@@ -107,6 +110,7 @@ func (s *Store) GetResult(ctx context.Context, triggerID string) (Result, error)
 }
 
 func boundResult(r Result) Result {
+	r.ReportUntrusted = true
 	r.Report = observe.Sanitize(r.Report)
 	if len(r.Report) > MaxReportBytes {
 		r.Report, r.ReportTruncated = cutUTF8(r.Report, MaxReportBytes), true
@@ -177,4 +181,26 @@ func (s *Store) pruneResults(keep string) {
 	for _, f := range files[:max(len(files)+1-MaxResults, 0)] {
 		_ = os.Remove(filepath.Join(s.resultsDir(), f.name))
 	}
+}
+
+// sessionPathOrEmpty keeps a session path the child reported only when it names a
+// file inside the state root the store lives under, so a reader that opens it
+// cannot be pointed anywhere else.
+func (s *Store) sessionPathOrEmpty(p string) string {
+	if p == "" || !filepath.IsAbs(p) {
+		return ""
+	}
+	root, err := filepath.EvalSymlinks(filepath.Dir(s.dir))
+	if err != nil {
+		return ""
+	}
+	real, err := filepath.EvalSymlinks(filepath.Dir(p))
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(root, filepath.Join(real, filepath.Base(p)))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	return p
 }

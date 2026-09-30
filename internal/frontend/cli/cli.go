@@ -162,7 +162,7 @@ func RunWithBuildInfo(args []string, info BuildInfo) int {
 		usage()
 		return 0
 	default:
-		return unknownCommand(cmd, rest, version)
+		return unknownCommand(cmd, rest)
 	}
 }
 

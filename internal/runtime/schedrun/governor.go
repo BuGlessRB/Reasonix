@@ -15,6 +15,8 @@ import (
 type Governor struct {
 	tokens     atomic.Int64
 	usages     atomic.Int64
+	requests   atomic.Int64
+	unmetered  atomic.Bool
 	ceiling    int64
 	stopped    atomic.Bool
 	overBudget atomic.Bool
@@ -40,6 +42,23 @@ func (g *Governor) AddUsage(tokens int64) int64 {
 		g.halt()
 	}
 	return total
+}
+
+// Committed records that a model request completed. Each request must be
+// followed by a usage report; the report may trail the commit by one request, so
+// two requests without one between them stop the run, because from then on what
+// it spends is not being counted.
+func (g *Governor) Committed() {
+	n := g.requests.Add(1)
+	if g.usages.Load() < n-1 {
+		g.unmetered.Store(true)
+		g.halt()
+	}
+}
+
+// Unmetered reports whether some request completed with no usage report.
+func (g *Governor) Unmetered() bool {
+	return g.unmetered.Load() || g.usages.Load() < g.requests.Load()
 }
 
 func (g *Governor) halt() {

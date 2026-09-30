@@ -338,3 +338,40 @@ func TestAvailableFalseWhenSandboxExecMissing(t *testing.T) {
 		t.Fatal("Available() = true, want false: sandbox-exec not on PATH")
 	}
 }
+
+// A path that may not be read may not be overwritten blind either: the schema of
+// an unreadable file can be public, and inside a write root the write rule alone
+// would let it through.
+func TestSandboxForbiddenDirectoryTakesWritesToo(t *testing.T) {
+	if !Available() {
+		t.Skip("sandbox-exec not available")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("no home dir: %v", err)
+	}
+	workRoot, err := os.MkdirTemp(home, ".reasonix-sbtest-forbid-*")
+	if err != nil {
+		t.Skipf("cannot create work dir under home: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(workRoot) })
+	forbidden := filepath.Join(workRoot, "store")
+	if err := os.MkdirAll(forbidden, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	spec := Spec{Mode: "enforce", WriteRoots: []string{workRoot}, ForbidReadRoots: []string{forbidden}, Network: true}
+	run := func(command string) error {
+		argv, _ := Command(spec, Shell{Kind: ShellBash, Path: "bash"}, command)
+		return exec.Command(argv[0], argv[1:]...).Run()
+	}
+	planted := filepath.Join(forbidden, "schedules.json")
+	if err := run("echo forged > " + planted); err == nil {
+		t.Error("a write into a forbidden directory must be refused")
+	}
+	if _, err := os.Stat(planted); !os.IsNotExist(err) {
+		t.Error("the forbidden directory gained a file")
+	}
+	if err := run("echo ok > " + filepath.Join(workRoot, "elsewhere.txt")); err != nil {
+		t.Errorf("the rest of the write root must stay writable: %v", err)
+	}
+}

@@ -273,15 +273,11 @@ func TestScheduleExecLeavesAndSettlesWhenItsSupervisorCrashes(t *testing.T) {
 	}
 }
 
-// A child started by hand for a run that is already running (the supervisor's
-// child died and the reaper has not settled it yet) must not spend the claim a
-// second time.
-func TestScheduleExecNeverStartsTheSameRunTwice(t *testing.T) {
+// A child started by hand cannot spend a claim: it needs the token only the
+// supervisor was given, and the run starts once.
+func TestScheduleExecStartsOnlyWithTheSupervisorsTokenAndOnlyOnce(t *testing.T) {
 	w := newExecWorld(t, "", "Look around.", fakeModelRef, fakeTurn{text: "quiet", prompt: 10, cl: 5})
-	if err := w.store.MarkRunning(t.Context(), w.run.TriggerID); err != nil {
-		t.Fatal(err)
-	}
-	byHand := func() string {
+	byHand := func(token string) string {
 		cmd := w.child()
 		in, err := cmd.StdinPipe()
 		if err != nil {
@@ -294,19 +290,56 @@ func TestScheduleExecNeverStartsTheSameRunTwice(t *testing.T) {
 		if err := cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
-		_, _ = io.WriteString(in, schedrun.GoLine+"\n")
+		_, _ = io.WriteString(in, schedrun.GoLine+" "+token+"\n")
 		data, _ := io.ReadAll(out)
 		_ = in.Close()
 		_ = cmd.Wait()
 		return string(data)
 	}
-	if first := byHand(); !strings.Contains(first, `"state":"succeeded"`) {
-		t.Fatalf("the first start did not run: %s", first)
+	if got := byHand("guess"); !strings.Contains(got, schedrun.CodeRunSettled) {
+		t.Fatalf("a claimed run must not start: %s", got)
 	}
-	if second := byHand(); !strings.Contains(second, schedrun.CodeRunStarted) {
-		t.Fatalf("the second start = %s, want %s", second, schedrun.CodeRunStarted)
+	token, err := w.store.MarkRunning(t.Context(), w.run.TriggerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := byHand("guess"); !strings.Contains(got, schedrun.CodeRunToken) {
+		t.Fatalf("a guessed token must be refused: %s", got)
+	}
+	if n := len(w.model.requests()); n != 0 {
+		t.Fatalf("provider saw %d requests before the right token", n)
+	}
+	if got := byHand(token); !strings.Contains(got, `"state":"succeeded"`) {
+		t.Fatalf("the token holder did not run: %s", got)
+	}
+	if got := byHand(token); !strings.Contains(got, schedrun.CodeRunStarted) {
+		t.Fatalf("a second start must be refused: %s", got)
 	}
 	if n := len(w.model.requests()); n != 1 {
 		t.Fatalf("provider saw %d requests, want the claim spent once", n)
+	}
+}
+
+func TestScheduleExecStopsARunWhoseProviderReportsNoUsage(t *testing.T) {
+	w := newExecWorld(t, "", "Read.", fakeModelRef,
+		fakeTurn{callName: "read_file", callArgs: `{"path":"notes.txt"}`, noUsage: true})
+	rep, err := w.supervisor().Run(t.Context(), w.run.TriggerID)
+	if err != nil || rep.State != schedule.RunBudgetStopped || rep.Code != schedrun.CodeUnmetered || rep.Clean {
+		t.Fatalf("Run = %+v, %v\nstderr: %s", rep, err, rep.StderrTail)
+	}
+	if n := len(w.model.requests()); n > 2 {
+		t.Fatalf("provider saw %d requests: a run nothing can count must stop after the second", n)
+	}
+	if got := w.runRecord(); got.Charged != got.PerRunCap {
+		t.Fatalf("charged %d, want the whole cap %d", got.Charged, got.PerRunCap)
+	}
+}
+
+func TestTheScheduleChildReadsNoConfigFromItsWorkingDirectory(t *testing.T) {
+	if readsLanguageFromConfig("schedule", false) {
+		t.Fatal("the schedule child would read the working directory's configuration")
+	}
+	if !readsLanguageFromConfig("run", false) || readsLanguageFromConfig("run", true) {
+		t.Fatal("ordinary commands changed")
 	}
 }

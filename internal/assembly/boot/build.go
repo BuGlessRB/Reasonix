@@ -153,7 +153,10 @@ func (b *builder) load() error {
 	if b.additionalDirs, err = normalizeAdditionalDirs(b.root, opts.AdditionalDirs); err != nil {
 		return err
 	}
-	migrations := runConfigMigrations(b.roots, b.root)
+	var migrations configMigrations
+	if opts.Observe == nil {
+		migrations = runConfigMigrations(b.roots, b.root)
+	}
 	if b.cfg, err = b.loadConfig(); err != nil {
 		return err
 	}

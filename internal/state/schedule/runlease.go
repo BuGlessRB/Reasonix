@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"reasonix/internal/base/filelock"
@@ -17,16 +18,32 @@ func (s *Store) leasePath(triggerID string) string {
 	return filepath.Join(s.dir, leasesDirName, strings.TrimSuffix(resultName(triggerID), ".json")+".lock")
 }
 
+func (s *Store) supervisionPath(triggerID string) string {
+	return filepath.Join(s.dir, leasesDirName, strings.TrimSuffix(resultName(triggerID), ".json")+".sup")
+}
+
+// HoldSupervision takes the lock the supervisor keeps from before it spawns the
+// child until the run is settled. A run counts as alive while either this or the
+// executor's lease is held, so the reaper never sees a gap between the child
+// leaving and the supervisor recording what it did.
+func (s *Store) HoldSupervision(triggerID string) (release func(), err error) {
+	return s.hold(s.supervisionPath(triggerID))
+}
+
 // HoldRun takes the exclusive operating-system lock that says a run is alive.
 // Of any number of executors started for one claim exactly one gets it; the
 // rest get ErrRunHeld. The lock dies with its holder, so a kill or a crash frees
 // it without anyone having to clean up, which is why the reaper reads it and no
 // file content.
 func (s *Store) HoldRun(triggerID string) (release func(), err error) {
+	return s.hold(s.leasePath(triggerID))
+}
+
+func (s *Store) hold(path string) (release func(), err error) {
 	if err := os.MkdirAll(filepath.Join(s.dir, leasesDirName), 0o700); err != nil {
 		return nil, fmt.Errorf("schedule: leases dir: %w", err)
 	}
-	release, err = filelock.TryAcquire(s.leasePath(triggerID))
+	release, err = filelock.TryAcquire(path)
 	if errors.Is(err, filelock.ErrHeld) {
 		return nil, ErrRunHeld
 	}
@@ -36,36 +53,17 @@ func (s *Store) HoldRun(triggerID string) (release func(), err error) {
 	return release, nil
 }
 
-// MarkStarted records, once and durably, that an executor began the run's work.
-// A second call for the same run gets ErrRunStarted, whoever makes it and
-// however long after: a run that died half-way is settled by the reaper and never
-// executed again, and nothing that can start the child by hand can spend the
-// same claim twice. It is called under HoldRun.
-func (s *Store) MarkStarted(triggerID string) error {
-	if err := os.MkdirAll(filepath.Join(s.dir, leasesDirName), 0o700); err != nil {
-		return fmt.Errorf("schedule: leases dir: %w", err)
-	}
-	f, err := os.OpenFile(s.startedPath(triggerID), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		return ErrRunStarted
-	}
-	if err != nil {
-		return fmt.Errorf("schedule: start marker: %w", err)
-	}
-	return f.Close()
-}
-
-func (s *Store) startedPath(triggerID string) string {
-	return filepath.Join(s.dir, leasesDirName, strings.TrimSuffix(resultName(triggerID), ".json")+".started")
-}
-
 // RunHeld reports whether some executor holds the run's lease right now. A lease
 // that cannot be probed counts as held: a run is never reaped on a guess.
 func (s *Store) RunHeld(r Run) bool {
+	return slices.ContainsFunc([]string{s.leasePath(r.TriggerID), s.supervisionPath(r.TriggerID)}, s.lockHeld)
+}
+
+func (s *Store) lockHeld(path string) bool {
 	if err := os.MkdirAll(filepath.Join(s.dir, leasesDirName), 0o700); err != nil {
 		return true
 	}
-	release, err := filelock.TryAcquire(s.leasePath(r.TriggerID))
+	release, err := filelock.TryAcquire(path)
 	if err != nil {
 		return true
 	}
@@ -91,10 +89,11 @@ func (s *Store) pruneLeases(m Manifest) {
 	live := map[string]bool{}
 	for _, r := range m.Runs {
 		live[filepath.Base(s.leasePath(r.TriggerID))] = true
+		live[filepath.Base(s.supervisionPath(r.TriggerID))] = true
 	}
 	cutoff := s.clock().Add(-ReapGrace)
 	for _, e := range entries {
-		if live[strings.TrimSuffix(e.Name(), ".started")+".lock"] {
+		if live[e.Name()] {
 			continue
 		}
 		if info, err := e.Info(); err == nil && info.ModTime().Before(cutoff) {

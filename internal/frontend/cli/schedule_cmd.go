@@ -16,9 +16,9 @@ func readsLanguageFromConfig(cmd string, doctorRepair bool) bool {
 
 // unknownCommand is the fallthrough of the command switch: the internal commands
 // that are not listed in usage, then the usage error.
-func unknownCommand(cmd string, rest []string, version string) int {
+func unknownCommand(cmd string, rest []string) int {
 	if cmd == "schedule" {
-		return scheduleCommand(rest, version)
+		return scheduleCommand(rest)
 	}
 	fmt.Fprintf(os.Stderr, i18n.M.UnknownCommandFmt+"\n\n", cmd)
 	usage()
@@ -27,9 +27,9 @@ func unknownCommand(cmd string, rest []string, version string) int {
 
 // scheduleCommand dispatches `reasonix schedule`. Only the supervisor's own
 // child entry exists here; it is not a command a person types.
-func scheduleCommand(args []string, version string) int {
+func scheduleCommand(args []string) int {
 	if len(args) > 0 && args[0] == "exec" {
-		return scheduleExec(args[1:], version)
+		return scheduleExec(args[1:])
 	}
 	fmt.Fprintln(os.Stderr, "usage: reasonix schedule exec <trigger-id>   (started by the scheduler, not by hand)")
 	return 2

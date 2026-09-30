@@ -52,6 +52,7 @@ type fakeTurn struct {
 	callName   string
 	callArgs   string
 	prompt, cl int
+	noUsage    bool
 }
 
 // fakeModel answers the n-th request with turns[n], repeating the last turn, and
@@ -99,6 +100,9 @@ func (m *fakeModel) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	usage := fmt.Sprintf(`"usage":{"prompt_tokens":%d,"completion_tokens":%d,"total_tokens":%d}`, turn.prompt, turn.cl, turn.prompt+turn.cl)
+	if turn.noUsage {
+		usage = `"x":0`
+	}
 	if turn.callName != "" {
 		call, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{
 			"tool_calls": []any{map[string]any{"index": 0, "id": fmt.Sprintf("call_%d", n), "type": "function",
@@ -195,7 +199,7 @@ api_key_env = "SCHED_FAKE_KEY"
 
 %s
 `, fm.srv.URL, schedTable), 0o644)
-	user, err := schedule.LoadOverrides(config.RootsForHome("").UserConfigPath())
+	user, err := schedule.LoadOverrides(config.RootsForHome("").UserConfigLoadPath())
 	if err != nil {
 		t.Fatal(err)
 	}

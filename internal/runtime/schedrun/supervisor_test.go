@@ -73,6 +73,15 @@ func newFixture(t *testing.T) *fixture {
 	return &fixture{store: store, clk: clk, dir: dir, sc: sc, run: run}
 }
 
+// ctx bounds a run under test: a supervisor that failed to end a child must fail
+// the test, not hang it.
+func (f *fixture) ctx(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
 func (f *fixture) supervisor(mode, mark string, extra ...string) *Supervisor {
 	return &Supervisor{Store: f.store, Policy: testPolicy(), WallGrace: 300 * time.Millisecond,
 		Command: childCommand(mode, f.dir, f.run.TriggerID, mark, extra...)}
@@ -107,7 +116,7 @@ func (f *fixture) waitFree(t *testing.T) {
 func TestWallClockKillsAChildThatIgnoresSignals(t *testing.T) {
 	f := newFixture(t)
 	start := time.Now()
-	rep, err := f.supervisor("sleep", "").Run(t.Context(), f.run.TriggerID)
+	rep, err := f.supervisor("sleep", "").Run(f.ctx(t), f.run.TriggerID)
 	if !errors.Is(err, ErrWallLimit) || rep.Code != CodeWallLimit || !rep.Killed {
 		t.Fatalf("Run = %+v, %v; want a wall-limit kill", rep, err)
 	}
@@ -125,7 +134,7 @@ func TestTokenCeilingKillsAChildThatKeepsSpending(t *testing.T) {
 	f := newFixture(t)
 	sup := f.supervisor("flood", "", "SCHEDRUN_CHUNK=4000")
 	sup.WallGrace = 30 * time.Second
-	rep, err := sup.Run(t.Context(), f.run.TriggerID)
+	rep, err := sup.Run(f.ctx(t), f.run.TriggerID)
 	if !errors.Is(err, ErrTokenLimit) || rep.Code != CodeTokenLimit || !rep.Killed {
 		t.Fatalf("Run = %+v, %v; want a token-limit kill", rep, err)
 	}
@@ -142,7 +151,7 @@ func TestTokenCeilingKillsAChildThatKeepsSpending(t *testing.T) {
 
 func TestACleanRunChargesWhatItUsedAndStoresACleanResult(t *testing.T) {
 	f := newFixture(t)
-	rep, err := f.supervisor("ok", "").Run(t.Context(), f.run.TriggerID)
+	rep, err := f.supervisor("ok", "").Run(f.ctx(t), f.run.TriggerID)
 	if err != nil || rep.State != schedule.RunSucceeded || !rep.Clean || rep.Observed != 1000 {
 		t.Fatalf("Run = %+v, %v", rep, err)
 	}
@@ -167,7 +176,7 @@ func TestACleanRunChargesWhatItUsedAndStoresACleanResult(t *testing.T) {
 
 func TestACrashedChildIsChargedTheWholeCap(t *testing.T) {
 	f := newFixture(t)
-	rep, err := f.supervisor("crash", "").Run(t.Context(), f.run.TriggerID)
+	rep, err := f.supervisor("crash", "").Run(f.ctx(t), f.run.TriggerID)
 	if err != nil || rep.State != schedule.RunFailed || rep.Code != CodeCrashed || rep.Clean {
 		t.Fatalf("Run = %+v, %v", rep, err)
 	}
@@ -180,7 +189,7 @@ func TestAChildThatBreaksTheProtocolIsKilled(t *testing.T) {
 	f := newFixture(t)
 	sup := f.supervisor("huge-line", "")
 	sup.WallGrace = 30 * time.Second
-	rep, err := sup.Run(t.Context(), f.run.TriggerID)
+	rep, err := sup.Run(f.ctx(t), f.run.TriggerID)
 	if !errors.Is(err, ErrProtocol) || rep.Code != CodeProtocol {
 		t.Fatalf("Run = %+v, %v", rep, err)
 	}
@@ -196,7 +205,10 @@ func TestCancellingTheContextKillsTheRunAndInterruptsIt(t *testing.T) {
 	sup.WallGrace = time.Minute
 	ctx, cancel := context.WithCancel(t.Context())
 	go func() {
-		for !f.store.RunHeld(f.run) {
+		for {
+			if m, _, err := f.store.Snapshot(t.Context()); err == nil && m.Runs[0].State == schedule.RunRunning {
+				break
+			}
 			time.Sleep(20 * time.Millisecond)
 		}
 		cancel()
@@ -218,7 +230,7 @@ func TestARunReapedBeforeTheSupervisorStartsIsNotRun(t *testing.T) {
 		t.Fatalf("ReapDead = %v, %v", reaped, err)
 	}
 	mark := filepath.Join(t.TempDir(), "mark")
-	_, err := f.supervisor("ok", mark).Run(t.Context(), f.run.TriggerID)
+	_, err := f.supervisor("ok", mark).Run(f.ctx(t), f.run.TriggerID)
 	if !errors.Is(err, schedule.ErrRunSettled) {
 		t.Fatalf("Run = %v, want ErrRunSettled", err)
 	}
@@ -227,19 +239,18 @@ func TestARunReapedBeforeTheSupervisorStartsIsNotRun(t *testing.T) {
 	}
 }
 
-func TestASlowStartReapedInTheWindowSpendsNothing(t *testing.T) {
+func TestARunSettledWhileTheChildStartsSpendsNothing(t *testing.T) {
 	f := newFixture(t)
 	mark := filepath.Join(t.TempDir(), "mark")
 	sup := f.supervisor("ok", mark)
 	inner := sup.Command
 	sup.Command = func(id string) (*exec.Cmd, error) {
-		f.clk.Advance(schedule.ReapGrace + time.Second)
-		if _, err := f.store.ReapDead(t.Context(), testPolicy()); err != nil {
+		if err := f.store.Finish(t.Context(), testPolicy(), id, schedule.Outcome{State: schedule.RunInterrupted}); err != nil {
 			return nil, err
 		}
 		return inner(id)
 	}
-	rep, err := sup.Run(t.Context(), f.run.TriggerID)
+	rep, err := sup.Run(f.ctx(t), f.run.TriggerID)
 	if !errors.Is(err, schedule.ErrRunSettled) || rep.Code != CodeRunSettled {
 		t.Fatalf("Run = %+v, %v; want ErrRunSettled", rep, err)
 	}
@@ -262,7 +273,7 @@ func TestTwoSupervisorsOnOneClaimRunItOnce(t *testing.T) {
 		wg.Go(func() {
 			sup := f.supervisor("slow-ok", mark)
 			sup.WallGrace = 30 * time.Second
-			_, errs[i] = sup.Run(t.Context(), f.run.TriggerID)
+			_, errs[i] = sup.Run(f.ctx(t), f.run.TriggerID)
 		})
 	}
 	wg.Wait()
@@ -271,7 +282,7 @@ func TestTwoSupervisorsOnOneClaimRunItOnce(t *testing.T) {
 		switch {
 		case err == nil:
 			ok++
-		case errors.Is(err, schedule.ErrRunSettled):
+		case errors.Is(err, schedule.ErrRunSettled), errors.Is(err, schedule.ErrRunHeld):
 			settled++
 		default:
 			t.Fatalf("unexpected error %v", err)
@@ -336,7 +347,7 @@ func TestKillingTheRunEndsItsWholeProcessTree(t *testing.T) {
 		}
 		sawHeld <- false
 	}()
-	rep, err := f.supervisor("tree", "", "SCHEDRUN_GRAND_LOCK="+lock).Run(t.Context(), f.run.TriggerID)
+	rep, err := f.supervisor("tree", "", "SCHEDRUN_GRAND_LOCK="+lock).Run(f.ctx(t), f.run.TriggerID)
 	if !errors.Is(err, ErrWallLimit) {
 		t.Fatalf("Run = %+v, %v", rep, err)
 	}
@@ -354,5 +365,66 @@ func TestKillingTheRunEndsItsWholeProcessTree(t *testing.T) {
 			t.Fatal("a grandchild survived the kill of the run")
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestAStreamThatDisagreesWithTheChildIsChargedTheWholeCap(t *testing.T) {
+	f := newFixture(t)
+	rep, err := f.supervisor("lie", "").Run(f.ctx(t), f.run.TriggerID)
+	if err != nil || rep.Clean {
+		t.Fatalf("Run = %+v, %v; a usage count that does not match must not read as clean", rep, err)
+	}
+	if got := f.settled(t); got.Charged != got.PerRunCap {
+		t.Fatalf("charged %d, want the whole cap %d", got.Charged, got.PerRunCap)
+	}
+}
+
+func TestARunWithUnreportedUsageIsChargedTheWholeCap(t *testing.T) {
+	f := newFixture(t)
+	rep, err := f.supervisor("unmetered", "").Run(f.ctx(t), f.run.TriggerID)
+	if err != nil || rep.Clean || rep.Code != CodeUnmetered {
+		t.Fatalf("Run = %+v, %v", rep, err)
+	}
+	if got := f.settled(t); got.Charged != got.PerRunCap {
+		t.Fatalf("charged %d, want the whole cap %d", got.Charged, got.PerRunCap)
+	}
+}
+
+func TestAChildRefusedTheLeaseLeavesTheRunUnsettled(t *testing.T) {
+	f := newFixture(t)
+	foreign, err := f.store.HoldRun(f.run.TriggerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer foreign()
+	mark := filepath.Join(t.TempDir(), "mark")
+	_, err = f.supervisor("ok", mark).Run(f.ctx(t), f.run.TriggerID)
+	if !errors.Is(err, ErrExecutorRefused) {
+		t.Fatalf("Run = %v, want ErrExecutorRefused", err)
+	}
+	if got := f.settled(t); got.State != schedule.RunClaimed {
+		t.Fatalf("state = %s: a supervisor whose child never held the run must not release or settle it", got.State)
+	}
+	if _, statErr := os.Stat(mark); statErr == nil {
+		t.Fatal("work ran without the lease")
+	}
+}
+
+func TestASupervisedRunIsNeverReapedBeforeItIsSettled(t *testing.T) {
+	f := newFixture(t)
+	f.clk.Advance(schedule.ReapGrace + time.Minute)
+	sup := f.supervisor("ok", "")
+	inner := sup.Command
+	sup.Command = func(id string) (*exec.Cmd, error) {
+		if reaped, err := f.store.ReapDead(t.Context(), testPolicy()); err != nil || len(reaped) != 0 {
+			t.Errorf("a run under supervision was reaped: %v %v", reaped, err)
+		}
+		return inner(id)
+	}
+	if _, err := sup.Run(f.ctx(t), f.run.TriggerID); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.settled(t); got.State != schedule.RunSucceeded {
+		t.Fatalf("state = %s", got.State)
 	}
 }

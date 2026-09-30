@@ -192,7 +192,7 @@ func TestConcurrencyAndSettleErrors(t *testing.T) {
 		t.Fatalf("one in-flight run machine-wide: %v", err)
 	}
 	id := TriggerID(sc.ID, slotN(sc, 1))
-	if err := st.MarkRunning(t.Context(), id); err != nil {
+	if _, err := st.MarkRunning(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
 	ok := Outcome{State: RunSucceeded, Observed: 1, Clean: true}
@@ -360,7 +360,7 @@ func TestReapSkipsRunThatStartedDuringCallback(t *testing.T) {
 	}
 	clk.Advance(ReapGrace)
 	got, err := st.Reap(t.Context(), p, func(r Run) bool {
-		if err := st.MarkRunning(t.Context(), r.TriggerID); err != nil {
+		if _, err := st.MarkRunning(t.Context(), r.TriggerID); err != nil {
 			t.Error(err)
 		}
 		return false

@@ -14,6 +14,7 @@ import (
 
 // Line kinds on the child's standard output.
 const (
+	KindReady  = "ready"
 	KindUsage  = "usage"
 	KindResult = "result"
 )
@@ -33,10 +34,13 @@ type Line struct {
 // own totals; the supervisor compares them with what it counted from the stream
 // before it believes the usage stream ran to the end.
 type Done struct {
-	State       schedule.RunState `json:"state"`
-	Code        string            `json:"code,omitempty"`
-	Tokens      int64             `json:"tokens"`
-	Usages      int64             `json:"usages"`
+	State  schedule.RunState `json:"state"`
+	Code   string            `json:"code,omitempty"`
+	Tokens int64             `json:"tokens"`
+	Usages int64             `json:"usages"`
+	// Unmetered is set when the model answered a request with no usage report,
+	// so the tokens the run spent are not known.
+	Unmetered   bool              `json:"unmetered,omitempty"`
 	Report      string            `json:"report,omitempty"`
 	Pending     []observe.Pending `json:"pending,omitempty"`
 	Posture     observe.Posture   `json:"posture"`
@@ -51,6 +55,8 @@ type Writer struct {
 }
 
 func NewWriter(w io.Writer) *Writer { return &Writer{enc: json.NewEncoder(w)} }
+
+func (w *Writer) Ready() error { return w.write(Line{Kind: KindReady}) }
 
 func (w *Writer) Usage(tokens int64) error {
 	return w.write(Line{Kind: KindUsage, Tokens: tokens})
@@ -88,7 +94,7 @@ func readLines(r io.Reader, fn func(Line)) error {
 			continue
 		}
 		var l Line
-		if json.Unmarshal(buf, &l) == nil && (l.Kind == KindUsage || l.Kind == KindResult) {
+		if json.Unmarshal(buf, &l) == nil && (l.Kind == KindUsage || l.Kind == KindResult || l.Kind == KindReady) {
 			fn(l)
 		}
 		buf = buf[:0]

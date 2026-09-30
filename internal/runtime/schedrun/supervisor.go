@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"reasonix/internal/base/proc"
+	"reasonix/internal/contract/observe"
 	"reasonix/internal/state/schedule"
 )
 
@@ -36,6 +37,8 @@ type Supervisor struct {
 	Command func(triggerID string) (*exec.Cmd, error)
 	// WallGrace overrides DefaultWallGrace.
 	WallGrace time.Duration
+	// StartWait overrides StartTimeout, how long the child has to take its lease.
+	StartWait time.Duration
 }
 
 // Report is how a supervised run ended. State and Code are always set; Killed
@@ -87,13 +90,32 @@ func (s *Supervisor) Run(ctx context.Context, triggerID string) (Report, error) 
 		return rep, errors.Join(schedule.ErrNotFound, s.settle(triggerID, schedule.Outcome{State: schedule.RunFailed, Clean: true}, nil))
 	}
 
-	c, err := s.child(triggerID, run.PerRunCap+run.PerRunCap/tokenHardDen*(tokenHardNum-tokenHardDen))
+	release, err := s.Store.HoldSupervision(triggerID)
+	if err != nil {
+		rep.Code = CodeRunHeld
+		return rep, err
+	}
+	defer release()
+
+	perRunCap := run.PerRunCap
+	if s.Policy.PerRunTokens > 0 {
+		perRunCap = min(perRunCap, s.Policy.PerRunTokens)
+	}
+	c, err := s.child(triggerID, perRunCap+perRunCap/tokenHardDen*(tokenHardNum-tokenHardDen))
 	if err != nil {
 		rep.Code, rep.State, rep.Clean = CodeSpawn, schedule.RunFailed, true
 		return rep, errors.Join(fmt.Errorf("%w: %w", ErrSpawn, err), s.settle(triggerID, schedule.Outcome{State: schedule.RunFailed, Clean: true}, nil))
 	}
 
-	if err := s.Store.MarkRunning(ctx, triggerID); err != nil {
+	if err := s.awaitReady(ctx, c); err != nil {
+		rep.Code = CodeRunHeld
+		if errors.Is(err, ErrCancelled) {
+			rep.Code = CodeCancelled
+		}
+		return rep, err
+	}
+	token, err := s.Store.MarkRunning(ctx, triggerID)
+	if err != nil {
 		c.kill()
 		c.reap(killWait)
 		rep.Code = CodeStore
@@ -102,16 +124,46 @@ func (s *Supervisor) Run(ctx context.Context, triggerID string) (Report, error) 
 		}
 		return rep, err
 	}
-	if _, err := io.WriteString(c.stdin, GoLine+"\n"); err != nil {
+	if _, err := io.WriteString(c.stdin, GoLine+" "+token+"\n"); err != nil {
 		c.kill()
 		c.reap(killWait)
 		rep = s.end(triggerID, rep, endInfo{killed: true, code: CodeSpawn, state: schedule.RunFailed}, c)
 		return rep, fmt.Errorf("%w: release the child: %w", ErrSpawn, err)
 	}
 
-	cause := s.watch(ctx, c, sc.Budget.PerRunWallSec)
+	wallSec := sc.Budget.PerRunWallSec
+	if s.Policy.PerRunWallSeconds > 0 {
+		wallSec = min(wallSec, s.Policy.PerRunWallSeconds)
+	}
+	cause := s.watch(ctx, c, wallSec)
 	rep = s.end(triggerID, rep, cause, c)
 	return rep, cause.err
+}
+
+// awaitReady waits for the child to say it holds the run's lease. A child that
+// leaves without saying so was refused the run by another executor; the run is
+// left claimed, unsettled, for that executor's owner or the reaper.
+func (s *Supervisor) awaitReady(ctx context.Context, c *child) error {
+	wait := s.StartWait
+	if wait <= 0 {
+		wait = StartTimeout
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-c.ready:
+		return nil
+	case <-c.done:
+		return ErrExecutorRefused
+	case <-timer.C:
+		c.kill()
+		c.reap(killWait)
+		return ErrStartTimeout
+	case <-ctx.Done():
+		c.kill()
+		c.reap(killWait)
+		return ErrCancelled
+	}
 }
 
 // watch waits for the run to end by itself or be ended, and kills the child when
@@ -153,7 +205,8 @@ type endInfo struct {
 func (s *Supervisor) end(triggerID string, rep Report, cause endInfo, c *child) Report {
 	exited := c.reap(killWait)
 	rep.Observed = c.tokens.Load()
-	rep.StderrTail = c.stderr.String()
+	rep.StderrTail = observe.Sanitize(c.stderr.String())
+	c.job.Finish()
 	rep.Killed = cause.killed
 	done := c.result()
 	var out schedule.Outcome
@@ -161,6 +214,9 @@ func (s *Supervisor) end(triggerID string, rep Report, cause endInfo, c *child) 
 	case cause.killed:
 		rep.State, rep.Code = cause.state, cause.code
 		out = schedule.Outcome{State: cause.state, Observed: rep.Observed}
+	case done != nil && done.Unmetered:
+		rep.State, rep.Code = done.State, CodeUnmetered
+		out = schedule.Outcome{State: done.State, Observed: rep.Observed}
 	case done != nil && exited && c.exitOK() && c.usages.Load() == done.Usages && rep.Observed == done.Tokens:
 		rep.State, rep.Code, rep.Clean = done.State, done.Code, true
 		out = schedule.Outcome{State: done.State, Observed: rep.Observed, Clean: true}
@@ -209,7 +265,7 @@ func (s *Supervisor) child(triggerID string, hardTokens int64) (*child, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &child{cmd: cmd, hardTokens: hardTokens, done: make(chan struct{}), overTokens: make(chan struct{}, 1), protocol: make(chan struct{}, 1), stderr: &tail{limit: stderrTail}}
+	c := &child{cmd: cmd, hardTokens: hardTokens, done: make(chan struct{}), ready: make(chan struct{}), overTokens: make(chan struct{}, 1), protocol: make(chan struct{}, 1), stderr: &tail{limit: stderrTail}}
 	cmd.Stderr = c.stderr
 	if c.stdin, err = cmd.StdinPipe(); err != nil {
 		return nil, err
@@ -219,7 +275,7 @@ func (s *Supervisor) child(triggerID string, hardTokens int64) (*child, error) {
 		return nil, err
 	}
 	c.stdout = out
-	if c.job, err = proc.StartTracked(cmd); err != nil {
+	if c.job, err = proc.StartTrackedRequired(cmd); err != nil {
 		return nil, err
 	}
 	go c.pump()
@@ -248,12 +304,14 @@ type child struct {
 	tokens     atomic.Int64
 	usages     atomic.Int64
 
-	mu       sync.Mutex
-	last     *Done
-	waitErr  error
-	waited   bool
-	done     chan struct{}
-	overOnce sync.Once
+	mu        sync.Mutex
+	last      *Done
+	waitErr   error
+	waited    bool
+	done      chan struct{}
+	overOnce  sync.Once
+	readyOnce sync.Once
+	ready     chan struct{}
 
 	overTokens chan struct{}
 	protocol   chan struct{}
@@ -263,6 +321,8 @@ type child struct {
 func (c *child) pump() {
 	err := readLines(c.stdout, func(l Line) {
 		switch l.Kind {
+		case KindReady:
+			c.readyOnce.Do(func() { close(c.ready) })
 		case KindUsage:
 			c.usages.Add(1)
 			total := saturatingAdd(&c.tokens, max(l.Tokens, 0))
