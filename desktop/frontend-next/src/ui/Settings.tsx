@@ -122,7 +122,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
   const [installedTarget, setInstalledTarget] = useState<{ kind: string; name: string } | null>(null);
   const [extRefreshing, setExtRefreshing] = useState(false);
   const extRefresh = useRef(0);
-  const [updatingPkg, setUpdatingPkg] = useState("");
+  const [updatingPkg, setUpdatingPkg] = useState({ name: "", applying: false });
   const [hookCount, setHookCount] = useState(0);
   const [netMode, setNetMode] = useState("");
   const [memCount, setMemCount] = useState(0);
@@ -203,9 +203,9 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
   }, []);
 
   useEffect(() => {
-    const onKey = (e: Event) => (e as KeyboardEvent).key === "Escape" && onClose();
+    const onKey = (e: Event) => (e as KeyboardEvent).key === "Escape" && !updatingPkg.applying && onClose();
     return listenAction(window, "keydown", { action: "settings.close", listener: onKey });
-  }, [onClose]);
+  }, [onClose, updatingPkg.applying]);
 
   useEffect(() => {
     loadModels();
@@ -351,7 +351,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
       onMouseDown={(e) => { veiled.current = e.target === e.currentTarget; }}
       // Both ends of the press have to land on the veil. A drag that started
       // inside the sheet and let go outside is a selection, not a dismissal.
-      onMouseUp={(e) => { if (veiled.current && e.target === e.currentTarget) onClose(); }}
+      onMouseUp={(e) => { if (veiled.current && e.target === e.currentTarget && !updatingPkg.applying) onClose(); }}
       data-action-mouseup="settings.close"
     >
       <div className="prefs-sheet" role="dialog" aria-modal="true" aria-labelledby="prefs-title">
@@ -379,7 +379,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
             }
           }}
         />
-        <button className="btn sm" data-action="settings.close" onClick={onClose}>
+        <button className="btn sm" data-action="settings.close" disabled={updatingPkg.applying} onClick={onClose}>
           {t("关闭")} <span className="esc">Esc</span>
         </button>
         {found !== null && (
@@ -391,7 +391,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
                 <button
                   key={e.anchor}
                   role="option"
-                  aria-selected={false}
+                  aria-selected={false} disabled={updatingPkg.applying}
                   data-action="settings.section"
                   data-value={e.section}
                   data-target={e.anchor}
@@ -434,7 +434,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
                   <button key={id} id={`prefs-${id}`} role="tab" title={t(name)}
                     data-action="settings.section" data-value={id}
                     tabIndex={at === id ? 0 : -1}
-                    aria-selected={at === id} onClick={() => setAt(id)}>
+                    aria-selected={at === id} disabled={updatingPkg.applying} onClick={() => setAt(id)}>
                     <svg viewBox="0 0 16 16" aria-hidden="true">{ICON[id]}</svg>
                     <span className="nm">{t(name)}</span>
                     <span className="nv" title={nav[id] || undefined} data-danger={danger(id) ? "" : undefined}>
@@ -619,7 +619,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
           )}
           {at === "ext" && (
             <>
-              <ExtTabs at={extTab} onPick={(tab) => { setInstalledTarget(null); setExtTab(tab); }} />
+              <ExtTabs at={extTab} disabled={updatingPkg.applying} onPick={(tab) => { setInstalledTarget(null); setExtTab(tab); }} />
               {extTab === "installed" && <InstalledLocation root={root} target={installedTarget} packages={packages} skills={skills} mcp={mcp} refreshing={extRefreshing} onFound={setInstalledTarget} />}
               {extTab === "market" && <MarketGroup port={port} onInstalled={afterExtChange} onViewInstalled={(kind, name) => { setInstalledTarget({ kind, name }); setExtTab("installed"); }} account={acct} onSignIn={() => go("account", "account")} />}
               {extTab === "installed" && (
@@ -640,7 +640,7 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
                   hint={t("一个包可以同时提供技能、命令、自动化钩子和外部服务。安装与导入是同一个操作：提供一个仓库地址，或本机的一个文件夹。")}
                   action={
                     addingPkg ? undefined : (
-                      <button className="act" data-action="extensions.add" onClick={() => setAddingPkg(true)}>
+                      <button className="act" data-action="extensions.add" disabled={!!updatingPkg.name} onClick={() => setAddingPkg(true)}>
                         {t("添加")}
                       </button>
                     )
@@ -649,20 +649,20 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
                   {addingPkg && (
                     <AddPlugin port={port} onClose={() => setAddingPkg(false)} onInstalled={afterExtChange} />
                   )}
-                  {updatingPkg && (
+                  {updatingPkg.name && (
                     <AddPlugin
                       port={port}
-                      updating={packages.find((p) => p.name === updatingPkg)}
-                      onClose={() => setUpdatingPkg("")}
-                      onInstalled={afterExtChange}
+                      updating={packages.find((p) => p.name === updatingPkg.name)}
+                      onApplying={(applying) => setUpdatingPkg((p) => ({ ...p, applying }))}
+                      onClose={() => setUpdatingPkg({ name: "", applying: false })} onInstalled={afterExtChange}
                     />
                   )}
                   <Packages
                     port={port}
                     packages={packages}
                     onChanged={afterExtChange}
-                    updating={updatingPkg}
-                    onUpdate={setUpdatingPkg}
+                    updating={updatingPkg.name}
+                    onUpdate={(name) => setUpdatingPkg({ name, applying: false })}
                   />
                   {packages.length === 0 && !addingPkg && <div className="empty">{t("尚未安装插件包。")}</div>}
                 </Group>

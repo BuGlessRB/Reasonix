@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEscape } from "./dismiss";
 import { current as language, plural, t } from "../i18n";
 import { useFileDrop } from "./filedrop";
@@ -29,15 +29,20 @@ interface Props {
   updating?: PluginPackage;
   // A source someone already chose, such as a plugin named in a restored backup.
   source?: string;
+  onApplying?: (applying: boolean) => void;
 }
 
-export function AddPlugin({ port, onClose, onInstalled, updating, source }: Props) {
+export function AddPlugin({ port, onClose, onInstalled, updating, source, onApplying }: Props) {
   const [text, setText] = useState(updating?.source ?? source ?? "");
   const [plan, setPlan] = useState<PluginPlan | null>(null);
   const [done, setDone] = useState<PluginPlan | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const apply = useRef<HTMLButtonElement>(null);
   useEscape(true, () => { if (!updating || !plan || !busy) onClose(); });
+  useEffect(() => {
+    if (updating?.name && !busy && (done || (error && plan))) apply.current?.focus();
+  }, [updating?.name, error, plan, done, busy]);
 
   const request = (planId?: string) => ({
     source: text.trim(),
@@ -70,6 +75,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source }: Prop
   const install = async () => {
     if (!plan) return;
     setBusy(true);
+    onApplying?.(true);
     setError("");
     try {
       const out = await port.installPlugin(request(plan.planId));
@@ -79,6 +85,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source }: Prop
       setError(reason(e));
     } finally {
       setBusy(false);
+      onApplying?.(false);
     }
   };
 
@@ -106,7 +113,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source }: Prop
       <div className="addpkg" data-stage="done">
         <Outcome plan={done} />
         <div className="acts">
-          <button className="act" data-action="extensions.finish" onClick={onClose}>
+          <button className="act" data-action="extensions.finish" ref={apply} onClick={onClose}>
             {t("完成")}
           </button>
         </div>
@@ -161,6 +168,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source }: Prop
           <button
             className="act"
             data-action={updating ? "extensions.update" : "extensions.install"}
+            ref={apply}
             data-primary
             disabled={busy}
             onClick={() => void install()}
@@ -168,7 +176,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source }: Prop
             {t(busy ? (updating ? "更新中…" : "安装中…") : updating ? "更新" : "安装")}
           </button>
         </div>
-        {error && <div className="why">{error}</div>}
+        {error && <div className="why" role="alert">{error}</div>}
       </div>
     );
   }

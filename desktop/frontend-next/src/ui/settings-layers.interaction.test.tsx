@@ -4,6 +4,7 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import "./testkit";
 import { Settings } from "./Settings";
+import { AddPlugin } from "./AddPlugin";
 import type { AgentPort, PluginPlan, SessionStatus } from "../port/port";
 import { MockPort } from "../port/mock";
 import { MockHub } from "../port/mock_hub";
@@ -48,6 +49,22 @@ it("opens the installed tab after a market install and keeps keyboard focus ther
 });
 
 describe("a package's inline update", () => {
+  it("keeps focus where the user moved after a failed update when the inventory refreshes", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    const updating = (await port.plugins())[0];
+    vi.spyOn(port, "installPlugin").mockRejectedValueOnce(new Error("update unavailable"));
+    const drawUpdate = (p: typeof updating) => <>
+      <button>Other control</button>
+      <AddPlugin port={port} updating={p} onClose={() => {}} onInstalled={() => {}} />
+    </>;
+    const { rerender } = render(drawUpdate(updating));
+    await userEvent.click(await screen.findByRole("button", { name: "更新" }));
+    await screen.findByRole("alert");
+    await userEvent.click(screen.getByRole("button", { name: "Other control" }));
+    rerender(drawUpdate({ ...updating }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Other control" }));
+  });
+
   it("locks the selected row until its update preview is dismissed", async () => {
     const port = new MockPort() as unknown as AgentPort;
     let finish!: (value: PluginPlan) => void;
@@ -61,6 +78,11 @@ describe("a package's inline update", () => {
     await userEvent.click(controls.getByRole("button", { name: "移除 review-kit" }));
     await userEvent.click(controls.getByRole("button", { name: "更新" }));
     await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+    expect(row.getAttribute("aria-busy")).toBe("true");
+    const add = screen.getByRole<HTMLButtonElement>("button", { name: "添加" });
+    expect(add.disabled).toBe(true);
+    await userEvent.click(add);
+    expect(document.querySelectorAll(".addpkg")).toHaveLength(1);
 
     expect(controls.getByRole<HTMLButtonElement>("switch", { name: "关闭 review-kit" }).disabled).toBe(true);
     for (const name of ["导出", "移除 review-kit", "删除", "取消"]) {
@@ -84,10 +106,12 @@ describe("a package's inline update", () => {
     expect(controls.getByRole<HTMLButtonElement>("switch", { name: "关闭 review-kit" }).disabled).toBe(false);
     expect(controls.getByRole<HTMLButtonElement>("button", { name: "删除" }).disabled).toBe(false);
     expect(otherUpdate.disabled).toBe(false);
+    expect(row.getAttribute("aria-busy")).toBe("false");
+    expect(add.disabled).toBe(false);
     await act(async () => finish({ ok: true, applied: false, status: "planned", actions: [] }));
   });
 
-  it.each(["success", "failure"])("keeps an applying update mounted through Cancel and Escape, then permits dismissal after %s", async (outcome) => {
+  it.each(["success", "failure", "refused"])("keeps an applying update mounted through Cancel and Escape, then permits dismissal after %s", async (outcome) => {
     const port = new MockPort() as unknown as AgentPort;
     let finish!: (value: PluginPlan) => void;
     let fail!: (error: Error) => void;
@@ -97,30 +121,50 @@ describe("a package's inline update", () => {
     await userEvent.click(within(row).getByRole("button", { name: "更新" }));
     await screen.findByText(/review-kit.*→/);
     const panel = document.querySelector<HTMLElement>('.addpkg[data-stage="confirm"]')!;
-    await userEvent.click(within(panel).getByRole("button", { name: "更新" }));
+    const apply = within(panel).getByRole<HTMLButtonElement>("button", { name: "更新" });
+    apply.focus();
+    await userEvent.keyboard("{Enter}");
     expect(install).toHaveBeenCalledTimes(1);
 
     const cancel = within(panel).getByRole<HTMLButtonElement>("button", { name: "取消" });
     expect(cancel.disabled).toBe(true);
     expect(panel.getAttribute("aria-busy")).toBe("true");
+    const close = document.querySelector<HTMLButtonElement>('[data-action="settings.close"]')!;
+    expect(close.disabled).toBe(true);
+    const section = document.querySelector<HTMLButtonElement>('[data-action="settings.section"][data-value="session"]')!;
+    const market = screen.getByRole<HTMLButtonElement>("tab", { name: "发现" });
+    expect(section.disabled).toBe(true);
+    expect(market.disabled).toBe(true);
+    await userEvent.click(section);
+    await userEvent.click(market);
+    await userEvent.click(close);
+    await userEvent.click(document.querySelector<HTMLElement>(".prefs")!);
     await userEvent.click(cancel);
     await userEvent.keyboard("{Escape}");
     expect(onClose).not.toHaveBeenCalled();
     expect(document.querySelector('.addpkg[data-stage="confirm"]')).toBe(panel);
     expect(within(row).getByRole<HTMLButtonElement>("switch", { name: "关闭 review-kit" }).disabled).toBe(true);
 
-    if (outcome === "success") {
-      await act(async () => finish({ ok: true, applied: true, status: "done", actions: [{ kind: "plugin", action: "install_plugin_package", status: "done", name: "review-kit", riskLevel: "low" }] }));
-      await userEvent.click(await screen.findByRole("button", { name: "完成" }));
+    if (outcome !== "failure") {
+      await act(async () => finish(outcome === "success"
+        ? { ok: true, applied: true, status: "done", actions: [{ kind: "plugin", action: "install_plugin_package", status: "done", name: "review-kit", riskLevel: "low" }] }
+        : { ok: false, applied: false, status: "failed", error: "update refused", actions: [] }));
+      const done = await screen.findByRole("button", { name: "完成" });
+      await waitFor(() => expect(document.activeElement).toBe(done));
+      await userEvent.click(done);
     } else {
       await act(async () => fail(new Error("update unavailable")));
       expect(await within(panel).findByText("update unavailable")).toBeTruthy();
       expect(cancel.disabled).toBe(false);
       expect(panel.getAttribute("aria-busy")).toBe("false");
+      await waitFor(() => expect(document.activeElement).toBe(apply));
       await userEvent.click(cancel);
     }
     expect(document.querySelector(".addpkg")).toBeNull();
     expect(within(row).getByRole<HTMLButtonElement>("switch", { name: "关闭 review-kit" }).disabled).toBe(false);
+    expect(close.disabled).toBe(false);
+    expect(section.disabled).toBe(false);
+    expect(market.disabled).toBe(false);
   });
 });
 

@@ -174,7 +174,7 @@ function Package({
   );
 
   return (
-    <details className="srv" data-extension-name={p.name} data-st={p.enabled ? "ready" : "disabled"} aria-busy={!!busy} open={confirming || undefined}>
+    <details className="srv" data-extension-name={p.name} data-st={p.enabled ? "ready" : "disabled"} aria-busy={locked} open={confirming || undefined}>
       <summary>{head}</summary>
       {confirm}
       {notes}
