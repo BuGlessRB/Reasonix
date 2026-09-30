@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "./testkit";
 import { Settings } from "./Settings";
-import type { AgentPort, SessionStatus } from "../port/port";
+import type { AgentPort, PluginPlan, SessionStatus } from "../port/port";
 import { MockPort } from "../port/mock";
 import { MockHub } from "../port/mock_hub";
 
@@ -45,6 +45,83 @@ it("opens the installed tab after a market install and keeps keyboard focus ther
   const installed = screen.getByRole("tab", { name: "已安装" });
   await waitFor(() => expect(installed.getAttribute("aria-selected")).toBe("true"));
   await waitFor(() => expect(document.activeElement?.closest("[data-extension-name='manifest-kit']")).toBeTruthy());
+});
+
+describe("a package's inline update", () => {
+  it("locks the selected row until its update preview is dismissed", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    let finish!: (value: PluginPlan) => void;
+    const preview = vi.spyOn(port, "planPlugin").mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const toggle = vi.spyOn(port, "setPluginEnabled");
+    const remove = vi.spyOn(port, "removePlugin");
+    const exportPackage = vi.spyOn(port, "exportPlugin");
+    draw("ext:installed", port);
+    const row = (await screen.findByText("review-kit")).closest("details")!;
+    const controls = within(row);
+    await userEvent.click(controls.getByRole("button", { name: "移除 review-kit" }));
+    await userEvent.click(controls.getByRole("button", { name: "更新" }));
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+
+    expect(controls.getByRole<HTMLButtonElement>("switch", { name: "关闭 review-kit" }).disabled).toBe(true);
+    for (const name of ["导出", "移除 review-kit", "删除", "取消"]) {
+      const button = controls.getByRole<HTMLButtonElement>("button", { name });
+      expect(button.disabled).toBe(true);
+      await userEvent.click(button);
+    }
+    await userEvent.click(controls.getByRole("switch", { name: "关闭 review-kit" }));
+    expect(toggle).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(exportPackage).not.toHaveBeenCalled();
+    expect(screen.getByRole<HTMLButtonElement>("switch", { name: "启用 notion-bridge" }).disabled).toBe(false);
+    const otherUpdate = within(document.querySelector<HTMLElement>('[data-extension-name="notion-bridge"]')!).getByRole<HTMLButtonElement>("button", { name: "更新" });
+    expect(otherUpdate.disabled).toBe(true);
+    await userEvent.click(otherUpdate);
+    expect(preview).toHaveBeenCalledTimes(1);
+    const panel = document.querySelector<HTMLElement>('.addpkg[data-stage="reading"]')!;
+    expect(panel.getAttribute("aria-busy")).toBe("true");
+    await userEvent.click(within(panel).getByRole("button", { name: "取消" }));
+    expect(document.querySelector(".addpkg")).toBeNull();
+    expect(controls.getByRole<HTMLButtonElement>("switch", { name: "关闭 review-kit" }).disabled).toBe(false);
+    expect(controls.getByRole<HTMLButtonElement>("button", { name: "删除" }).disabled).toBe(false);
+    expect(otherUpdate.disabled).toBe(false);
+    await act(async () => finish({ ok: true, applied: false, status: "planned", actions: [] }));
+  });
+
+  it.each(["success", "failure"])("keeps an applying update mounted through Cancel and Escape, then permits dismissal after %s", async (outcome) => {
+    const port = new MockPort() as unknown as AgentPort;
+    let finish!: (value: PluginPlan) => void;
+    let fail!: (error: Error) => void;
+    const install = vi.spyOn(port, "installPlugin").mockImplementationOnce(() => new Promise((resolve, reject) => { finish = resolve; fail = reject; }));
+    const { onClose } = draw("ext:installed", port);
+    const row = (await screen.findByText("review-kit")).closest("details")!;
+    await userEvent.click(within(row).getByRole("button", { name: "更新" }));
+    await screen.findByText(/review-kit.*→/);
+    const panel = document.querySelector<HTMLElement>('.addpkg[data-stage="confirm"]')!;
+    await userEvent.click(within(panel).getByRole("button", { name: "更新" }));
+    expect(install).toHaveBeenCalledTimes(1);
+
+    const cancel = within(panel).getByRole<HTMLButtonElement>("button", { name: "取消" });
+    expect(cancel.disabled).toBe(true);
+    expect(panel.getAttribute("aria-busy")).toBe("true");
+    await userEvent.click(cancel);
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.querySelector('.addpkg[data-stage="confirm"]')).toBe(panel);
+    expect(within(row).getByRole<HTMLButtonElement>("switch", { name: "关闭 review-kit" }).disabled).toBe(true);
+
+    if (outcome === "success") {
+      await act(async () => finish({ ok: true, applied: true, status: "done", actions: [{ kind: "plugin", action: "install_plugin_package", status: "done", name: "review-kit", riskLevel: "low" }] }));
+      await userEvent.click(await screen.findByRole("button", { name: "完成" }));
+    } else {
+      await act(async () => fail(new Error("update unavailable")));
+      expect(await within(panel).findByText("update unavailable")).toBeTruthy();
+      expect(cancel.disabled).toBe(false);
+      expect(panel.getAttribute("aria-busy")).toBe("false");
+      await userEvent.click(cancel);
+    }
+    expect(document.querySelector(".addpkg")).toBeNull();
+    expect(within(row).getByRole<HTMLButtonElement>("switch", { name: "关闭 review-kit" }).disabled).toBe(false);
+  });
 });
 
 describe("what Escape takes back", () => {

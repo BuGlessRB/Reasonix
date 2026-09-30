@@ -34,6 +34,7 @@ describe("installed package operations", () => {
     }
 
     const enable = row.getByRole<HTMLButtonElement>("switch", { name: "关闭 review-kit" });
+    expect(enable.closest("details")?.getAttribute("aria-busy")).toBe("true");
     await userEvent.click(enable);
     await userEvent.click(row.getByRole("button", { name: "更新" }));
     expect(toggle).not.toHaveBeenCalled();
@@ -52,6 +53,7 @@ describe("installed package operations", () => {
     await act(async () => fail(new Error(`${operation} unavailable`)));
     expect(await row.findByText(`${operation} unavailable`)).toBeTruthy();
     expect(enable.disabled).toBe(false);
+    expect(enable.closest("details")?.getAttribute("aria-busy")).toBe("false");
     expect(row.getByRole<HTMLButtonElement>("button", { name: "更新" }).disabled).toBe(false);
     expect(row.getByRole<HTMLButtonElement>("button", { name: "导出" }).disabled).toBe(false);
     expect(onChanged).toHaveBeenCalledTimes(1);

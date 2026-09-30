@@ -23,7 +23,7 @@ export function Packages({ port, packages, onChanged, updating, onUpdate }: Prop
           p={p}
           port={port}
           onDone={onChanged}
-          updating={updating === p.name}
+          updating={updating}
           onUpdate={() => onUpdate(p.name)}
         />
       ))}
@@ -55,12 +55,13 @@ function summary(p: PluginPackage): string {
 function Package({
   p, port, onDone, updating, onUpdate,
 }: {
-  p: PluginPackage; port: AgentPort; onDone: () => void; updating: boolean; onUpdate: () => void;
+  p: PluginPackage; port: AgentPort; onDone: () => void; updating: string; onUpdate: () => void;
 }) {
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [exported, setExported] = useState<PluginExport | null>(null);
+  const locked = !!busy || updating === p.name;
 
   const run = async (what: string, fn: () => Promise<unknown>) => {
     setBusy(what);
@@ -81,7 +82,7 @@ function Package({
       {/* Only a package that recorded where it came from can be fetched again;
           one installed from a folder that has since moved cannot. */}
       {p.source && (
-          <button className="act ghost" data-action="extensions.update" disabled={!!busy || updating} onClick={onUpdate}>
+        <button className="act ghost" data-action="extensions.update" disabled={locked || !!updating} onClick={onUpdate}>
           {t("更新")}
         </button>
       )}
@@ -89,8 +90,8 @@ function Package({
           says what the archive is for rather than naming a format. */}
       <button
         className="act ghost"
-          data-action="extensions.export"
-        disabled={!!busy}
+        data-action="extensions.export"
+        disabled={locked}
         onClick={() =>
           void run("export", async () => {
             setExported(await port.exportPlugin(p.name));
@@ -99,14 +100,14 @@ function Package({
       >
         {t(busy === "export" ? "打包中…" : "导出")}
       </button>
-      <button className="act ghost" aria-label={t("移除 {name}", { name: p.name })} disabled={!!busy} onClick={() => setConfirming(true)}>
+      <button className="act ghost" aria-label={t("移除 {name}", { name: p.name })} disabled={locked} onClick={() => setConfirming(true)}>
         {t("移除")}
       </button>
       <Switch
-          data-action="extensions.enabled"
-          data-target={p.name}
+        data-action="extensions.enabled"
+        data-target={p.name}
         on={p.enabled}
-        busy={!!busy}
+        busy={locked}
         label={`${t(p.enabled ? "关闭" : "启用")} ${p.name}`}
         onClick={() => void run("toggle", () => port.setPluginEnabled(p.name, !p.enabled))}
       />
@@ -118,14 +119,14 @@ function Package({
       <span className="q">
         {t("删除 {name}？其提供的技能、命令与服务将一并移除。若只是暂时停用，关闭开关即可。", { name: p.name })}
       </span>
-      <button className="act" disabled={!!busy} onClick={() => setConfirming(false)}>
+      <button className="act" disabled={locked} onClick={() => setConfirming(false)}>
         {t("取消")}
       </button>
       <button
         className="act danger"
-            data-action="extensions.remove"
-            data-target={p.name}
-        disabled={!!busy}
+        data-action="extensions.remove"
+        data-target={p.name}
+        disabled={locked}
         onClick={() =>
           void run("remove", async () => {
             const out = await port.removePlugin(p.name);
@@ -173,7 +174,7 @@ function Package({
   );
 
   return (
-    <details className="srv" data-extension-name={p.name} data-st={p.enabled ? "ready" : "disabled"} open={confirming || undefined}>
+    <details className="srv" data-extension-name={p.name} data-st={p.enabled ? "ready" : "disabled"} aria-busy={!!busy} open={confirming || undefined}>
       <summary>{head}</summary>
       {confirm}
       {notes}
