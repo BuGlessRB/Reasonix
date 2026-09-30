@@ -32,6 +32,7 @@ import (
 type toolEnvironment struct {
 	writeRoots      []string
 	forbidReadRoots []string
+	readRoots       []string // non-nil confines the read tools to these directories
 	network         bool
 	bash            sandbox.Spec
 	bashTimeout     time.Duration
@@ -55,6 +56,9 @@ func resolveToolEnvironment(opts Options, cfg *config.Config, roots config.Roots
 	env.writeRoots = appendUniquePaths(cfg.WriteRootsForRoot(root), additionalDirs...)
 	if opts.WorkspaceOnly {
 		env.writeRoots = []string{root}
+	}
+	if opts.Observe != nil {
+		env.readRoots = []string{root}
 	}
 	if opts.SandboxNetworkOverride != nil {
 		env.network = *opts.SandboxNetworkOverride

@@ -56,6 +56,7 @@ func (c *Controller) turnBlocksFor(source string, includeOwed bool, notes []stri
 		)
 	}
 	return append(blocks,
+		turnBlock{"scheduled-run", c.scheduledRunBlock()},
 		turnBlock{"background-jobs", c.backgroundJobsBlock()},
 		turnBlock{"memory-update", memoryUpdateBlock(notes)},
 		turnBlock{"reasoning-language", langpref.ReasoningLanguageBlock(langpref.ResolveReasoningLanguage(reasoningLanguage, source))},

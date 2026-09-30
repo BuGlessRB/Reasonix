@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"reasonix/internal/contract/tool"
 	"reasonix/internal/safety/evidence"
 )
 
@@ -50,6 +51,8 @@ func (*ConcludeBlockedTool) Schema() json.RawMessage {
 // ReadOnly is true: the call records a conclusion and changes nothing. The
 // evidence it cites was produced by the work that came before it.
 func (*ConcludeBlockedTool) ReadOnly() bool { return true }
+
+func (*ConcludeBlockedTool) Reach() tool.Reach { return tool.ReachHostControl }
 
 type blockedEvidence struct {
 	Command string   `json:"command"`

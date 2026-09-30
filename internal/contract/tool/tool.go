@@ -363,7 +363,10 @@ type Registry struct {
 	// schema. Nil means every registered tool is provider-visible (tests and
 	// legacy direct construction).
 	providerVisible map[string]bool
-	schemaRev       atomic.Uint64
+	// admit, when non-nil, is the ceiling on what this registry may ever hold:
+	// Add refuses every tool it rejects, so no later registration path can widen it.
+	admit     func(Tool) bool
+	schemaRev atomic.Uint64
 }
 
 // NewRegistry returns an empty registry.
@@ -433,6 +436,12 @@ func (r *Registry) isProviderVisibleLocked(name string) bool {
 // canonicalized once here — it never changes after registration, so Schemas()
 // (called every turn) reuses the result instead of re-marshaling.
 func (r *Registry) Add(t Tool) {
+	r.mu.RLock()
+	admit := r.admit
+	r.mu.RUnlock()
+	if admit != nil && !admit(t) {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

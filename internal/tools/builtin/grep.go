@@ -80,6 +80,7 @@ type grepTool struct {
 	paths       *PathResolver
 	rg          string
 	forbidRoots []string
+	readRoots   []string
 	sb          sandbox.Spec
 	sessionTemp *sessiontemp.Manager
 }
@@ -99,6 +100,8 @@ func (grepTool) Schema() json.RawMessage {
 }
 
 func (grepTool) ReadOnly() bool { return true }
+
+func (grepTool) Reach() tool.Reach { return tool.ReachLocalRead }
 
 // SnipHint keeps a long head of matches and a short tail: the first matches are
 // the ones the model usually acts on, the tail just confirms scope.
@@ -146,6 +149,9 @@ func (g grepTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	ctx, cancel := context.WithTimeout(ctx, to)
 	defer cancel()
 
+	if err := confineScope(g.readRoots, p.Path); err != nil {
+		return "", err
+	}
 	info, err := os.Stat(p.Path)
 	if err != nil {
 		if rp.External {
@@ -294,7 +300,7 @@ func (g grepTool) nativePass(ctx context.Context, pattern, path, glob string, in
 
 	if info.IsDir() {
 		root := path // the walk callback shadows path with each entry
-		ig := newWalkIgnorer(path, g.forbidRoots, wide)
+		ig := newWalkIgnorer(path, g.forbidRoots, g.readRoots, wide)
 		_ = filepath.WalkDir(path, func(path string, d os.DirEntry, err error) error {
 			if ctx.Err() != nil {
 				return ctx.Err() // abort promptly on cancel — a huge tree is interruptible
@@ -352,6 +358,8 @@ func (g grepTool) ripgrepPass(ctx context.Context, pattern, path, glob string, d
 	args := []string{
 		g.rg,
 		"--no-heading", "--line-number", "--with-filename", "--color", "never",
+		// Ripgrep does not follow links unless told to; stated so that stays true.
+		"--no-follow",
 	}
 	if wide {
 		// The ignore rules and nothing else: the VCS store is history rather

@@ -23,6 +23,7 @@ func init() { tool.RegisterBuiltin(codeIndex{}) }
 type codeIndex struct {
 	workDir     string
 	forbidRoots []string
+	readRoots   []string
 }
 
 func (codeIndex) Name() string { return "code_index" }
@@ -46,6 +47,8 @@ func (codeIndex) Schema() json.RawMessage {
 }
 
 func (codeIndex) ReadOnly() bool { return true }
+
+func (codeIndex) Reach() tool.Reach { return tool.ReachLocalRead }
 
 const (
 	codeIndexDefaultLimit = 100
@@ -111,6 +114,9 @@ func (c codeIndex) Execute(ctx context.Context, args json.RawMessage) (string, e
 }
 
 func (c codeIndex) collect(ctx context.Context, root string, limit int, outline bool) ([]codeSymbol, bool, error) {
+	if err := confineScope(c.readRoots, root); err != nil {
+		return nil, false, err
+	}
 	if confineRead(c.forbidRoots, root) {
 		return nil, false, nil
 	}
@@ -124,7 +130,7 @@ func (c codeIndex) collect(ctx context.Context, root string, limit int, outline 
 			files = append(files, root)
 		}
 	} else {
-		confine := newWalkConfine(c.forbidRoots, root)
+		confine := newWalkConfine(c.forbidRoots, c.readRoots, root)
 		err = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 			if ctx.Err() != nil {
 				return ctx.Err()

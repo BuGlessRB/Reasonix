@@ -31,13 +31,16 @@ type Workspace struct {
 	Dir             string
 	WriteRoots      []string
 	ForbidReadRoots []string
-	Bash            sandbox.Spec
-	BashTimeout     time.Duration
-	Search          SearchSpec
-	ProxySpec       netclient.ProxySpec
-	SystemOne       SystemOneSpec
-	ReadPaths       *PathResolver
-	SessionGuard    SessionDataGuard
+	// ReadRoots, when set, confines every read tool to these directories after
+	// symlinks are resolved; empty leaves reads unconfined.
+	ReadRoots    []string
+	Bash         sandbox.Spec
+	BashTimeout  time.Duration
+	Search       SearchSpec
+	ProxySpec    netclient.ProxySpec
+	SystemOne    SystemOneSpec
+	ReadPaths    *PathResolver
+	SessionGuard SessionDataGuard
 	// ManagedConfig names the Reasonix-owned config files the file-writers may
 	// touch outside WriteRoots after a fresh per-write human approval (see
 	// ManagedConfigPaths). The zero value disables the escape hatch.
@@ -70,9 +73,14 @@ func (w Workspace) Tools(enabled ...string) []tool.Tool {
 	}
 	roots := realRoots(writeRoots)
 	forbidRoots := realRoots(w.ForbidReadRoots)
+	readRoots := realRoots(w.ReadRoots)
+	if len(w.ReadRoots) > 0 && len(readRoots) == 0 {
+		// A scope that resolves to nothing must refuse everything, not confine nothing.
+		readRoots = []string{filepath.Join(string(filepath.Separator), "\x00unresolved")}
+	}
 
 	overrides := map[string]tool.Tool{
-		"read_file":     readFile{workDir: w.Dir, paths: w.ReadPaths, forbidRoots: forbidRoots, overlay: w.FileOverlay},
+		"read_file":     readFile{workDir: w.Dir, readRoots: readRoots, paths: w.ReadPaths, forbidRoots: forbidRoots, overlay: w.FileOverlay},
 		"write_file":    writeFile{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig, sessionTemp: w.SessionTemp, overlay: w.FileOverlay, receipt: w.FileWriteReceipt},
 		"edit_file":     editFile{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig, sessionTemp: w.SessionTemp, overlay: w.FileOverlay},
 		"multi_edit":    multiEdit{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig, sessionTemp: w.SessionTemp, overlay: w.FileOverlay},
@@ -80,11 +88,11 @@ func (w Workspace) Tools(enabled ...string) []tool.Tool {
 		"notebook_edit": notebookEdit{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig, sessionTemp: w.SessionTemp, overlay: w.FileOverlay},
 		"delete_range":  deleteRange{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig, sessionTemp: w.SessionTemp, overlay: w.FileOverlay},
 		"delete_symbol": deleteSymbol{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig, sessionTemp: w.SessionTemp, overlay: w.FileOverlay},
-		"code_index":    codeIndex{workDir: w.Dir, forbidRoots: forbidRoots},
+		"code_index":    codeIndex{workDir: w.Dir, readRoots: readRoots, forbidRoots: forbidRoots},
 		"bash":          bash{workDir: w.Dir, sb: w.Bash, timeout: w.BashTimeout, guard: w.SessionGuard, terminal: w.Terminal, sessionTemp: w.SessionTemp, paths: w.ReadPaths},
-		"ls":            listDir{workDir: w.Dir, paths: w.ReadPaths, forbidRoots: forbidRoots},
-		"glob":          globTool{workDir: w.Dir, paths: w.ReadPaths, forbidRoots: forbidRoots},
-		"grep":          grepTool{workDir: w.Dir, paths: w.ReadPaths, rg: w.Search.RgPath, forbidRoots: forbidRoots, sb: w.Bash, sessionTemp: w.SessionTemp},
+		"ls":            listDir{workDir: w.Dir, readRoots: readRoots, paths: w.ReadPaths, forbidRoots: forbidRoots},
+		"glob":          globTool{workDir: w.Dir, readRoots: readRoots, paths: w.ReadPaths, forbidRoots: forbidRoots},
+		"grep":          grepTool{workDir: w.Dir, readRoots: readRoots, paths: w.ReadPaths, rg: w.Search.RgPath, forbidRoots: forbidRoots, sb: w.Bash, sessionTemp: w.SessionTemp},
 		"web_fetch":     webFetch{proxySpec: w.ProxySpec},
 	}
 	all := tool.Builtins()

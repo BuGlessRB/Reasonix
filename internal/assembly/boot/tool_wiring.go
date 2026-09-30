@@ -28,7 +28,10 @@ import (
 // its plan allows, and binds the runner to the resolved shell.
 func loadHooks(opts Options, roots config.Roots, root string, shell sandbox.Shell, sink event.Sink) ([]hook.ResolvedHook, *hook.Runner) {
 	var resolved []hook.ResolvedHook
-	if opts.ReuseAssembly != nil && shouldReuseDiscovery(opts.PreviousPlan) {
+	if opts.Observe != nil {
+		// An empty, non-nil scope list loads no hook at all: nil would load every one.
+		resolved = hook.Load(hook.LoadOptions{ProjectRoot: root, ReasonixHomeDir: roots.Home(), Scopes: []hook.Scope{}})
+	} else if opts.ReuseAssembly != nil && shouldReuseDiscovery(opts.PreviousPlan) {
 		resolved = opts.ReuseAssembly.Hooks
 	} else {
 		resolved = hook.Load(hook.LoadOptions{ProjectRoot: root, ReasonixHomeDir: roots.Home()})

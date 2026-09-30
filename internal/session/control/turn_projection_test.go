@@ -21,6 +21,7 @@ func TestTurnBlockOrderIsDeclared(t *testing.T) {
 		"hook-context",
 		"available-skills",
 		"project-instructions",
+		"scheduled-run",
 		"background-jobs",
 		"memory-update",
 		"reasoning-language",

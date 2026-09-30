@@ -12,7 +12,7 @@ import (
 func addTurnExitTools(reg *tool.Registry) {
 	// Both reach the user through the call context's Asker, which interactive
 	// frontends wire up (EnableInteractiveApproval). A headless run has none:
-	// ask answers "decide for yourself", await_user refuses.
+	// ask stays unresolved, await_user refuses.
 	reg.Add(agent.NewAskTool())
 	reg.Add(agent.NewAwaitUserTool())
 	reg.Add(agent.NewConcludeBlockedTool())

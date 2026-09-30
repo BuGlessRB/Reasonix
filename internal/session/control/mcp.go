@@ -31,7 +31,13 @@ type mcpManager struct {
 	// defaultCallTimeout is what a spec gets when it declares none. Read once
 	// while building a spec, so it needs no lock.
 	defaultCallTimeout time.Duration
+	// sealed, once set, refuses every connection. It is written before the
+	// controller is handed to a caller and only read after.
+	sealed error
 }
+
+// seal makes the manager refuse to connect or register any server.
+func (m *mcpManager) seal(reason error) { m.sealed = reason }
 
 func newMcpManager(host *plugin.Host, reg *tool.Registry, pluginCtx context.Context, defaultCallTimeout time.Duration) mcpManager {
 	return mcpManager{host: host, reg: reg, pluginCtx: pluginCtx, defaultCallTimeout: defaultCallTimeout}
@@ -49,6 +55,9 @@ func (m *mcpManager) hostRef() *plugin.Host {
 // registers its tools, replacing any prior tools under the same prefix. Returns
 // the tool count. The host's network/subprocess I/O runs off mu.
 func (m *mcpManager) connectSpec(s plugin.Spec) (int, error) {
+	if m.sealed != nil {
+		return 0, m.sealed
+	}
 	m.mu.Lock()
 	if m.host == nil {
 		m.host = plugin.NewHost()
@@ -83,6 +92,9 @@ func (m *mcpManager) connectSpec(s plugin.Spec) (int, error) {
 // is reused immediately; otherwise cached lazy tools (or one connect stub on a
 // cache miss) start the server only when the model makes the first real call.
 func (m *mcpManager) registerSpecOnDemand(s plugin.Spec) (int, error) {
+	if m.sealed != nil {
+		return 0, m.sealed
+	}
 	m.mu.Lock()
 	if m.host == nil {
 		m.host = plugin.NewHost()

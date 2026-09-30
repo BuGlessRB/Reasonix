@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"reasonix/internal/contract/event"
+	"reasonix/internal/contract/tool"
 )
 
 // AskTool obtains what only the user can supply: a decision that is theirs, or a
@@ -69,6 +70,8 @@ func (*AskTool) DecisionBarrier() bool { return true }
 // ReadOnly is true: asking has no host side effects, so it never needs approval
 // and stays available in plan mode (clarifying scope while planning is fine).
 func (*AskTool) ReadOnly() bool { return true }
+
+func (*AskTool) Reach() tool.Reach { return tool.ReachHostControl }
 
 func (*AskTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {

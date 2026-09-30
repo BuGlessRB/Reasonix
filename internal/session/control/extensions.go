@@ -266,6 +266,9 @@ func (c *Controller) ReplaceExtensions(d *dispatch.Dispatcher) {
 }
 
 func (c *Controller) installExtensionsLocked(d *dispatch.Dispatcher) {
+	if c.observeSealed() {
+		return
+	}
 	c.extensions = d
 	// Keep the inbox observer as the outermost sink so Steer/unapplied events
 	// always update durable state, while still installing/updating the

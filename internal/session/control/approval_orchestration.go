@@ -153,6 +153,9 @@ func (c *Controller) recordDecisionReceipt(pending pendingApproval, outcome stri
 // Interactive frontends (chat, desktop) call this; the headless run keeps the
 // silent gate and a nil asker from setup.
 func (c *Controller) EnableInteractiveApproval() {
+	if c.observe != nil {
+		return
+	}
 	escapeApprover := sandboxEscapeApprover{c}
 	configApprover := managedConfigWriteApprover{c}
 	if c.executor != nil {
@@ -249,6 +252,9 @@ func (c *Controller) newHeadlessGate(mode string) *freshHumanHeadlessGate {
 // by the gate for every mode. The only exception is a controller-assessed,
 // create-only project/reference memory; every other memory write remains denied.
 func (c *Controller) ApplyHeadlessApprovalMode(mode string) {
+	if c.observe != nil {
+		return
+	}
 	mode = normalizeToolApprovalMode(mode)
 	c.approval.setMode(mode)
 	if c.subagentGate != nil {
@@ -260,6 +266,9 @@ func (c *Controller) ApplyHeadlessApprovalMode(mode string) {
 }
 
 func (c *Controller) refreshInteractiveGate() {
+	if c.observe != nil {
+		return
+	}
 	if c.executor != nil {
 		c.executor.SetGate(c.newInteractiveGate())
 	}
@@ -450,6 +459,9 @@ func (c *Controller) SetToolApprovalMode(mode string) {
 // not cover — so a frontend must keep showing them instead of assuming the
 // posture switch resolved everything (#6432).
 func (c *Controller) ApplyToolApprovalMode(mode string) []string {
+	if c.observe != nil {
+		return nil
+	}
 	mode = normalizeToolApprovalMode(mode)
 	drained, _ := c.switchApprovalMode(mode, func() ([]drainedApproval, bool) { return c.approval.setMode(mode), true })
 	return drained

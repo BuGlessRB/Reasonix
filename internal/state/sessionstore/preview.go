@@ -30,6 +30,7 @@ var TransientUserBlockTags = []string{
 	"interrupted-turn-recovery",
 	"execution-policy",
 	"workspace",
+	"scheduled-run",
 }
 
 // SupersededUserBlockTags names the transient blocks carrying standing state
@@ -43,6 +44,7 @@ var SupersededUserBlockTags = []string{
 	"reasoning-language",
 	"workspace",
 	"project-instructions",
+	"scheduled-run",
 }
 
 // SupersededUserBlock indexes SupersededUserBlockTags so the two cannot drift.

@@ -55,6 +55,9 @@ type controllerDeps struct {
 	// one — sub-agents then keep whatever gate they were constructed with.
 	subagentGate *SharedHeadlessGate
 
+	// observe is non-nil for a read-only unattended run; see ObserveRun.
+	observe *ObserveRun
+
 	label      string
 	modelRef   string
 	modelModes []config.ModelMode // what SetModelMode accepts; see model_modes.go
@@ -134,6 +137,7 @@ func newControllerDeps(opts Options, sink event.Sink, usageTee *goalUsageTee, ru
 		goalUsageTee:           usageTee,
 		sink:                   sink,
 		policy:                 opts.Policy,
+		observe:                cloneObserveRun(opts.Observe),
 		subagentGate:           opts.SubagentGate,
 		label:                  opts.Label,
 		modelRef:               opts.ModelRef,

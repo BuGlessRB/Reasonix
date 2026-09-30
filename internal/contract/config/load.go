@@ -48,7 +48,15 @@ func (r Roots) defaultConfig() *Config {
 // LoadForRoot reads root's configuration out of this binding's home, so one
 // process can serve two homes without either seeing the other's config.
 func (r Roots) LoadForRoot(root string) (*Config, error) {
-	return r.loadForRoot(root, true)
+	return r.loadForRoot(root, true, true)
+}
+
+// LoadUserScopeForRoot is LoadForRoot for a run that takes nothing from the
+// workspace: no reasonix.toml, no .mcp.json, no project .env, and none of the
+// folder grants the user gave this workspace. Only the user's own configuration
+// and installed packages contribute, and nothing is written.
+func (r Roots) LoadUserScopeForRoot(root string) (*Config, error) {
+	return r.loadForRoot(root, false, false)
 }
 
 // LoadForRootReadOnly is like LoadForRoot but never writes config files: it skips
@@ -59,12 +67,17 @@ func LoadForRootReadOnly(root string) (*Config, error) {
 }
 
 func (r Roots) LoadForRootReadOnly(root string) (*Config, error) {
-	return r.loadForRoot(root, false)
+	return r.loadForRoot(root, false, true)
 }
 
-func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
+func (r Roots) loadForRoot(root string, migrateOnDisk, withProject bool) (*Config, error) {
 	root = resolveRoot(root)
-	expansionEnv := r.loadDotEnvForRoot(root)
+	var expansionEnv map[string]string
+	if withProject {
+		expansionEnv = r.loadDotEnvForRoot(root)
+	} else {
+		r.loadCredentialStoreForScope(root, false)
+	}
 	cfg := r.defaultConfig()
 	cfg.setExpansionEnv(expansionEnv)
 	cfg.CredentialsStore = r.credentialsStoreMode()
@@ -75,8 +88,10 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 			return nil, err
 		}
 	}
-	if _, err := resolveConfigAccessPath(projectTOML, false); err != nil {
-		return nil, err
+	if withProject {
+		if _, err := resolveConfigAccessPath(projectTOML, false); err != nil {
+			return nil, err
+		}
 	}
 
 	mergeTOML := mergeFileSnapshot
@@ -121,50 +136,18 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 		cfg.systemPromptFileSource = promptFileSourceUser
 	}
 	userDefaultModel := cfg.DefaultModel
-	globalCLI := cfg.CLI
-	globalSecrets := cfg.Secrets
 	held := holdUserScope(cfg)
-	globalRemote, globalStorage, globalServe := cfg.Remote.Clone(), maps.Clone(cfg.Storage), cfg.Serve
-	globalDesktopLanguage := cfg.Desktop.Language
-	globalPricingCurrency := cfg.Desktop.Currency
-	globalBillingDisplayCurrency := cfg.Billing.DisplayCurrency
-	globalTelemetry, globalStatusline, globalProgressWatch, globalUICommandMode := cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch, cfg.UI.CommandMode
-
-	tomlSources = append(tomlSources, projectTOML)
-	projectMeta, err := mergeTOML(cfg, projectTOML)
-	if err != nil {
-		// Project config damage is isolated to this workspace: continue with
-		// user/global config so other tabs stay available.
-		cfg.addLoadWarning(fmt.Sprintf(
-			"project config %s is invalid (%v); ignored for this workspace",
-			projectTOML, err,
-		))
-		// Drop the project path from later multi-file merges so a broken TOML
-		// cannot fail plugin/provider re-merges.
-		tomlSources = tomlSources[:len(tomlSources)-1]
-	} else if projectMeta.IsDefined("agent", "system_prompt_file") {
-		cfg.systemPromptFileSource = promptFileSourceProject
+	var projectMeta toml.MetaData
+	if withProject {
+		var mergeErr error
+		projectMeta, tomlSources, mergeErr = mergeProjectTOML(cfg, mergeTOML, projectTOML, tomlSources)
+		if mergeErr != nil {
+			cfg.addLoadWarning(fmt.Sprintf(
+				"project config %s is invalid (%v); ignored for this workspace",
+				projectTOML, mergeErr,
+			))
+		}
 	}
-	// The whole [cli] table is user-global: the update channel picks the one
-	// installed binary, and a repository must not run a formatter or redraw diffs.
-	cfg.CLI = globalCLI
-	// Secret protection is a user-global security control: a cloned repo's
-	// reasonix.toml must not be able to flip on the workflow-breaking env/path
-	// protections.
-	cfg.Secrets = globalSecrets
-	// Remote hosts, storage locations and serve authentication are user-global:
-	// a repo must not inject hosts or forwards, redirect where transcripts live,
-	// or choose serve's launch token, auth mode, or trust in forwarded headers.
-	cfg.Remote, cfg.Storage, cfg.Serve = globalRemote, globalStorage, globalServe
-	// Desktop language and pricing currency are user-level regional preferences.
-	// A repository must not be able to alter how the user's spend is shown.
-	cfg.Desktop.Language = globalDesktopLanguage
-	cfg.Desktop.Currency = globalPricingCurrency
-	cfg.Billing.DisplayCurrency = globalBillingDisplayCurrency
-	// Telemetry, statusline and progress watch are user-global: a project sets
-	// none, even with no global value. The composer's key bindings are the user's
-	// too, so a cloned repo cannot rebind Esc through a project [ui] commandmode.
-	cfg.Telemetry, cfg.Statusline, cfg.ProgressWatch, cfg.UI.CommandMode = globalTelemetry, globalStatusline, globalProgressWatch, globalUICommandMode
 	// TOML decoding replaces [[plugins]] wholesale, so cfg.Plugins now holds
 	// only the last file's. Re-merge by name across all sources (later wins) so a
 	// project reasonix.toml doesn't drop the global config's MCP servers.
@@ -188,22 +171,26 @@ func (r Roots) loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 		cfg.Desktop.ProviderAccess = access
 	}
 	// Sandbox, permission, shell env and program grants only narrow (see heldScope).
-	held.narrow(cfg, r, root, projectMeta)
+	if withProject {
+		held.narrow(cfg, r, root, projectMeta)
+	}
 
 	// Claude Code's .mcp.json (project root) is read last and merged into
 	// [[plugins]], so a server configured for Claude works here unchanged.
 	// Project reasonix.toml wins on a name collision; project .mcp.json wins
 	// over a same-name user-global entry (see mergeMCPJSON).
-	mcpFile := mcpJSONFile
-	if root != "." {
-		mcpFile = filepath.Join(root, mcpJSONFile)
+	if withProject {
+		mcpFile := mcpJSONFile
+		if root != "." {
+			mcpFile = filepath.Join(root, mcpJSONFile)
+		}
+		entries, err := loadMCPJSON(mcpFile)
+		if err != nil { // a malformed file yields no entries, so the append below is still correct
+			cfg.addLoadWarning(fmt.Sprintf("project .mcp.json is invalid (%v); MCP servers from that file are ignored", err))
+		}
+		// Claude's scopes go last, so a name the project file claims keeps it.
+		cfg.mergeMCPJSON(append(entries, loadClaudeMCP(r.claudeConfigPath(), root)...))
 	}
-	entries, err := loadMCPJSON(mcpFile)
-	if err != nil { // a malformed file yields no entries, so the append below is still correct
-		cfg.addLoadWarning(fmt.Sprintf("project .mcp.json is invalid (%v); MCP servers from that file are ignored", err))
-	}
-	// Claude's scopes go last, so a name the project file claims keeps it.
-	cfg.mergeMCPJSON(append(entries, loadClaudeMCP(r.claudeConfigPath(), root)...))
 
 	// Lowest priority before the one-time v1.9.1 MCP migration: the v0.x
 	// ~/.reasonix/config.json's mcpServers. Once the migration marker exists, the

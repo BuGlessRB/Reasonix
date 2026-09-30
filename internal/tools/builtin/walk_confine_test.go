@@ -64,7 +64,7 @@ func TestWalkConfineAgreesWithConfineRead(t *testing.T) {
 	}
 	blockedSeen := 0
 	for _, walkRoot := range walkRoots {
-		w := newWalkConfine(forbid, walkRoot)
+		w := newWalkConfine(forbid, nil, walkRoot)
 		_ = filepath.WalkDir(walkRoot, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil

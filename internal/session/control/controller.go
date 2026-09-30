@@ -277,6 +277,7 @@ type externalFolderToolRefs interface {
 type Options struct {
 	Runner   agent.Runner
 	Executor *agent.Agent
+	Observe  *ObserveRun
 	Guardian *guardian.Session
 	// RecoveryReviewer is the optional independent recovery reviewer (nil =
 	// rule-only path with fail-closed human confirmation for ambiguous cases).
@@ -457,7 +458,6 @@ func New(opts Options) *Controller {
 		runtimeGeneration:  opts.RuntimeGeneration,
 	}
 	c.adoptSessionResources(opts)
-
 	c.publishPerProjectContext(opts)
 	if opts.Extensions != nil {
 		c.extensions = opts.Extensions
@@ -488,8 +488,8 @@ func New(opts Options) *Controller {
 	// Auto Guard is built into Auto. Ask and YOLO bypass it through the mode
 	// provider, so no separate enablement state is needed.
 	c.initRecoveryGate(opts.RecoveryReviewer, opts.RecoveryHeadless)
-
 	c.observeJobs(opts.TaskStore)
+	c.bindObserve()
 	return c
 }
 

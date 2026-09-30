@@ -61,8 +61,8 @@ type Renderer interface {
 // Asker puts structured multiple-choice questions to the user and blocks for the
 // answers. The agent consults it for the `ask` tool. It is interface-shaped so
 // the agent stays independent of the frontend; a nil asker means no interactive
-// user (headless runs), where `ask` returns a "decide for yourself" result. The
-// interactive frontends wire the controller in as the Asker.
+// user (headless runs), where `ask` returns an unresolved result and never an
+// answer. The interactive frontends wire the controller in as the Asker.
 type Asker interface {
 	Ask(ctx context.Context, questions []event.AskQuestion) ([]event.AskAnswer, error)
 }
@@ -377,7 +377,7 @@ func (a *Agent) SetTools(tools *tool.Registry) {
 	if a == nil {
 		return
 	}
-	a.svc.tools = tools
+	a.svc.setTools(tools)
 }
 
 // SetReasoningLanguage updates the visible reasoning language preference for
@@ -405,7 +405,7 @@ func (a *Agent) SetGate(g Gate) {
 	if nilutil.IsNil(g) {
 		g = nil
 	}
-	a.svc.gate = g
+	a.svc.setGate(g)
 }
 
 // SetExtensions installs the extension dispatcher after construction. Boot
@@ -416,7 +416,7 @@ func (a *Agent) SetExtensions(d *dispatch.Dispatcher) {
 	if a == nil {
 		return
 	}
-	a.svc.extensions = d
+	a.svc.setExtensions(d)
 }
 
 // SetRecoveryGate installs Auto Guard. Safe to call before the run loop starts;
@@ -493,7 +493,7 @@ func (a *Agent) withTurnPreferences(input string) string {
 
 // SetAsker installs the asker the `ask` tool uses to question the user.
 // Interactive frontends wire one in; headless runs leave it nil.
-func (a *Agent) SetAsker(as Asker) { a.svc.asker = as }
+func (a *Agent) SetAsker(as Asker) { a.svc.setAsker(as) }
 
 // SetMemoryQueue installs the sink the remember/forget tools use to apply a
 // memory change in the current session. The controller wires itself in.
