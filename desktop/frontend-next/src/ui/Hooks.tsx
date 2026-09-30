@@ -44,6 +44,28 @@ const RECIPES: Recipe[] = [
 
 const SCOPE_LABEL = { user: "我的", project: "这个项目" } as const;
 
+const EVENT_LABELS = new Map<string, () => string>([
+  ["PreToolUse", () => t("工具执行前")],
+  ["PostToolUse", () => t("工具执行后")],
+  ["PostToolUseFailure", () => t("工具执行失败后")],
+  ["PermissionRequest", () => t("请求权限时")],
+  ["UserPromptSubmit", () => t("提交消息时")],
+  ["Stop", () => t("本轮结束时")],
+  ["StopFailure", () => t("本轮失败时")],
+  ["PostLLMCall", () => t("模型响应完成后")],
+  ["SessionStart", () => t("会话开始时")],
+  ["SessionEnd", () => t("会话结束时")],
+  ["SubagentStart", () => t("子代理开始时")],
+  ["SubagentStop", () => t("子代理结束时")],
+  ["Notification", () => t("需要你关注时")],
+  ["PreCompact", () => t("压缩上下文前")],
+]);
+
+function eventLabel(event: string): string {
+  const label = EVENT_LABELS.get(event);
+  return label ? `${label()} (${event})` : event;
+}
+
 interface Props {
   port: AgentPort;
   onChanged: () => void;
@@ -211,7 +233,7 @@ function Expert({
               <select value={h.event} onChange={(e) => patch(i, { event: e.target.value })}>
                 {cat.events.map((e) => (
                   <option key={e.name} value={e.name}>
-                    {e.name}
+                    {eventLabel(e.name)}
                   </option>
                 ))}
               </select>
@@ -269,7 +291,7 @@ function Expert({
           <span className="lb">{t("插件带来的 {n} 条", { n: plugin.length })}</span>
           {plugin.map((h, i) => (
             <div className="hookrow" key={i}>
-              <span className="ev">{h.event}</span>
+              <span className="ev" title={eventLabel(h.event)}>{eventLabel(h.event)}</span>
               <span className="cm">{h.command}</span>
               <span className="sc">{t("只读")}</span>
             </div>
