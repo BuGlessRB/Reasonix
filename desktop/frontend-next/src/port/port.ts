@@ -41,7 +41,7 @@ import type { Appearance, ThemeImport, ThemePack } from "./look";
 import type { BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists, PermissionRules, ProgressWatchSettings, SandboxSettings } from "./boundary";
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 export type { ModelEffort, Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
-import type { StoragePlan, StorageState } from "./storage";
+import type { StoragePlan, StorageQuery, StorageState } from "./storage";
 
 export type * from "./plugin";
 export type * from "./market";
@@ -289,7 +289,7 @@ export interface AgentPort {
   // Persisted, then the runtime is rebuilt: boot reads every role model while
   // assembling, so an assignment cannot reach a runtime that is already up.
   setRole(role: string, ref: string): Promise<void>;
-  storage(): Promise<StorageState>;
+  storage(query?: StorageQuery): Promise<StorageState>;
   planStorageMove(root: string, dir: string): Promise<StoragePlan>;
   moveStorage(root: string, dir: string): Promise<StoragePlan>;
   providers(): Promise<ProviderEntry[]>;

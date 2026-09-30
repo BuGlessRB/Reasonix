@@ -107,7 +107,7 @@ func PlanMove(ctx context.Context, root config.RootID, target string) Plan {
 
 	// What the move would copy, which for a root sharing its directory is its
 	// declared entries rather than everything under them.
-	plan.Bytes, plan.Files, _, _ = measureRoot(ctx, plan.Root, plan.From)
+	plan.Bytes, plan.Files, _, _, _ = measureRoot(ctx, plan.Root, plan.From, 0)
 	plan.Need = plan.Bytes + headroom
 
 	if err := probeWritable(plan.To); err != nil {
@@ -123,7 +123,7 @@ func PlanMove(ctx context.Context, root config.RootID, target string) Plan {
 		if holdsRoot(plan.Root, plan.To, entries) {
 			plan.Adopt = true
 			plan.Stays = plan.Bytes
-			plan.Bytes, plan.Files, _, _ = measureRoot(ctx, plan.Root, plan.To)
+			plan.Bytes, plan.Files, _, _, _ = measureRoot(ctx, plan.Root, plan.To, 0)
 			plan.Need = headroom
 		} else {
 			plan.Refusals = append(plan.Refusals, Refusal{

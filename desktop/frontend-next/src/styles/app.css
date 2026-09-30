@@ -5336,6 +5336,7 @@
   .storage .item .p { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--ghost); word-break: break-all }
 
   .storage .item .held { font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--accent-ink) }
+  .storage .vol .note { margin: 3px 0 7px }
 
   .storage .mover { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 4px }
   .storage .mover input { width: 100%; padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--r-xs);

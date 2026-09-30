@@ -1,4 +1,4 @@
-import type { StoragePlan, StorageState } from "./storage";
+import type { StoragePlan, StorageQuery, StorageState } from "./storage";
 
 // A C: drive with three gigabytes left and a session store that ate the rest —
 // the situation the panel exists for, so the fixture shows it rather than a
@@ -7,7 +7,14 @@ const VOL = { volume: "C:", volumeFree: 3_100_000_000, volumeTotal: 476_000_000_
 const ROAMING = "C:/Users/you/AppData/Roaming/reasonix";
 const LOCAL = "C:/Users/you/AppData/Local/reasonix";
 
-export function mockStorage(): StorageState {
+export function mockStorage(query?: StorageQuery): StorageState {
+  const all = mockStorageAll();
+  if (query?.layout) return { ...all, roots: all.roots.map((r) => ({ ...r, bytes: 0, files: 0, pending: true })) };
+  if (query?.root) return { ...all, roots: all.roots.filter((r) => r.id === query.root) };
+  return all;
+}
+
+function mockStorageAll(): StorageState {
   return {
     editable: true,
     roots: [

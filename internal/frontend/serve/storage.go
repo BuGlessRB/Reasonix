@@ -22,6 +22,8 @@ type storageRoot struct {
 	Relocatable bool   `json:"relocatable"`
 	PinnedBy    string `json:"pinnedBy,omitempty"`
 	Missing     bool   `json:"missing,omitempty"`
+	Truncated   bool   `json:"truncated,omitempty"`
+	Pending     bool   `json:"pending,omitempty"`
 	Err         string `json:"err,omitempty"`
 	Volume      string `json:"volume,omitempty"`
 	VolumeFree  int64  `json:"volumeFree,omitempty"`
@@ -115,15 +117,43 @@ func (s *Server) registerStorageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /storage/move", s.storageMove)
 }
 
-// storage reports every root with its measured size. The walk runs on the
-// request's own context, so a client that navigates away stops paying for it.
+// storage reports every root with its measured size, each walk bounded by
+// storage.Budget. ?layout=1 answers at once with the roots unmeasured, and
+// ?root=<id> measures that one alone (an undeclared id is refused), so a panel can show the fast roots
+// without waiting on a slow one. The walk runs on the request's own context.
 func (s *Server) storage(w http.ResponseWriter, r *http.Request) {
-	roots := storage.Survey(r.Context())
+	q := r.URL.Query()
+	layout := q.Get("layout") == "1"
+	only := q.Get("root")
+	if layout && only != "" {
+		badValue(w, "layout", "1 (without root)")
+		return
+	}
+	var roots []storage.Root
+	switch {
+	case layout:
+		roots = storage.Layout()
+	case only != "":
+		root, ok := storage.SurveyRoot(r.Context(), config.RootID(only))
+		if !ok {
+			ids := config.RootIDs()
+			allowed := make([]string, len(ids))
+			for i, id := range ids {
+				allowed[i] = string(id)
+			}
+			badValue(w, "root", allowed...)
+			return
+		}
+		roots = []storage.Root{root}
+	default:
+		roots = storage.Survey(r.Context())
+	}
 	out := make([]storageRoot, 0, len(roots))
 	for _, root := range roots {
 		out = append(out, storageRoot{
 			ID: string(root.ID), Dir: root.Dir, Bytes: root.Bytes, Files: root.Files,
 			Relocatable: root.Relocatable, PinnedBy: root.PinnedBy, Missing: root.Missing,
+			Truncated: root.Truncated, Pending: root.Pending,
 			Err: root.Err, Volume: root.Volume.Path,
 			VolumeFree: root.Volume.Free, VolumeTotal: root.Volume.Total,
 		})
