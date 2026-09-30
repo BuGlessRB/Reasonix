@@ -32,6 +32,7 @@ type mcpServerSpec struct {
 	StartupTimeoutSeconds int               `json:"startup_timeout_seconds"`
 	CallTimeoutSeconds    int               `json:"call_timeout_seconds"`
 	ToolTimeoutSeconds    map[string]int    `json:"tool_timeout_seconds"`
+	DisabledTools         []string          `json:"disabled_tools"`
 	AutoStart             *bool             `json:"auto_start"`
 	AlwaysLoad            bool              `json:"alwaysLoad"`
 }
@@ -256,6 +257,7 @@ func pluginEntryFromMCPSpec(name string, s mcpServerSpec) PluginEntry {
 		StartupTimeoutSeconds: s.StartupTimeoutSeconds,
 		CallTimeoutSeconds:    s.CallTimeoutSeconds,
 		ToolTimeoutSeconds:    s.ToolTimeoutSeconds,
+		DisabledTools:         s.DisabledTools,
 		AutoStart:             s.AutoStart,
 	}
 	if s.AlwaysLoad {
@@ -391,6 +393,7 @@ func applyPluginEntryToMCPJSONServer(server map[string]json.RawMessage, entry Pl
 	setMCPJSONInt(server, "startup_timeout_seconds", entry.StartupTimeoutSeconds)
 	setMCPJSONInt(server, "call_timeout_seconds", entry.CallTimeoutSeconds)
 	setMCPJSONIntMap(server, "tool_timeout_seconds", entry.ToolTimeoutSeconds)
+	setMCPJSONStringArray(server, "disabled_tools", entry.DisabledTools)
 	// The removed per-tool reader list is accepted on load for compatibility but
 	// never persisted. Explicitly delete it when updating an existing shared
 	// .mcp.json entry so the obsolete setting disappears naturally.

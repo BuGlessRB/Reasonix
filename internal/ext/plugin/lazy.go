@@ -432,6 +432,9 @@ func LazyToolset(spec Spec, cs *CachedSchema, host *Host, reg *tool.Registry, se
 	} else {
 		out = make([]tool.Tool, 0, len(cs.Tools))
 		for _, ct := range cs.Tools {
+			if !spec.ToolEnabled(ct.Name) {
+				continue
+			}
 			visibleName := ct.Name
 			if spec.StripRawPrefix != "" {
 				visibleName = strings.TrimPrefix(visibleName, spec.StripRawPrefix)

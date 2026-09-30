@@ -15,6 +15,8 @@ type PluginEntry struct {
 	Env     map[string]string `toml:"env"`
 	URL     string            `toml:"url"`
 	Headers map[string]string `toml:"headers"`
+	// DisabledTools excludes exact raw names returned by this server in tools/list.
+	DisabledTools []string `toml:"disabled_tools"`
 	// StartupTimeoutSeconds overrides [tools].mcp_startup_timeout_seconds for
 	// initialize + tools/list. Zero keeps the global/default cap.
 	StartupTimeoutSeconds int `toml:"startup_timeout_seconds"`

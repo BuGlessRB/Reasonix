@@ -894,6 +894,13 @@ headers = { Authorization = "Bearer ${STRIPE_KEY}" }
 `initialize` 到 `tools/list` 的完整启动流程；`mcp_call_timeout_seconds` 只作用于连接成功后的
 RPC 调用。两者都可按服务器覆盖。
 
+在服务器的 `[[plugins]]` 中设置 `disabled_tools = ["write_file", "delete_file"]` 可隐藏指定工具，`.mcp.json` 也支持此扩展。
+
+- 精确匹配 `tools/list` 返回的原始名称，在命名空间及前缀处理之前比较；空列表保持全部工具启用。
+- 隐藏工具不会进入注册表、能力目录、`/mcp` 工具列表或工具 schema token 统计，缓存恢复时也会过滤，配置保存会保留列表。
+- 编辑后重启会话，或断开并重新连接服务器。已运行会话保留原有 schema 前缀。
+- 此设置控制 Reasonix 暴露的工具，不为服务器进程提供沙箱。
+
 **已有 Claude Code 的 `.mcp.json`？** 直接放到项目根目录，Reasonix 会原样读取——其
 `mcpServers` 规范（`command`/`args`/`env`、`type`/`url`/`headers`、`${VAR}` 展开）
 与 `[[plugins]]` 字段一一对应。两处来源会合并加载；同名时以 `reasonix.toml` 为准。

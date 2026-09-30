@@ -332,3 +332,20 @@ func TestCatalogDoesNotRouteProxyToolsAfterFailure(t *testing.T) {
 		t.Fatalf("failed server proxy tool = (%+v, %v), want failed catalog entry", entry, ok)
 	}
 }
+
+func TestDisabledToolsAreAbsentFromStaleCatalogSnapshots(t *testing.T) {
+	t.Setenv("REASONIX_CACHE_HOME", testenv.TempDir(t))
+	spec := plugin.Spec{Name: "filtered", Command: "mcp"}
+	if err := plugin.SaveCachedSchema(spec.Name, plugin.CachedSchema{CacheKey: plugin.SchemaCacheKey(spec), Tools: []plugin.CachedTool{{Name: "read"}, {Name: "write"}}}); err != nil {
+		t.Fatal(err)
+	}
+	spec.DisabledTools = []string{"write"}
+	cached, keyOK := LoadCachedToolsForSpecs([]plugin.Spec{spec})
+	cat := BuildCatalog(CatalogOptions{Plugins: []config.PluginEntry{{Name: spec.Name}}, CachedTools: cached, CacheKeyOK: keyOK})
+	if _, found := cat.Lookup("mcp-tool:filtered/write"); found {
+		t.Fatal("disabled stale tool remains discoverable")
+	}
+	if _, found := cat.Lookup("mcp-tool:filtered/read"); !found {
+		t.Fatal("allowed stale tool disappeared")
+	}
+}

@@ -11,6 +11,9 @@ import (
 // share. They live together so a policy added to one scope cannot be forgotten
 // in the other, which would silently drop a user's setting on the next save.
 func renderPluginPolicy(b *strings.Builder, pl PluginEntry) {
+	if len(pl.DisabledTools) > 0 {
+		fmt.Fprintf(b, "disabled_tools = %s\n", renderStringArray(pl.DisabledTools))
+	}
 	if c := strings.TrimSpace(pl.Concurrency); c != "" {
 		fmt.Fprintf(b, "concurrency = %q\n", c)
 	}

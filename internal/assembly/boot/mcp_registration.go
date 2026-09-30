@@ -33,8 +33,8 @@ func registerMCPTools(ctx context.Context, host *plugin.Host, reg *tool.Registry
 // controller, so recovery and session-scoped servers are deterministic. A
 // failure still leaves a catalog entry for /mcp to diagnose.
 func registerHostSessionServer(ctx context.Context, host *plugin.Host, reg *tool.Registry, s plugin.Spec, sink event.Sink) {
-	if host.HasClient(s.Name) {
-		if tools, err := host.ToolsFor(ctx, s.Name); err == nil {
+	if host.HasClientForSpec(s) {
+		if tools, err := host.ToolsForSpec(ctx, s); err == nil {
 			addTools(reg, tools)
 			return
 		}
@@ -47,7 +47,7 @@ func registerHostSessionServer(ctx context.Context, host *plugin.Host, reg *tool
 		return
 	}
 	if plugin.IsServerAlreadyConnected(err) {
-		if tools, err2 := host.ToolsFor(ctx, s.Name); err2 == nil {
+		if tools, err2 := host.ToolsForSpec(ctx, s); err2 == nil {
 			addTools(reg, tools)
 			return
 		}
@@ -64,8 +64,8 @@ func registerHostSessionServer(ctx context.Context, host *plugin.Host, reg *tool
 // may call directly on its first turn; any other server connects on first use.
 // It reports whether the server's tools were known when it returned.
 func registerConfiguredServer(ctx context.Context, host *plugin.Host, reg *tool.Registry, s plugin.Spec, alwaysLoad bool) bool {
-	if host.HasClient(s.Name) {
-		if tools, err := host.ToolsFor(ctx, s.Name); err == nil {
+	if host.HasClientForSpec(s) {
+		if tools, err := host.ToolsForSpec(ctx, s); err == nil {
 			addTools(reg, tools)
 			return true
 		}

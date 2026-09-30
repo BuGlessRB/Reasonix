@@ -168,3 +168,15 @@ func TestPluginSpecsForRootExpandWorkspaceRoot(t *testing.T) {
 		t.Fatalf("headers = %v, want both %q", got, want)
 	}
 }
+
+func TestConfiguredDisabledToolsReachTheRuntimeWithoutAliasing(t *testing.T) {
+	entry := config.PluginEntry{Name: "filtered", Command: "mcp", DisabledTools: []string{"write_file"}}
+	spec := FromEntry(entry, "/workspace", Options{})
+	if spec.ToolEnabled("write_file") || !spec.ToolEnabled("read_file") {
+		t.Fatal("configured policy did not reach runtime")
+	}
+	entry.DisabledTools[0] = "read_file"
+	if spec.ToolEnabled("write_file") {
+		t.Fatal("config edit mutated active spec policy")
+	}
+}
