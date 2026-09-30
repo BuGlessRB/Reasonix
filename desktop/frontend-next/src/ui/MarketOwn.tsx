@@ -10,12 +10,13 @@ interface Props {
   pkg: MarketPackage;
   onBack: () => void;
   onInstalled: () => void;
+  onViewInstalled?: (kind: string, name: string) => void;
 }
 
 // A publisher installing their own package: the kernel fetches it from the
 // registry as the account, previews it, and installs only what matches that
 // preview's digest. This view never holds a source of its own to send.
-export function OwnInstall({ port, pkg, onBack, onInstalled }: Props) {
+export function OwnInstall({ port, pkg, onBack, onInstalled, onViewInstalled }: Props) {
   const [plan, setPlan] = useState<MarketPlan | null>(null);
   const [done, setDone] = useState<MarketPlan | null>(null);
   const [busy, setBusy] = useState(true);
@@ -62,10 +63,19 @@ export function OwnInstall({ port, pkg, onBack, onInstalled }: Props) {
   );
 
   if (done) {
+    const installed = done.applied ? done.actions?.filter((action) => action.status === "done" && action.name) ?? [] : [];
+    const location = pkg.kind === "plugin" || pkg.kind === "theme"
+      ? installed.find((action) => action.kind === "plugin") : installed[0];
     return (
       <div className="mkt addpkg" data-stage="done">
         <Outcome plan={done} />
-        <div className="acts">{back}</div>
+        {installed.length > 0 && <ul className="mkt-installed">{installed.map((action, i) => <li key={`${action.kind}:${action.name}:${i}`}>{action.name}</li>)}</ul>}
+        <div className="acts">
+          {back}
+          {location && onViewInstalled && (
+            <button className="act" data-action="market.view-installed" onClick={() => onViewInstalled(location.kind, location.name!)}>{t("查看已安装能力")}</button>
+          )}
+        </div>
       </div>
     );
   }

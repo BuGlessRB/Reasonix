@@ -164,7 +164,7 @@ export function PublishForm({ port, handle, onMine }: { port: AgentPort; handle:
 
 // Every row is the account's own package, so each can be installed here in
 // whatever state review has it; a private one can also be sent to review.
-export function MyPackages({ port, onInstalled }: { port: AgentPort; onInstalled: () => void }) {
+export function MyPackages({ port, onInstalled, onViewInstalled }: { port: AgentPort; onInstalled: () => void; onViewInstalled?: (kind: string, name: string) => void }) {
   const [rows, setRows] = useState<MarketPackage[] | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<MarketPackage | null>(null);
@@ -202,6 +202,7 @@ export function MyPackages({ port, onInstalled }: { port: AgentPort; onInstalled
         port={port}
         pkg={open}
         onBack={() => setOpen(null)}
+        onViewInstalled={onViewInstalled}
         onInstalled={() => {
           onInstalled();
           setAttempt((n) => n + 1);

@@ -13,8 +13,8 @@ afterEach(cleanup);
 const signedIn = { signedIn: true, user: { handle: "demo", email: "demo@example.com", label: "demo" } };
 const pinned = "https://github.com/demo/themes/tree/" + "a".repeat(40) + "/dusk";
 
-async function openMine(port: AgentPort, onInstalled = () => {}) {
-  render(<MarketGroup port={port} onInstalled={onInstalled} account={signedIn} onSignIn={() => {}} />);
+async function openMine(port: AgentPort, onInstalled = () => {}, onViewInstalled?: (kind: string, name: string) => void) {
+  render(<MarketGroup port={port} onInstalled={onInstalled} onViewInstalled={onViewInstalled} account={signedIn} onSignIn={() => {}} />);
   await userEvent.click(screen.getByRole("radio", { name: "我的发布" }));
 }
 
@@ -75,6 +75,72 @@ describe("the account's own packages", () => {
     expect(install.mock.calls[0]![0]).toEqual({
       slug: "demo/ship-notes", version: shown.version, planId: shown.planId, replace: false, digest: shown.contentDigest,
     });
+  });
+
+  it.each([["ship-notes", "skill"], ["night-desk", "plugin"], ["lint-kit", "plugin"]])(
+    "opens the installed capability after installing %s",
+    async (name, kind) => {
+      const port = new MockPort() as unknown as AgentPort;
+      const onViewInstalled = vi.fn();
+      const install = port.installOwnMarket.bind(port);
+      port.installOwnMarket = async (req) => {
+        const out = await install(req);
+        const actions = out.actions?.map((a) => ({ ...a, name: `${name}-local` })) ?? [];
+        return { ...out, actions: name === "lint-kit"
+          ? [{ kind: "skill", action: "copy_skill", status: "done", riskLevel: "low", name: "bundled-notes" }, ...actions] : actions };
+      };
+      await openMine(port, () => {}, onViewInstalled);
+      const row = (await screen.findByText(name)).closest("li")!;
+      await userEvent.click(row.querySelector<HTMLButtonElement>('[data-action="market.own-inspect"]')!);
+      await userEvent.click(await screen.findByRole("button", { name: "安装" }));
+      await userEvent.click(await screen.findByRole("button", { name: "查看已安装能力" }));
+
+      expect(onViewInstalled).toHaveBeenCalledWith(kind, `${name}-local`);
+    },
+  );
+
+  it("offers no installed location when the install was not applied", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    const onViewInstalled = vi.fn();
+    port.installOwnMarket = async (req) => ({ ...await port.planOwnMarket(req), ok: false, status: "blocked", applied: false, error: "refused" });
+    await openMine(port, () => {}, onViewInstalled);
+    const row = (await screen.findByText("ship-notes")).closest("li")!;
+    await userEvent.click(row.querySelector<HTMLButtonElement>('[data-action="market.own-inspect"]')!);
+    await userEvent.click(await screen.findByRole("button", { name: "安装" }));
+    await screen.findByText("refused");
+
+    expect(screen.queryByRole("button", { name: "查看已安装能力" })).toBeNull();
+    expect(onViewInstalled).not.toHaveBeenCalled();
+  });
+
+  it("locates only the successful server after a partial author install", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    const pkg = (await port.myMarket()).find((p) => p.slug === "demo/ship-notes")!;
+    const shown = await port.planOwnMarket({ slug: pkg.slug });
+    const planned: MarketPlan = { ...shown, actions: [
+      { kind: "mcp", action: "install_mcp_server", name: "unavailable-server", status: "planned", riskLevel: "high" },
+      { kind: "mcp", action: "install_mcp_server", name: "working-server", status: "planned", riskLevel: "high" },
+    ] };
+    vi.spyOn(port, "myMarket").mockResolvedValue([{ ...pkg, kind: "mcp" }]);
+    vi.spyOn(port, "planOwnMarket").mockResolvedValue(planned);
+    vi.spyOn(port, "installOwnMarket").mockResolvedValue({ ...planned, ok: false, applied: true, status: "partial", next: "Some actions failed", actions: [
+      { ...planned.actions![0]!, status: "failed", error: "server unavailable" },
+      { ...planned.actions![1]!, status: "done" },
+    ] });
+    const onViewInstalled = vi.fn();
+    const onInstalled = vi.fn();
+    await openMine(port, onInstalled, onViewInstalled);
+    const row = (await screen.findByText(pkg.name)).closest("li")!;
+    await userEvent.click(row.querySelector<HTMLButtonElement>('[data-action="market.own-inspect"]')!);
+    await userEvent.click(await screen.findByRole("button", { name: "安装" }));
+    await screen.findByText("Some actions failed");
+
+    const installed = document.querySelector(".mkt-installed")!;
+    expect(installed.textContent).toContain("working-server");
+    expect(installed.textContent).not.toContain("unavailable-server");
+    expect(onInstalled).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("button", { name: "查看已安装能力" }));
+    expect(onViewInstalled).toHaveBeenCalledWith("mcp", "working-server");
   });
 
   it("saves a private package out of review and shows it as private", async () => {

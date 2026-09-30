@@ -370,7 +370,7 @@ export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSig
         )
       )}
       {at === "browse" && <Market port={port} onInstalled={onInstalled} onViewInstalled={onViewInstalled} onSignIn={onSignIn} />}
-      {at === "mine" && <MyPackages port={port} onInstalled={onInstalled} />}
+      {at === "mine" && <MyPackages port={port} onInstalled={onInstalled} onViewInstalled={onViewInstalled} />}
       {at === "publish" && handle && <PublishForm port={port} handle={handle} onMine={() => setView("mine")} />}
     </Group>
   );
