@@ -51,11 +51,17 @@ func (s *Server) registerFeedbackRoutes(mux *http.ServeMux) {
 
 func (s *Server) feedbackEnv(w http.ResponseWriter, r *http.Request) {
 	c := s.ctl()
-	writeJSON(w, map[string]any{
-		"env":         c.FeedbackEnv(feedback.SurfaceStudio, r.URL.Query().Get("locale")),
-		"displayName": c.FeedbackDisplayName(),
-		"limits":      c.FeedbackLimits(),
+	writeJSON(w, feedbackEnvView{
+		Env:         c.FeedbackEnv(feedback.SurfaceStudio, r.URL.Query().Get("locale")),
+		DisplayName: c.FeedbackDisplayName(),
+		Limits:      c.FeedbackLimits(),
 	})
+}
+
+type feedbackEnvView struct {
+	Env         feedback.Env    `json:"env"`
+	DisplayName string          `json:"displayName"`
+	Limits      feedback.Limits `json:"limits"`
 }
 
 type feedbackImageBody struct {

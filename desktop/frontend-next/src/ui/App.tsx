@@ -15,6 +15,7 @@ import { folded as roomGaveUp, onRoomWidth } from "./viewport";
 import { useFoldAway } from "./foldaway";
 import { useDrawerCloses } from "./drawer";
 import { RemoteAsk } from "./RemoteAsk";
+import { Feedback, type FeedbackTab } from "./Feedback";
 import { BrowserLogin } from "./BrowserLogin";
 import type { RemoteAsk as RemoteAskT, RemoteHost } from "../port/remote";
 import { Boundary } from "./Boundary";
@@ -104,6 +105,7 @@ export function App({ hub }: { hub: HubPort }) {
   const [error, setError] = useState("");
   // false = closed, true = open at its last section, a string = open there.
   const [settings, setSettings] = useState<string | boolean>(false);
+  const [feedback, setFeedback] = useState<FeedbackTab | null>(null);
   const [browser, setBrowser] = useState(false);
   const [setup, setSetup] = useState<ProviderSetup | null | undefined>(undefined);
   // undefined until asked; false means the opening sequence is still owed.
@@ -638,6 +640,7 @@ export function App({ hub }: { hub: HubPort }) {
           accountUnread={accountUnread}
           wallet={report.wallet}
           onSettings={showPrefs}
+          onFeedback={(tab) => setFeedback(tab ?? "send")}
           onFind={openFind}
           onError={fail}
         />
@@ -734,6 +737,10 @@ export function App({ hub }: { hub: HubPort }) {
         </div>
 
       </div>
+
+      {feedback && (networkPort ?? activePort) && (
+        <Feedback port={(networkPort ?? activePort)!} tab={feedback} onClose={() => setFeedback(null)} onError={setError} />
+      )}
 
       {settings && activePort && (
         <Boundary fallback={<SettingsUnavailable onClose={hidePrefs} />}>

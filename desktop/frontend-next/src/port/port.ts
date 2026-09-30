@@ -42,9 +42,11 @@ import type { BrowserToolsSettings, ConfigProblem, ConfigRepair, PermissionLists
 import type { Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 export type { ModelEffort, Protocol, ProviderCheck, ProviderDraft, ProviderEdit, ProviderEntry, ProviderModelCheck, ProviderModelCheckRequest, ProviderProbe, ProviderSetup } from "./provider";
 import type { StoragePlan, StorageQuery, StorageState } from "./storage";
+import type { FeedbackEnv, FeedbackMine, FeedbackReceipt, FeedbackRequest } from "./feedback";
 
 export type * from "./plugin";
 export type * from "./market";
+export type * from "./feedback";
 
 // GET /mcp. One external tool provider. state is ready | connecting | failed |
 // disabled | idle: disabled is switched off and stays off across restarts, idle
@@ -348,6 +350,11 @@ export interface AgentPort {
   deleteBackup(id: string): Promise<void>;
   previewBackup(id: string, passphrase: string): Promise<BackupPlan>;
   applyBackup(planId: string, items: string[], consented: string[]): Promise<BackupApplyResult>;
+  // A report becomes a public issue. Refusals carry feedback.* codes; only
+  // feedback.offline is safe to retry with the same idempotencyKey.
+  feedbackEnv(locale?: string): Promise<FeedbackEnv>;
+  sendFeedback(req: FeedbackRequest): Promise<FeedbackReceipt>;
+  myFeedback(): Promise<FeedbackMine>;
   workspaces(): Promise<WorkspaceInfo>;
   // Rebuilds the whole runtime against another folder. The conversation does
   // not come along, so the caller has to reload the transcript afterwards.

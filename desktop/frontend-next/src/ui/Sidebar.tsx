@@ -50,6 +50,7 @@ interface Props {
   accountUnread: string;
   wallet: string;
   onSettings: (section?: string) => void;
+  onFeedback: (tab?: "send" | "mine") => void;
   onFind: () => void;
   onError: (e: unknown) => void;
 }
@@ -89,6 +90,7 @@ export function Sidebar({
   accountUnread,
   wallet,
   onSettings,
+  onFeedback,
   onFind,
   onError,
 }: Props) {
@@ -128,10 +130,14 @@ export function Sidebar({
         run: () => onSettings("providers") },
       { id: "usage", label: t("钱包与用量"), icon: "wallet", keywords: "usage cost token 用量 费用",
         run: () => onSettings("usage") },
+      { id: "feedback", label: t("发送反馈"), icon: "feedback", keywords: "feedback report bug idea suggestion 反馈 报告 问题 建议 意见",
+        run: () => onFeedback("send") },
+      { id: "feedback-mine", label: t("我的反馈"), icon: "feedback", keywords: "feedback receipt status my 反馈 回执 进展 我的",
+        run: () => onFeedback("mine") },
       { id: "settings", label: t("设置"), icon: "settings", keywords: "settings preferences 设置 偏好",
         run: () => onSettings() },
     ],
-    [newSessionRoot, onOpen, onSettings, onFind, onError],
+    [newSessionRoot, onOpen, onSettings, onFeedback, onFind, onError],
   );
   const sessionCount = tree.reduce((n, ws) => n + ws.sessions.filter((session) => !session.archived).length, 0);
   const archivedCount = tree.reduce((n, ws) => n + ws.sessions.filter((session) => session.archived).length, 0);
@@ -251,6 +257,7 @@ export function Sidebar({
       </div>
       <div className="railfoot">
         <button className="studio-wallet" data-action="settings.section" data-value="usage" onClick={() => onSettings("usage")}><span aria-hidden="true"><StudioIcon name="wallet" /></span><b>{t("钱包与用量")}</b>{wallet && <small>{hideAmounts ? MASK : wallet}</small>}</button>
+        <button className="studio-wallet studio-feedback" data-action="feedback.open" onClick={() => onFeedback()}><span aria-hidden="true"><StudioIcon name="feedback" /></span><b>{t("发送反馈")}</b></button>
         <div className="studio-user-foot">
           <AccountRow account={account} unread={accountUnread} onOpen={() => onSettings("account")} />
           <span className="studio-workspace-kind">{t(account?.signedIn ? "个人工作空间" : "本地工作空间")}</span>

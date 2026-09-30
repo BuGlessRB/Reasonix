@@ -16,6 +16,7 @@ import { EN_STORAGE } from "./en_storage";
 import { EN_USAGE } from "./en_usage";
 import { EN_COMPOSER } from "./en_composer";
 import { EN_BACKUP } from "./en_backup";
+import { EN_FEEDBACK } from "./en_feedback";
 
 export const EN: Record<string, string> = {
   "工作台": "Workbench",
@@ -26,6 +27,7 @@ export const EN: Record<string, string> = {
   ...EN_USAGE,
   ...EN_COMPOSER,
   ...EN_BACKUP,
+  ...EN_FEEDBACK,
   ...EN_KERNEL,
   ...EN_REMOTE,
   ...EN_WINDOW,
