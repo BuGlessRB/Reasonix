@@ -19,19 +19,42 @@ func TestCorpusIsWellFormed(t *testing.T) {
 	if got := len(searchTasks()); got != 6 {
 		t.Errorf("search experiment has %d tasks, want 6", got)
 	}
-	if got := len(indexTasks()); got != 6 {
-		t.Errorf("index experiment has %d tasks, want 6", got)
+	if got := len(indexTasks()); got != 12 {
+		t.Errorf("index experiment has %d tasks, want 12", got)
 	}
+	stopping := map[string]bool{}
 	tiers := map[string]int{}
 	for _, task := range indexTasks() {
+		if task.Role == roleStopping {
+			stopping[task.ID] = true
+			continue
+		}
 		tiers[task.CueTier]++
 	}
-	// Two per tier is what makes the staircase readable: the same task can be
-	// compared across the boundary its cue sits on, instead of two different
-	// questions being compared across two arms.
+	if !stopping["i03-coalescing"] || !stopping["i04-recovery-fence"] {
+		t.Errorf("the stopping corpus is %v; it must keep i03-coalescing and i04-recovery-fence", stopping)
+	}
+	// Two per tier, over the efficiency substrate, is what makes the staircase
+	// readable: the same task can be compared across the boundary its cue sits
+	// on, instead of two different questions being compared across two arms.
 	for _, tier := range []string{tierQuarter, tierHalf, tierDefault} {
 		if tiers[tier] != 2 {
 			t.Errorf("tier %s has %d tasks, want 2", tier, tiers[tier])
+		}
+	}
+}
+
+// The role decides which batch a task enters; the literal lists are only where
+// it is declared, so the two must not drift.
+func TestIndexListsMatchTheirRoles(t *testing.T) {
+	for _, task := range append(append(indexQuarterTasks(), indexHalfTasks()...), indexDefaultTasks()...) {
+		if task.Role != roleEfficiency {
+			t.Errorf("%s sits in an efficiency list with role %q", task.ID, task.Role)
+		}
+	}
+	for _, task := range stoppingIndexTasks() {
+		if task.Role != roleStopping {
+			t.Errorf("%s sits in the stopping list with role %q", task.ID, task.Role)
 		}
 	}
 }

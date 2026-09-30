@@ -26,6 +26,12 @@ const (
 	tierDefault = "default" // visible at default only
 )
 
+// role places an index task in the efficiency substrate or the stopping corpus.
+const (
+	roleEfficiency = "efficiency"
+	roleStopping   = "stopping"
+)
+
 // plantKind is how a task's target enters the transcript.
 const (
 	plantAssistant = "assistant" // the model's own account: never index-addressed
@@ -45,6 +51,8 @@ type contextTask struct {
 	AnswerVars []string
 	CueVar     string
 	CueTier    string
+	// Role is roleEfficiency or roleStopping; it decides the batch a task enters.
+	Role string
 	// PlantAfterGen ages the target: mergeFoldIndex trims from its oldest end,
 	// so what follows a cue decides which budget addresses it. Frozen, because
 	// a run that searched for it would let the tested code move its goalposts.
@@ -121,6 +129,20 @@ func num(name string, lo, hi int) varSpec {
 	return varSpec{Name: name, Kind: varInt, Min: lo, Max: hi}
 }
 
+// efficiencyTasks is the substrate a study measures on. Every task in it
+// qualifies under the corpus bar; the stopping corpus is deliberately excluded,
+// because a task carrying post-sufficient stopping behaviour swamps the effect
+// an efficiency batch exists to measure.
+func efficiencyTasks() []contextTask {
+	var out []contextTask
+	for _, t := range indexTasks() {
+		if t.Role == roleEfficiency {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 func searchTasks() []contextTask {
 	return []contextTask{
 		{
@@ -192,10 +214,104 @@ func searchTasks() []contextTask {
 	}
 }
 
-func indexTasks() []contextTask {
+// efficiencyIndexTasks is what a study measures on: two tasks per cue tier.
+func efficiencyIndexTasks() []contextTask {
+	out := indexQuarterTasks()
+	out = append(out, indexHalfTasks()...)
+	out = append(out, indexDefaultTasks()...)
+	return out
+}
+
+// indexQuarterTasks holds the quarter-tier literals.
+func indexQuarterTasks() []contextTask {
 	return []contextTask{
 		{
-			ID: "i01-transport-fallback", Experiment: experimentIndex, TargetKind: "tool_input",
+			ID: "i37-dispatchlag", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleEfficiency,
+			Prompt:     "早前会话里执行过 ./scripts/dispatchlag，它打印出的 dispatch lag epoch 是多少？",
+			ProbeQuery: "dispatchlag dispatch lag epoch",
+			Vars:       []varSpec{code("cue", "dispatchlag"), code("epoch", "cobalt")},
+			AnswerVars: []string{"epoch"}, CueVar: "cue", CueTier: tierQuarter,
+			PlantAfterGen: 4,
+			Plant:         plantCall, CallID: "p37", CallTool: "bash",
+			CallArgs:  `{"command":"./scripts/dispatchlag {{cue}}"}`,
+			PlantBody: "dispatch lag epoch = {{epoch}}",
+		},
+		{
+			ID: "i118-fencelag", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleEfficiency,
+			Prompt:     "早前会话里运行过 ./scripts/fencelag，它打印出的 fence lag 是多少？",
+			ProbeQuery: "fencelag fence lag",
+			Vars:       []varSpec{code("cue", "fencelag"), code("v", "slate")},
+			AnswerVars: []string{"v"}, CueVar: "cue", CueTier: tierQuarter,
+			PlantAfterGen: 4,
+			Plant:         plantCall, CallID: "x118", CallTool: "bash",
+			CallArgs:  `{"command":"./scripts/fencelag {{cue}}"}`,
+			PlantBody: "fence lag = {{v}}",
+		},
+	}
+}
+
+// indexHalfTasks holds the half-tier literals.
+func indexHalfTasks() []contextTask {
+	return []contextTask{
+		{
+			ID: "i70-ingestfloor", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleEfficiency,
+			Prompt:     "早前会话里执行过 ./scripts/ingestfloor，它打印出的 route quota 是多少？",
+			ProbeQuery: "ingestfloor quota",
+			Vars:       []varSpec{code("cue", "ingestfloor"), num("quota", 1200, 9800)},
+			AnswerVars: []string{"quota"}, CueVar: "cue", CueTier: tierHalf,
+			PlantAfterGen: 2,
+			Plant:         plantCall, CallID: "q70", CallTool: "bash",
+			CallArgs:  `{"command":"./scripts/ingestfloor {{cue}}"}`,
+			PlantBody: "route quota = {{quota}}",
+		},
+		{
+			ID: "i106-budgetseal", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleEfficiency,
+			Prompt:     "早前会话里执行过 ./scripts/budgetseal，它打印出的 route quota 是多少？",
+			ProbeQuery: "budgetseal route quota",
+			Vars:       []varSpec{code("cue", "budgetseal"), code("quota", "amber")},
+			AnswerVars: []string{"quota"}, CueVar: "cue", CueTier: tierHalf,
+			PlantAfterGen: 2,
+			Plant:         plantCall, CallID: "h106", CallTool: "bash",
+			CallArgs:  `{"command":"./scripts/budgetseal {{cue}}"}`,
+			PlantBody: "route quota = {{quota}}",
+		},
+	}
+}
+
+// indexDefaultTasks holds the default-tier literals.
+func indexDefaultTasks() []contextTask {
+	return []contextTask{
+		{
+			ID: "i47-tenantlease", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleEfficiency,
+			Prompt:     "早前会话里执行过 ./scripts/tenantlease，它打印出的 tenant lease（秒）是多少？",
+			ProbeQuery: "tenantlease tenant lease",
+			Vars:       []varSpec{code("cue", "tenantlease"), {Name: "lease", Kind: varDuration, Min: 15, Max: 300}},
+			AnswerVars: []string{"lease"}, CueVar: "cue", CueTier: tierDefault,
+			PlantAfterGen: 0,
+			Plant:         plantCall, CallID: "p47", CallTool: "bash",
+			CallArgs:  `{"command":"./scripts/tenantlease {{cue}}"}`,
+			PlantBody: "tenant lease = {{lease}}",
+		},
+		{
+			ID: "i112-lagquota", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleEfficiency,
+			Prompt:     "早前会话里执行过 ./scripts/lagquota，它打印出的 lagquota lease 是多少？",
+			ProbeQuery: "lagquota lagquota lease",
+			Vars:       []varSpec{code("cue", "lagquota"), {Name: "lease", Kind: varDuration, Min: 20, Max: 420}},
+			AnswerVars: []string{"lease"}, CueVar: "cue", CueTier: tierDefault,
+			PlantAfterGen: 0,
+			Plant:         plantCall, CallID: "d112", CallTool: "bash",
+			CallArgs:  `{"command":"./scripts/lagquota {{cue}}"}`,
+			PlantBody: "lagquota lease = {{lease}}",
+		},
+	}
+}
+
+// stoppingIndexTasks is the frozen study's six tasks, kept out of efficiency
+// batches and measurable on their own with -task <id>.
+func stoppingIndexTasks() []contextTask {
+	return []contextTask{
+		{
+			ID: "i01-transport-fallback", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleStopping,
 			Prompt:     "transport fallback probe 当时报告的 selector 是什么？",
 			ProbeQuery: "transport fallback probe selector",
 			Vars:       []varSpec{code("cue", "tfprobe"), code("selector", "fern")},
@@ -206,7 +322,7 @@ func indexTasks() []contextTask {
 			PlantBody: "fallback selector = {{selector}}",
 		},
 		{
-			ID: "i02-scheduler-handoff", Experiment: experimentIndex, TargetKind: "tool_input",
+			ID: "i02-scheduler-handoff", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleStopping,
 			Prompt:     "scheduler handoff 当时记录的 grace 和 marker 是什么？",
 			ProbeQuery: "scheduler handoff grace marker",
 			Vars: []varSpec{
@@ -220,7 +336,7 @@ func indexTasks() []contextTask {
 			PlantBody: "handoff grace = {{grace}}\nmarker = {{marker}}",
 		},
 		{
-			ID: "i03-coalescing", Experiment: experimentIndex, TargetKind: "tool_input",
+			ID: "i03-coalescing", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleStopping,
 			Prompt:     "job completion 的 coalescing probe 最后记录的 window 和 marker 是多少？",
 			ProbeQuery: "coalescing policy completion window",
 			Vars: []varSpec{
@@ -234,7 +350,7 @@ func indexTasks() []contextTask {
 			PlantBody: "completion coalesce window = {{window}}\nmarker = {{marker}}",
 		},
 		{
-			ID: "i04-recovery-fence", Experiment: experimentIndex, TargetKind: "tool_input",
+			ID: "i04-recovery-fence", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleStopping,
 			Prompt:     "recovery fence 那次检查报告的 marker 和两个 epoch 是什么？",
 			ProbeQuery: "recovery fence epoch check",
 			Vars: []varSpec{
@@ -248,7 +364,7 @@ func indexTasks() []contextTask {
 			PlantBody: "{{marker}}\nexpected epoch {{expected}}\nobserved epoch {{observed}}",
 		},
 		{
-			ID: "i05-cache-probe", Experiment: experimentIndex, TargetKind: "tool_input",
+			ID: "i05-cache-probe", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleStopping,
 			Prompt:     "cache probe 当时记录的 prefix salt 和 scope 是什么？",
 			ProbeQuery: "cache probe prefix salt scope",
 			Vars:       []varSpec{code("cue", "cacheprobe"), code("salt", "comet"), code("scope", "lineage")},
@@ -259,7 +375,7 @@ func indexTasks() []contextTask {
 			PlantBody: "prefix salt = {{salt}}\nscope = {{scope}}",
 		},
 		{
-			ID: "i06-dispatch-handoff", Experiment: experimentIndex, TargetKind: "tool_input",
+			ID: "i06-dispatch-handoff", Experiment: experimentIndex, TargetKind: "tool_input", Role: roleStopping,
 			Prompt:     "dispatch handoff probe 当时确认的 mode 和 marker 是什么？",
 			ProbeQuery: "dispatch handoff probe mode",
 			Vars:       []varSpec{code("cue", "dispatchhandoff"), code("mode", "trigger"), code("marker", "iris")},
@@ -270,6 +386,12 @@ func indexTasks() []contextTask {
 			PlantBody: "handoff mode = {{mode}}\nmarker = {{marker}}",
 		},
 	}
+}
+
+// indexTasks is the whole index corpus, the efficiency substrate first.
+func indexTasks() []contextTask {
+	out := efficiencyIndexTasks()
+	return append(out, stoppingIndexTasks()...)
 }
 
 func allTasks() []contextTask {
@@ -331,6 +453,9 @@ func validateCorpus() error {
 		if t.Experiment == experimentIndex {
 			if t.CueVar == "" {
 				return fmt.Errorf("%s: an index task needs a cue var", t.ID)
+			}
+			if t.Role != roleEfficiency && t.Role != roleStopping {
+				return fmt.Errorf("%s: an index task needs a role (%s or %s)", t.ID, roleEfficiency, roleStopping)
 			}
 			if v, _ := tierScales(t.CueTier); v == nil {
 				return fmt.Errorf("%s: unknown cue tier %q", t.ID, t.CueTier)

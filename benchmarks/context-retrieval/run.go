@@ -232,7 +232,7 @@ func runBoundaries(root string) int {
 
 	var all []contextMetrics
 	var cueSide, noCueSide []contextMetrics
-	for _, t := range indexTasks() {
+	for _, t := range efficiencyTasks() {
 		cue, noCue := boundaryPair(t.CueTier)
 		for _, side := range []struct {
 			scale string

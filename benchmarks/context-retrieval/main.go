@@ -62,7 +62,14 @@ func main() {
 	case "adversarial":
 		os.Exit(runAdversarial(root))
 	case "run-index":
-		os.Exit(runExperiment(experimentIndex, root, *dry, tasks))
+		batch := tasks
+		if *only == "" {
+			// A batch measures the efficiency substrate only. Naming one task
+			// with -task runs that task, role included, so the stopping corpus
+			// stays measurable on its own.
+			batch = efficiencyTasks()
+		}
+		os.Exit(runExperiment(experimentIndex, root, *dry, batch))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown mode %q\n", *mode)
 		os.Exit(2)
