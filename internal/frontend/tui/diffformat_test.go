@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
@@ -14,15 +15,15 @@ import (
 
 // diffFormatHarness installs a stdin→stdout formatter (cat) and a re-render
 // hook, so a formatter run is asynchronous exactly as the full-screen TUI makes
-// it. The returned channel receives one signal per landed run.
-func diffFormatHarness(t *testing.T) (landed <-chan struct{}) {
+// it. The returned channel receives the key of each landed run.
+func diffFormatHarness(t *testing.T) (landed <-chan termrender.DiffKey) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("no portable stdin→stdout filter")
 	}
 	restore := termrender.SetDiffFormatterForTest([]string{"cat"})
-	ch := make(chan struct{}, 8)
-	termrender.SetDiffFormatNotify(func() { ch <- struct{}{} })
+	ch := make(chan termrender.DiffKey, 256)
+	termrender.SetDiffFormatNotify(func(k termrender.DiffKey) { ch <- k })
 	t.Cleanup(func() {
 		termrender.SetDiffFormatNotify(nil)
 		restore()
@@ -30,13 +31,16 @@ func diffFormatHarness(t *testing.T) (landed <-chan struct{}) {
 	return ch
 }
 
-// waitLanded fails unless a formatter run lands within the deadline.
-func waitLanded(t *testing.T, landed <-chan struct{}) {
+// waitLanded fails unless a formatter run lands within the deadline, and returns
+// the key it landed for.
+func waitLanded(t *testing.T, landed <-chan termrender.DiffKey) termrender.DiffKey {
 	t.Helper()
 	select {
-	case <-landed:
+	case k := <-landed:
+		return k
 	case <-time.After(5 * time.Second):
 		t.Fatal("formatter run never landed")
+		return termrender.DiffKey{}
 	}
 }
 
@@ -76,9 +80,9 @@ func TestLandedDiffResultReplacesTheSettledShellDiffRows(t *testing.T) {
 	if !strings.Contains(before, "+1 -1") {
 		t.Fatalf("built-in rows not drawn while the run was in flight:\n%s", before)
 	}
-	waitLanded(t, landed)
+	key := waitLanded(t, landed)
 
-	m.Update(diffFormattedMsg{})
+	m.Update(diffFormattedMsg{key: key})
 
 	after := strings.Join(cachedRows(m), "\n")
 	if strings.Contains(after, "+1 -1") {
@@ -101,9 +105,9 @@ func TestLandedDiffResultReplacesTheSettledWriteCardRows(t *testing.T) {
 	if !strings.Contains(before, "1 - OLD_LINE") {
 		t.Fatalf("built-in card body not drawn while the run was in flight:\n%s", before)
 	}
-	waitLanded(t, landed)
+	key := waitLanded(t, landed)
 
-	m.Update(diffFormattedMsg{})
+	m.Update(diffFormattedMsg{key: key})
 
 	after := strings.Join(cachedRows(m), "\n")
 	if strings.Contains(after, "1 - OLD_LINE") {
@@ -158,13 +162,48 @@ func TestFormattedShellDiffRowsFitTheTranscriptWidth(t *testing.T) {
 	apply(m, eventwire.Event{Kind: "tool_dispatch", Tool: &eventwire.Tool{ID: "t1", Name: "bash", Args: `{"command":"git diff"}`}})
 	apply(m, eventwire.Event{Kind: "tool_result", Tool: &eventwire.Tool{ID: "t1", Name: "bash", Output: diff, OutputDiff: true}})
 	_ = cachedRows(m)
-	waitLanded(t, landed)
-	m.Update(diffFormattedMsg{})
+	key := waitLanded(t, landed)
+	m.Update(diffFormattedMsg{key: key})
 
 	cw := m.contentWidth()
 	for _, l := range rawRows(m) {
 		if w := ansi.StringWidth(l); w > cw {
 			t.Fatalf("a formatted shell diff row is %d cells wide, want <= %d:\n%q", w, cw, ansi.Strip(l))
+		}
+	}
+}
+
+// A transcript holding more diff keys than the memo must still settle: each
+// landed run is fed back the way the program feeds it, and a run may only be
+// answered by repainting the block that asked for its key, so a repaint cannot
+// spawn runs for blocks it never touched. Keyless, every landed run dropped
+// every diff block and a transcript past the memo size never converged.
+func TestManyDiffBlocksSettleRatherThanLoop(t *testing.T) {
+	const n = 160 // more diff keys than diffFormatCacheMax
+	landed := diffFormatHarness(t)
+	m, _ := testModel(t)
+	for i := range n {
+		id := fmt.Sprintf("t%d", i)
+		diff := fmt.Sprintf("diff --git a/f%d.go b/f%d.go\n--- a/f%d.go\n+++ b/f%d.go\n@@ -1 +1 @@\n-old%d\n+new%d\n", i, i, i, i, i, i)
+		apply(m,
+			eventwire.Event{Kind: "tool_dispatch", Tool: &eventwire.Tool{ID: id, Name: "bash", Args: `{"command":"git diff"}`}},
+			eventwire.Event{Kind: "tool_result", Tool: &eventwire.Tool{ID: id, Name: "bash", Output: diff, OutputDiff: true}},
+		)
+	}
+	_ = cachedRows(m) // first render: every distinct block starts one run
+
+	answered := 0
+	for {
+		select {
+		case k := <-landed:
+			m.Update(diffFormattedMsg{key: k})
+			_ = cachedRows(m)
+			answered++
+			if answered > 4*n {
+				t.Fatalf("the landed-run repaint keeps spawning runs (%d answered)", answered)
+			}
+		case <-time.After(time.Second):
+			return // quiesced: no run landed for a second
 		}
 	}
 }

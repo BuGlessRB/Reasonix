@@ -214,21 +214,6 @@ func diffRows(out string, width int, f outputFold) []string {
 	return rows
 }
 
-// drawsThroughDiffFormatter reports a row whose settled render may consult the
-// configured [cli].diff_formatter: a tool card with a diff body, or an answer
-// carrying a ```diff / ```patch fence. A block drawn from one must drop its
-// cached rows when a background run lands, or it keeps the built-in rows it
-// showed while the run was in flight.
-func drawsThroughDiffFormatter(it *Item) bool {
-	switch it.Kind {
-	case ItemTool:
-		return it.Tool != nil && (it.Tool.Diff != "" || it.Tool.OutputDiff)
-	case ItemSay:
-		return strings.Contains(it.Text, "```diff") || strings.Contains(it.Text, "```patch")
-	}
-	return false
-}
-
 // renderUsage is what one model request cost, under a quiet rule: history,
 // so it stays in the scrollback in a quieter voice than the footer.
 func renderUsage(u *eventwire.Usage, width int) string {
