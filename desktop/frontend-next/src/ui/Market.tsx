@@ -38,6 +38,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
   const [open, setOpen] = useState("");
   const asked = useRef(0);
   const nextOffset = useRef(0);
+  const panel = useRef<HTMLDivElement>(null);
 
   const load = (offset: number) => {
     const n = ++asked.current;
@@ -95,7 +96,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
   }
 
   return (
-    <div className="mkt">
+    <div className="mkt" ref={panel} role="region" aria-label={t("社区市场")} tabIndex={-1}>
       <div className="mkt-bar">
         <input
           className="mkt-q"
@@ -130,12 +131,12 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
           <span className="t">{t("无法读取社区市场")}</span>
           <span className="why">{error}</span>
           {(filterUnsupported || rows?.length === 0) && <div className="acts">
-            {filterUnsupported && <button className="act" data-action="market.show-all" onClick={() => setPinned(false)}>{t("查看全部包")}</button>}
-            {!filterUnsupported && <button className="act" data-action="market.retry" onClick={() => { setRows(null); load(0); }}>{t("重试")}</button>}
+            {filterUnsupported && <button className="act" data-action="market.show-all" onClick={() => { panel.current?.focus(); setPinned(false); }}>{t("查看全部包")}</button>}
+            {!filterUnsupported && <button className="act" data-action="market.retry" onClick={() => { panel.current?.focus(); setRows(null); load(0); }}>{t("重试")}</button>}
           </div>}
         </div>
       )}
-      {(rows === null || loadingMore) && !error && <div className="empty" role="status">{t("正在读取…")}</div>}
+      {rows === null && !error && <div className="empty" role="status">{t("正在读取…")}</div>}
       {rows?.length === 0 && !error && <div className="empty">{t(pinned ? "没有找到已固定内容的包。可关闭筛选查看全部包。" : "没有找到匹配的包。")}</div>}
       <ul className="mkt-list">
         {rows?.map((p) => (
@@ -166,7 +167,7 @@ export function Market({ port, onInstalled, onViewInstalled, onSignIn }: Props) 
         ))}
       </ul>
       {more && (
-        <button className="act" data-action="market.more" disabled={loadingMore} onClick={() => load(nextOffset.current)}>
+        <button className="act" data-action="market.more" aria-live="polite" disabled={loadingMore} onClick={() => { panel.current?.focus({ preventScroll: true }); load(nextOffset.current); }}>
           {t(loadingMore ? "正在读取…" : error && !filterUnsupported ? "重试" : "加载更多")}
         </button>
       )}
@@ -181,6 +182,7 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -252,7 +254,7 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
 
   if (!d) {
     return (
-      <div className="mkt">
+      <div className="mkt" ref={panel} role="region" aria-label={slug} tabIndex={-1}>
         {error ? (
           <div className="find" data-lvl="err" role="alert">
             <span className="t">{t("无法读取 {name}", { name: slug })}</span>
@@ -263,7 +265,7 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
         )}
         <div className="acts">
           {back}
-          {error && <button className="act" data-action="market.detail-retry" onClick={() => setAttempt((n) => n + 1)}>{t("重试")}</button>}
+          {error && <button className="act" data-action="market.detail-retry" onClick={() => { panel.current?.focus(); setAttempt((n) => n + 1); }}>{t("重试")}</button>}
         </div>
       </div>
     );
@@ -276,7 +278,7 @@ function Entry({ port, slug, onBack, onInstalled, onViewInstalled, onSignIn }: {
   // from its removal rather than fail at the last step.
   const stuck = update && p.kind === "skill";
   return (
-    <div className="mkt mkt-entry">
+    <div className="mkt mkt-entry" ref={panel} role="region" aria-label={slug} tabIndex={-1}>
       <div className="mkt-hd">
         <span className="nm">{p.name}</span>
         <span className="mkt-kind">{t(KIND_NAME[p.kind] ?? p.kind)}</span>
