@@ -45,6 +45,9 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 		// Per-model vocabularies for a gateway serving several vendors' models;
 		// a listed model sent without one inherits the connection's.
 		ModelEfforts *map[string]modelEffortView `json:"modelEfforts"`
+		// Per-model window and output cap, with the same listed-models-are-the-
+		// whole-answer rule; a model sent empty inherits the connection's.
+		ModelLimits *map[string]modelLimitsView `json:"modelLimits"`
 	}
 	if !decodeProviderBody(w, r, &body) {
 		return
@@ -90,6 +93,10 @@ func (s *Server) editProvider(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		entry.MaxOutputTokens = *body.MaxOutputTokens
+	}
+	if bad := applyModelLimits(entry, models, body.ModelLimits); bad != nil {
+		refuse(w, http.StatusBadRequest, bad.code, bad.message, bad.detail)
+		return
 	}
 	if body.Headers != nil {
 		entry.Headers = trimmedHeaders(*body.Headers)

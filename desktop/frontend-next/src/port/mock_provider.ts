@@ -1,5 +1,6 @@
 import type {
   ModelEffort,
+  ModelLimit,
   Protocol,
   ProviderCheck,
   ProviderEdit,
@@ -45,6 +46,9 @@ export class MockProvider extends MockBoundary {
       visionModels: ["gpt-4o"], canSetVision: true,
       reasoningProtocol: "openai", supportedEfforts: ["low", "medium", "high"],
       modelEfforts: { "claude-sonnet-4": { supportedEfforts: ["low", "high", "max"], defaultEffort: "high" } },
+      contextWindow: 131072,
+      modelLimits: { "claude-sonnet-4": { contextWindow: 200000, maxOutputTokens: 64000 } },
+      inheritedLimits: { "gpt-4o": { contextWindow: 131072 }, "claude-sonnet-4": { contextWindow: 131072 } },
       inheritedEfforts: {
         "gpt-4o": { supportedEfforts: ["low", "medium", "high"] },
         "claude-sonnet-4": { supportedEfforts: ["low", "medium", "high"] },
@@ -146,6 +150,7 @@ export class MockProvider extends MockBoundary {
             reasoningProtocol: edit.reasoningProtocol, supportedEfforts: edit.supportedEfforts,
             defaultEffort: edit.defaultEffort,
             modelEfforts: edit.modelEfforts ? mockModelEfforts(edit.modelEfforts) : p.modelEfforts,
+            modelLimits: edit.modelLimits ? mockModelLimits(edit.modelLimits) : p.modelLimits,
           }
         : p,
     );
@@ -177,5 +182,10 @@ function relayCatalog(): string[] {
 // The kernel keeps only models that declare levels; the rest inherit.
 function mockModelEfforts(sent: Record<string, ModelEffort>): Record<string, ModelEffort> | undefined {
   const kept = Object.entries(sent).filter(([, v]) => v.supportedEfforts.length > 0);
+  return kept.length ? Object.fromEntries(kept) : undefined;
+}
+
+function mockModelLimits(sent: Record<string, ModelLimit>): Record<string, ModelLimit> | undefined {
+  const kept = Object.entries(sent).filter(([, v]) => v.contextWindow || v.maxOutputTokens);
   return kept.length ? Object.fromEntries(kept) : undefined;
 }

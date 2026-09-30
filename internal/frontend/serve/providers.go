@@ -117,6 +117,10 @@ type providerView struct {
 	ModelEfforts     map[string]modelEffortView `json:"modelEfforts,omitempty"`
 	InheritedEfforts map[string]modelEffortView `json:"inheritedEfforts,omitempty"`
 	ModelProtocols   map[string]string          `json:"modelProtocols,omitempty"`
+	// Per chat model: the window and output cap it declares for itself, and the
+	// ones it inherits when it declares none.
+	ModelLimits     map[string]modelLimitsView `json:"modelLimits,omitempty"`
+	InheritedLimits map[string]modelLimitsView `json:"inheritedLimits,omitempty"`
 }
 
 func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
@@ -156,6 +160,8 @@ func (s *Server) providers(w http.ResponseWriter, _ *http.Request) {
 			ModelEfforts:       modelEffortsOf(p),
 			InheritedEfforts:   inheritedEffortsOf(p),
 			ModelProtocols:     modelProtocolsOf(p),
+			ModelLimits:        modelLimitsOf(p),
+			InheritedLimits:    inheritedLimitsOf(p),
 			ContextWindow:      p.ContextWindow,
 			MaxOutputTokens:    p.MaxOutputTokens,
 			Headers:            p.Headers,
