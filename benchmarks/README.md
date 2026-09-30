@@ -426,7 +426,7 @@ own outcome).
 | `-bin` | `reasonix` | Path to the reasonix binary. |
 | `-model` | *(config default)* | Provider/model name. |
 | `-profile` | `baseline` | Tool-surface/runtime tier: `baseline` \| `economy` \| `balanced` \| `delivery`. All but `baseline` append `--profile <tier>` to the agent invocation; `baseline` passes no flag (byte-identical legacy control, behaviorally `balanced`). Economy starts with the core tool set and pays `connect_tool_source` rounds plus prefix resets to grow it — the report's Tool surface line prices that trade. |
-| `-ablate` | *(none)* | Ablation arm: comma-separated subsystems to switch off — `evidence`, `planner`, `subagent`, `retrieval`, `compaction`; `none` \| `all`. |
+| `-ablate` | *(none)* | Ablation arm: comma-separated subsystems to switch off — `evidence`, `planner`, `subagent`, `retrieval`, `compaction`, `upstream` and `recall-search`; `none` \| `all`. |
 | `-out` | *(stdout)* | Write the markdown report here. |
 | `-json` | *(none)* | Write the JSON report here (optional). |
 | `-trajectories` | *(none)* | Suite mode: write one `<task-id>.trajectory.jsonl` per task into this directory (the agent's full event stream with timestamps — see `reasonix run --trajectory`). The report gains a time-attribution line (tools vs. model) and each JSON result a `trajectory` digest. |

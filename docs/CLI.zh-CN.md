@@ -177,10 +177,13 @@ echo "解释这段代码" | reasonix run
 
 ### 基准对照组
 
-`--ablate` 用于整体关闭某个子系统，让基准测试能把成功率的变化归因到它身上。取值是
-`evidence`、`planner`、`subagent`、`retrieval`、`compaction` 的逗号分隔组合，另外还接受
-`none`（默认，全部启用）和 `all`。子代理继承父代理的对照组配置，对照组名称会写入
-`--metrics` 文件，因此记录下来的每次运行都能自证跑的是哪一组。
+`--ablate` 用于整体关闭某个子系统，让基准测试能把成功率的变化归因到它身上。
+
+取值是 `evidence`、`planner`、`subagent`、`retrieval`、`compaction`、`upstream`、
+`recall-search` 的逗号分隔组合，另外还接受 `none`（默认，全部启用）和 `all`。
+
+子代理继承父代理的对照组配置，对照组名称会写入 `--metrics` 文件，因此记录下来的
+每次运行都能自证跑的是哪一组。
 
 ```sh
 reasonix run --ablate evidence,planner --metrics run.json "修复失败的测试"
