@@ -77,11 +77,21 @@ marks the run contaminated and takes it out of every statistic.
 ## Index corpus v2, if this is reopened
 
 The present index tasks are not a fit substrate: two of six carry stopping
-behaviour that dominates the signal. A task should qualify only if a calibration
-run shows `PostSufficientSearches == 0`, alongside the existing requirements
-(successful tool call, answer in the output rather than the cue, rank 1,
-`FirstHitCoverage` complete, one or two simple values, nothing in the
-workspace). Keep i03 and i04 — as a stopping corpus, not an efficiency one.
+behaviour that dominates the signal. A task should qualify only if a run-index
+run reports a `stopping_class` other than `PostSufficientRetrieval` or
+`PostSufficientRunaway`: `SnippetStop`, `SnippetThenRead` and `DefensiveRead`
+all qualify, and a defensive read is deliberately not counted as waste. The
+class comes from the three counts in that report — `searches_after_sufficient`,
+`reads_after_sufficient` and `escapes_after_sufficient` — together with how
+sufficiency was reached and how many rounds followed it. The remaining
+requirements still apply — successful tool call, answer in the output rather
+than the cue, rank 1, `FirstHitCoverage` complete, one or two simple values,
+nothing in the workspace. Keep i03 and i04 — as a stopping corpus, not an
+efficiency one.
+
+`-mode=calibrate` is not a screening tool: it builds and reads back the
+fixtures, and reads nothing else, so its cue-visibility profile is the same for
+every task.
 
 Then repeats rather than levels: cue-present against cue-absent on each task's
 own boundary, three runs per cell. What is unknown is the variance, and four
