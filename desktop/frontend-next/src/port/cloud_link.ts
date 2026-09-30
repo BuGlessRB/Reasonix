@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import type { FailureDetail, RelayFailure } from "./cloud_failure";
 
 // Relay close codes, decided by the relay and read here by number alone.
 export const CLOSE_IDLE = 4408;
@@ -20,12 +21,17 @@ export function closeAction(code: number): CloseAction {
 export interface RemoteEnd {
   kind: "ended" | "reauth";
   reason: string;
+  failure?: FailureDetail;
 }
 
 // Why a (re)connection attempt failed, as the account service or the relay
 // said it: "transient" is worth another attempt, the others are not.
 export class RemoteLinkError extends Error {
-  constructor(readonly kind: "reauth" | "ended" | "transient", readonly reason: string) {
+  constructor(
+    readonly kind: "reauth" | "ended" | "transient",
+    readonly reason: string,
+    readonly failure?: FailureDetail,
+  ) {
     super(reason);
   }
 }
@@ -61,6 +67,8 @@ export interface RemoteLinkOptions {
   requestTimeoutMs: number;
   retryDelaysMs: number[];
 }
+
+const MAX_RETRY_AFTER_MS = 2 * 60 * 1000;
 
 const DEFAULTS: RemoteLinkOptions = {
   requestTimeoutMs: 30_000,
@@ -102,6 +110,7 @@ export class RemoteLink {
   private reconnecting = false;
   private ended = false;
   private lastHeardAt = Date.now();
+  private lastCloseCode = 0;
   private sending: Promise<void> = Promise.resolve();
   private readonly options: RemoteLinkOptions;
 
@@ -179,6 +188,7 @@ export class RemoteLink {
   private lost(code: number, reason: string) {
     if (this.ended) return;
     this.current = null;
+    this.lastCloseCode = code;
     const action = closeAction(code);
     if (action !== "reconnect") {
       this.finish({ kind: action === "reauth" ? "reauth" : "ended", reason });
@@ -191,9 +201,11 @@ export class RemoteLink {
 
   private async reconnect() {
     this.reconnecting = true;
+    let failure: FailureDetail | undefined;
+    let notBefore = 0;
     try {
-      for (const delay of this.options.retryDelaysMs) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
+      for (const scheduled of this.options.retryDelaysMs) {
+        await new Promise((resolve) => setTimeout(resolve, Math.max(scheduled, notBefore)));
         if (this.ended) return;
         try {
           const connection = await this.dial();
@@ -211,9 +223,16 @@ export class RemoteLink {
             this.finish({ kind: error.kind, reason: error.reason });
             return;
           }
+          failure = error instanceof RemoteLinkError ? error.failure : undefined;
+          notBefore = Math.min((failure?.retryAfterS ?? 0) * 1000, MAX_RETRY_AFTER_MS);
         }
       }
-      this.finish({ kind: "ended", reason: t("远程 Studio 暂无响应，请检查电脑是否在线后重试。") });
+      failure ??= this.lastCloseCode === CLOSE_IDLE ? { code: "idle" satisfies RelayFailure } : undefined;
+      this.finish({
+        kind: "ended",
+        reason: t("远程 Studio 暂无响应，请检查电脑是否在线后重试。"),
+        ...(failure ? { failure } : {}),
+      });
     } finally {
       this.reconnecting = false;
     }

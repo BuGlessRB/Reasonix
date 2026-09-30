@@ -14,7 +14,13 @@ import { install as installFileDrop } from "./ui/filedrop";
 import { host } from "./port/host";
 import { play } from "./boot/intro";
 import { settled } from "./boot/gate";
-import { onRemoteConnectionEnded, remoteConnectionEnded, remoteHub, signInAgain, type RemoteEnd } from "./port/cloud_remote";
+import { failureView, type FailureView } from "./port/cloud_failure";
+import { RemoteLinkError } from "./port/cloud_link";
+import { RemoteNotice } from "./ui/RemoteNotice";
+import { onRemoteConnectionEnded, remoteConnectionEnded, openRemoteHome, remoteHub, signInAgain, type RemoteEnd } from "./port/cloud_remote";
+
+const failureAction = (view: FailureView) => (view.action === "home" ? openRemoteHome : () => location.reload());
+const failureLabel = (view: FailureView) => (view.action === "home" ? t("打开 reasonix.io") : t("重新连接"));
 
 function RemoteAwareApp({ hub, remote }: { hub: HubPort; remote: string | null }) {
   const [ended, setEnded] = useState<RemoteEnd | null>(() => (remote ? remoteConnectionEnded() : null));
@@ -23,22 +29,21 @@ function RemoteAwareApp({ hub, remote }: { hub: HubPort; remote: string | null }
     return onRemoteConnectionEnded(setEnded);
   }, [remote]);
   const reauth = ended?.kind === "reauth";
+  const specific = !reauth && ended?.failure ? failureView(ended.failure) : null;
   return (
     <>
       <App hub={hub} />
       {ended && remote && (
-        <div className="remote-closed" role="alert" aria-label={reauth ? t("需要重新登录") : t("远程连接已断开")}>
-          <span aria-hidden="true" />
-          <div>
-            <b>{reauth ? t("需要重新登录") : t("远程连接已断开")}</b>
-            <p>{reauth
-              ? t("为了安全，远程控制在登录满 24 小时或退出登录后需要重新登录。")
-              : t("这台电脑已停止网页控制。重新连接需要再次验证设备状态。")}</p>
-          </div>
-          <button onClick={() => (reauth ? void signInAgain(remote) : location.reload())}>
-            {reauth ? t("重新登录") : t("重新连接")}
-          </button>
-        </div>
+        <RemoteNotice
+          title={reauth ? t("需要重新登录") : specific?.title ?? t("远程连接已断开")}
+          body={reauth
+            ? t("为了安全，远程控制在登录满 24 小时或退出登录后需要重新登录。")
+            : specific?.body ?? t("这台电脑已停止网页控制。重新连接需要再次验证设备状态。")}
+          action={reauth ? t("重新登录") : specific ? failureLabel(specific) : t("重新连接")}
+          waitS={specific?.waitS}
+          retryWhenOnline={specific?.retryWhenOnline}
+          onAction={reauth ? () => void signInAgain(remote) : specific ? failureAction(specific) : () => location.reload()}
+        />
       )}
     </>
   );
@@ -153,13 +158,21 @@ pick().then(
     arrive(settled);
   },
   (e: unknown) => {
-    root.render(
+    const failure = e instanceof RemoteLinkError && e.failure ? failureView(e.failure) : null;
+    root.render(failure ? (
+      <div className="app" data-run="idle">
+        <RemoteNotice
+          title={failure.title} body={failure.body} action={failureLabel(failure)} waitS={failure.waitS}
+          retryWhenOnline={failure.retryWhenOnline} onAction={failureAction(failure)}
+        />
+      </div>
+    ) : (
       <div className="app" data-run="idle">
         <div className="errbar" role="alert">
           <span>{reason(e)}</span>
         </div>
-      </div>,
-    );
+      </div>
+    ));
     // The failure is the one thing that must not stay behind the boot screen.
     arrive(Promise.resolve());
   },

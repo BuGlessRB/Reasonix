@@ -2,12 +2,17 @@ import type { HubPort } from "./hub";
 import { SseHub } from "./hub";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
+import { classifyHandshakeFailure, failureView, retryAfterSeconds } from "./cloud_failure";
 import { linkCodec, RemoteLink, RemoteLinkError, type RemoteConnection, type RemoteEnd } from "./cloud_link";
 
 const ACCOUNT = (import.meta.env.VITE_ACCOUNTS_API || "https://id.reasonix.io").replace(/\/$/, "");
 const RELAY = (import.meta.env.VITE_REMOTE_GATEWAY || "wss://remote.reasonix.io").replace(/\/$/, "");
 const REMOTE_HOME = import.meta.env.VITE_REMOTE_HOME || "https://reasonix.io/remote/";
 const HANDSHAKE_TIMEOUT_MS = 30_000;
+
+// The socket errored before it opened: the browser hides the status, so the
+// caller has to find out why.
+export class SocketRefused extends Error {}
 let connectionEnded: RemoteEnd | null = null;
 const connectionEndedListeners = new Set<(end: RemoteEnd) => void>();
 const { bytesToBase64, base64ToBytes, concatChunks } = linkCodec;
@@ -23,6 +28,10 @@ export const onRemoteConnectionEnded = (listener: (end: RemoteEnd) => void) => {
   connectionEndedListeners.add(listener);
   return () => { connectionEndedListeners.delete(listener); };
 };
+
+export function openRemoteHome() {
+  location.href = REMOTE_HOME;
+}
 
 // Signing out first is what makes the sign-in page ask: it sends a visitor who
 // still holds a session straight on, and that session is the one too old to
@@ -122,7 +131,7 @@ function waitForSocketOpen(socket: WebSocket, timeout = HANDSHAKE_TIMEOUT_MS): P
     const opened = () => { cleanup(); resolve(); };
     const failed = () => {
       cleanup();
-      reject(new Error(t("远程中转服务暂时不可用，请稍后重试。")));
+      reject(new SocketRefused());
     };
     const timer = setTimeout(() => {
       cleanup();
@@ -207,6 +216,10 @@ async function grantFailure(issued: Response): Promise<RemoteLinkError> {
   if (issued.status === 404 || code === "device_not_found") {
     return new RemoteLinkError("ended", t("这台电脑已从账号中移除。"));
   }
+  if (issued.status === 429) {
+    const detail = { code: "rate_limited" as const, retryAfterS: retryAfterSeconds(issued.headers.get("retry-after")) };
+    return new RemoteLinkError("transient", failureView(detail).body, detail);
+  }
   return new RemoteLinkError("transient", t("无法授权 Web Studio，请重新登录后再试。"));
 }
 
@@ -222,7 +235,8 @@ async function connect(deviceId: string, nativeFetch: typeof fetch, useBootstrap
       body: JSON.stringify({ targetDeviceId: deviceId, scopes: ["desktop"] }),
     }));
   } catch {
-    throw new RemoteLinkError("transient", t("远程中转服务暂时不可用，请稍后重试。"));
+    const detail = { code: navigator.onLine === false ? "offline" as const : "unreachable" as const };
+    throw new RemoteLinkError("transient", failureView(detail).body, detail);
   }
   if (!issued.ok) throw await grantFailure(issued);
   const { grant, device: target } = await issued.json() as { grant: { ticket: string }; device?: RemoteDevice };
@@ -256,6 +270,12 @@ async function connect(deviceId: string, nativeFetch: typeof fetch, useBootstrap
   } catch (error) {
     try { socket.close(1000, "Handshake failed"); } catch { /* never opened */ }
     if (error instanceof RemoteLinkError) throw error;
+    if (error instanceof SocketRefused) {
+      const detail = await classifyHandshakeFailure({
+        relay: RELAY, online: () => navigator.onLine !== false, fetch: nativeFetch,
+      }).catch(() => ({ code: "unknown" as const }));
+      throw new RemoteLinkError("transient", failureView(detail).body, detail);
+    }
     throw new RemoteLinkError("transient", reason(error));
   }
 }
