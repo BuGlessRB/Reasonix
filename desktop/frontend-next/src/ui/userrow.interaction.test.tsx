@@ -5,6 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Item } from "../state/session";
 import type { Checkpoint } from "../port/port";
+import { boot, current, STORAGE, t } from "../i18n";
 import { UserCard } from "./cards/UserCard";
 
 afterEach(cleanup);
@@ -38,6 +39,28 @@ describe("the controls below a message", () => {
     write.mockRestore();
   });
 
+  it.each(["zh", "en"])("shows rejected-copy feedback in %s without an empty header", async (lang) => {
+    const previous = localStorage.getItem(STORAGE);
+    const previousLang = current();
+    localStorage.setItem(STORAGE, lang);
+    boot();
+    const user = userEvent.setup();
+    const write = vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("denied"));
+    try {
+      row("好");
+      const copy = screen.getByRole("button", { name: t("复制") });
+      await user.click(copy);
+      expect(copy.querySelector("[aria-live]")?.className).not.toBe("sr-only");
+      expect(copy.textContent).toBe(lang === "zh" ? "复制失败，请重试" : "Copy failed. Try again.");
+      expect(document.querySelector(".user-hl")).toBeNull();
+    } finally {
+      write.mockRestore();
+      localStorage.setItem(STORAGE, previousLang);
+      boot();
+      if (previous === null) localStorage.removeItem(STORAGE);
+      else localStorage.setItem(STORAGE, previous);
+    }
+  });
   it("shows icons with accessible names and hints for a short message", () => {
     row("好");
     const edit = screen.getByRole("button", { name: "改写" });

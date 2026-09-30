@@ -60,12 +60,12 @@ export function UserCard({
         <span className="line" />
       </div>
       <div className="c">
-        <div className="hl user-hl">
+        {(item.steer || source) && <div className="hl user-hl">
           {/* It reached the model inside a turn already running, which is why
               there is no checkpoint on this row to rewind to. */}
           {item.steer && <span className="steermark">{t("插话")}</span>}
           {source && <span className="viamark">{source}</span>}
-        </div>
+        </div>}
         <div className="out">
           {draft === null ? (
             <div className="txt">{item.text}</div>
@@ -112,7 +112,7 @@ export function UserCard({
           )}
         </div>
         <div className="user-acts">
-          <CopyButton text={item.text} iconOnly label={t("复制")} />
+          <CopyButton text={item.text} iconOnly showFeedback label={t("复制")} />
           {reopen && (
             <button type="button" className="reask-open" data-action="turn.edit" data-target={item.id}
               title={t("改写这条消息并重新发送")} aria-label={t("改写")}
