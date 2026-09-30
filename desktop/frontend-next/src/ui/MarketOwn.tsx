@@ -73,14 +73,14 @@ export function OwnInstall({ port, pkg, onBack, onInstalled }: Props) {
     return <PlanConfirm key={plan.planId} slug={pkg.slug} plan={plan} busy={busy} error={error} onCancel={onBack} onInstall={() => void install()} own />;
   }
   return (
-    <div className="mkt">
+    <div className="mkt" aria-busy={busy}>
       {error ? (
-        <div className="find" data-lvl="err">
+        <div className="find" data-lvl="err" role="alert">
           <span className="t">{t("无法预览 {name}", { name: pkg.slug })}</span>
           <span className="why">{error}</span>
         </div>
       ) : (
-        <div className="empty">{t("正在预览将安装的内容…")}</div>
+        <div className="empty" role="status">{t("正在预览将安装的内容…")}</div>
       )}
       <div className="acts">
         {back}

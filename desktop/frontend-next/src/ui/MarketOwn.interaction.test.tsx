@@ -4,6 +4,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import "./testkit";
 import { MarketGroup } from "./Market";
+import { MyPackages } from "./MarketPublish";
+import { OwnInstall } from "./MarketOwn";
 import { MockPort } from "../port/mock";
 import { HttpError } from "../port/port";
 import type { AgentPort, MarketPackage, MarketPlan } from "../port/port";
@@ -19,6 +21,79 @@ async function openMine(port: AgentPort, onInstalled = () => {}) {
 }
 
 describe("the account's own packages", () => {
+  it.each(["success", "failure"])("ignores a stale list %s after replacing the port", async (outcome) => {
+    const port = new MockPort() as unknown as AgentPort;
+    const next = new MockPort() as unknown as AgentPort;
+    const rows = await port.myMarket();
+    let finishOld!: (value: MarketPackage[]) => void;
+    let failOld!: (error: Error) => void;
+    let finishNew!: (value: MarketPackage[]) => void;
+    vi.spyOn(port, "myMarket").mockImplementation(() => new Promise((resolve, reject) => { finishOld = resolve; failOld = reject; }));
+    vi.spyOn(next, "myMarket").mockImplementation(() => new Promise((resolve) => { finishNew = resolve; }));
+    const view = render(<MyPackages port={port} onInstalled={() => {}} />);
+    view.rerender(<MyPackages port={next} onInstalled={() => {}} />);
+    await act(async () => finishNew([{ ...rows[0]!, name: "current-package", slug: "demo/current-package" }]));
+    await screen.findByText("current-package");
+    await act(async () => {
+      if (outcome === "success") finishOld(rows);
+      else failOld(new Error("old list failed"));
+    });
+
+    expect(screen.getByText("current-package")).toBeTruthy();
+    expect(screen.queryByText(rows[0]!.name)).toBeNull();
+    expect(screen.queryByText("old list failed")).toBeNull();
+  });
+
+  it.each(["success", "failure"])("keeps a replacement preview pending after a stale %s", async (outcome) => {
+    const port = new MockPort() as unknown as AgentPort;
+    const next = new MockPort() as unknown as AgentPort;
+    const pkg = (await port.myMarket()).find((p) => p.slug === "demo/ship-notes")!;
+    const shown = await port.planOwnMarket({ slug: pkg.slug });
+    let finishOld!: (value: MarketPlan) => void;
+    let failOld!: (error: Error) => void;
+    let finishNew!: (value: MarketPlan) => void;
+    vi.spyOn(port, "planOwnMarket").mockImplementation(() => new Promise((resolve, reject) => { finishOld = resolve; failOld = reject; }));
+    vi.spyOn(next, "planOwnMarket").mockImplementation(() => new Promise((resolve) => { finishNew = resolve; }));
+    const install = vi.spyOn(next, "installOwnMarket");
+    const view = render(<OwnInstall port={port} pkg={pkg} onBack={() => {}} onInstalled={() => {}} />);
+    view.rerender(<OwnInstall port={next} pkg={pkg} onBack={() => {}} onInstalled={() => {}} />);
+    await act(async () => {
+      if (outcome === "success") finishOld(shown);
+      else failOld(new Error("old preview failed"));
+    });
+
+    expect(screen.getByText("正在预览将安装的内容…").closest(".mkt")?.getAttribute("aria-busy")).toBe("true");
+    expect(screen.queryByText("old preview failed")).toBeNull();
+    expect(screen.queryByRole("button", { name: "安装" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
+    expect(install).not.toHaveBeenCalled();
+    await act(async () => finishNew(shown));
+    expect(await screen.findByRole("button", { name: "安装" })).toBeTruthy();
+    expect(install).not.toHaveBeenCalled();
+  });
+
+  it("clears a previous confirmation and installs only the replacement preview", async () => {
+    const port = new MockPort() as unknown as AgentPort;
+    const next = new MockPort() as unknown as AgentPort;
+    const pkg = (await port.myMarket()).find((p) => p.slug === "demo/ship-notes")!;
+    const shown = await port.planOwnMarket({ slug: pkg.slug });
+    const fresh = { ...shown, planId: "replacement-preview", contentDigest: "b".repeat(64) };
+    vi.spyOn(port, "planOwnMarket").mockResolvedValue(shown);
+    let finish!: (value: MarketPlan) => void;
+    vi.spyOn(next, "planOwnMarket").mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const install = vi.spyOn(next, "installOwnMarket").mockResolvedValue({ ...fresh, applied: true, status: "done" });
+    const view = render(<OwnInstall port={port} pkg={pkg} onBack={() => {}} onInstalled={() => {}} />);
+    await screen.findByRole("button", { name: "安装" });
+    view.rerender(<OwnInstall port={next} pkg={pkg} onBack={() => {}} onInstalled={() => {}} />);
+
+    expect(screen.getByText("正在预览将安装的内容…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "安装" })).toBeNull();
+    expect(install).not.toHaveBeenCalled();
+    await act(async () => finish(fresh));
+    await userEvent.click(await screen.findByRole("button", { name: "安装" }));
+    expect(install).toHaveBeenCalledWith({ slug: pkg.slug, version: fresh.version, planId: fresh.planId, replace: false, digest: fresh.contentDigest });
+  });
+
   it("retries a failed list read without leaving My Packages", async () => {
     const port = new MockPort() as unknown as AgentPort;
     const rows = await port.myMarket();
