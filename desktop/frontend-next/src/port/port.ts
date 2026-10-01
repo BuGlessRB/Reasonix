@@ -115,6 +115,8 @@ export interface QueueItem {
   createdAt: string;
   // Why a blocked entry stopped, from the kernel that stopped it.
   blockReason?: string;
+  // The stable identity of that stop; the sentence is worded from it here.
+  blockCode?: string;
   // Files this entry froze at the moment it was queued. Their presence is what
   // makes re-freezing meaningful; the entry quotes them as they were.
   refs?: { path?: string }[];

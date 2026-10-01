@@ -334,6 +334,11 @@ export const EN: Record<string, string> = {
   "正在运行，暂停后才能关闭": "Running; pause it before closing",
   "受阻": "blocked",
   "状态不明": "uncertain",
+  "这条插话在本轮结束前没来得及送达，没有发给模型": "This guidance was not delivered before the turn ended, so the model never saw it",
+  "本轮已结束，但对话记录没能保存": "The turn ended, but the transcript could not be saved",
+  "本轮已结束，但队列没能确认这一条": "The turn ended, but the queue could not acknowledge this item",
+  "运行这一条的会话已不在了": "The session that was running this item is gone",
+  "队列记录损坏，这一条是从残留文件里找回的": "The queue record was corrupt; this item was salvaged from leftover files",
   "冻结 {n} 文件": "{n} frozen",
   "无法读取该条的正文，未打开编辑：{why}":
     "Could not read this entry back, so it was not opened for editing: {why}",
