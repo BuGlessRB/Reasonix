@@ -224,6 +224,10 @@ export class MockHub implements HubPort {
     return Promise.resolve({ summary: "mock migration complete", imported: 0, warnings: 0 });
   }
 
+  hostCapabilities() {
+    return Promise.resolve({ pickFolder: true, addWorkspace: true });
+  }
+
   pickFolder() {
     return Promise.resolve<string | null>("~/projects/mock-workspace");
   }
