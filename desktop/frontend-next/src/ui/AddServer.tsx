@@ -81,7 +81,7 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
   }
 
   return (
-    <div className="addsrv" data-stage={draft ? "confirm" : "paste"}>
+    <div className="addsrv" data-stage={draft ? "confirm" : "paste"} aria-busy={busy}>
       {!draft && (
         <>
           <textarea
@@ -131,13 +131,13 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
               question. Only the third option edits a tracked file, so it is the
               one that has to say so out loud — and it is never the default. */}
           <div className="scope" role="radiogroup" aria-label={t("安装位置")}>
-            <button role="radio" aria-checked={scope === "user"} onClick={() => setScope("user")}>
+            <button role="radio" aria-checked={scope === "user"} disabled={busy} onClick={() => setScope("user")}>
               {t("我的")}<i>{t("所有项目均可使用")}</i>
             </button>
             <button
               role="radio"
               aria-checked={scope === "local"}
-              disabled={!canProject}
+              disabled={busy || !canProject}
               onClick={() => setScope("local")}
             >
               {t("仅当前项目")}<i>{t("不写入仓库，他人不会获得")}</i>
@@ -145,7 +145,7 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
             <button
               role="radio"
               aria-checked={scope === "project"}
-              disabled={!canProject}
+              disabled={busy || !canProject}
               onClick={() => setScope("project")}
             >
               {t("写进仓库")}<i>{t("clone 仓库的人也会获得")}</i>
@@ -155,7 +155,7 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
             <div className="warn">{t("这会修改仓库中的配置文件，属于一处待提交的改动。")}</div>
           )}
           <div className="acts">
-            <button className="act" onClick={() => setDraft(null)}>
+            <button className="act" disabled={busy} onClick={() => setDraft(null)}>
               {t("返回")}
             </button>
             <button className="act" data-action="mcp.add" data-primary disabled={busy} onClick={() => void install()}>
