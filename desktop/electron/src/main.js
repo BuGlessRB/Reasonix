@@ -7,7 +7,8 @@ if (relaunchForOzonePlatform(app, process)) return;
 const fs = require("node:fs/promises");
 const { existsSync } = require("node:fs");
 const path = require("node:path");
-const { start } = require("./host");
+const { start, shouldRetry, HANDSHAKE_TIMEOUT_MS } = require("./host");
+const { showStarting } = require("./starting");
 const { StudioHost } = require("./hostclient");
 const { installTray } = require("./tray");
 const { instanceID, profileFor } = require("./instance");
@@ -45,6 +46,7 @@ const LIGHTS = { x: 11, y: 20 };
 const DEFAULT_SIZE = { width: 1440, height: 900 };
 const MIN_SIZE = { width: 760, height: 480 };
 const HOST_DRAIN_MS = 1000;
+const RETRY_DELAY_MS = 1000;
 
 const where = {
   packaged: app.isPackaged,
@@ -70,6 +72,69 @@ let reload = null;
 let logs = null;
 let handshaken = false;
 
+let starting = null;
+function closeStarting() {
+  const win = starting;
+  starting = null;
+  if (win && !win.isDestroyed()) win.close();
+}
+
+function handshakeTimeout() {
+  const ms = Number(process.env.REASONIX_STUDIO_HANDSHAKE_TIMEOUT_MS);
+  return Number.isFinite(ms) && ms > 0 ? ms : HANDSHAKE_TIMEOUT_MS;
+}
+
+// A kernel that exits or cannot be spawned within seconds is tried once more:
+// a scanner holding a freshly written binary lets go about that fast. A slow
+// kernel is waited for instead, never restarted.
+async function launchKernel(args) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    if (quitting) throw new Error("the launch was ended by quit");
+    const began = Date.now();
+    logs.shell.line(`host: starting ${hostBinary} (attempt ${attempt})`);
+    kernel = start(hostBinary, args, {
+      timeoutMs: handshakeTimeout(),
+      onSlow: () => {
+        logs.shell.line("host: no handshake yet; showing the starting window");
+        if (starting || quitting) return;
+        const win = showStarting(app.getLocale());
+        starting = win;
+        win.once("closed", () => {
+          if (starting !== win) return;
+          starting = null;
+          logs.shell.line("host: starting window closed; ending the launch");
+          app.quit();
+        });
+      },
+      onStderr: (text) => {
+        logs.host.raw(text);
+        process.stderr.write(text);
+      },
+      onExit: (code, signal) => {
+        logs.shell.line(`host: exited code=${code} signal=${signal}${handshaken ? "" : " before its handshake"}`);
+        // Before the handshake the launch itself fails, and boot's catch owns
+        // telling the person why; quitting here would race that dialog.
+        if (handshaken && code !== 0 && !quitting) app.quit();
+      },
+      onAct: handOver,
+    });
+    const current = kernel;
+    current.child.on("error", (err) => logs.shell.line(`host: spawn failed: ${err.message}`));
+    current.child.stderr.on("close", () => logs.host.flush());
+    try {
+      return await current.ready;
+    } catch (err) {
+      if (quitting || !shouldRetry(err, attempt, Date.now() - began)) {
+        err.attempts = attempt;
+        closeStarting();
+        throw err;
+      }
+      logs.shell.line(`host: ${err.message}; retrying once`);
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    }
+  }
+}
+
 async function boot() {
   // Which build this is belongs to the shell: inside the bundle the kernel's
   // own os.Executable() names the host binary, not the application around it.
@@ -86,23 +151,7 @@ async function boot() {
     // inside the bundle rather than being it.
     args.push("-studio-app", process.execPath, "-studio-app-pid", String(process.pid));
   }
-  logs.shell.line(`host: starting ${hostBinary}`);
-  kernel = start(hostBinary, args, {
-    onStderr: (text) => {
-      logs.host.raw(text);
-      process.stderr.write(text);
-    },
-    onExit: (code, signal) => {
-      logs.shell.line(`host: exited code=${code} signal=${signal}${handshaken ? "" : " before its handshake"}`);
-      // Before the handshake the launch itself fails, and boot's catch owns
-      // telling the person why; quitting here would race that dialog.
-      if (handshaken && code !== 0 && !quitting) app.quit();
-    },
-    onAct: handOver,
-  });
-  kernel.child.on("error", (err) => logs.shell.line(`host: spawn failed: ${err.message}`));
-  kernel.child.stderr.on("close", () => logs.host.flush());
-  const ready = await kernel.ready;
+  const ready = await launchKernel(args);
   logs.addSecret(ready.token);
   handshaken = true;
   logs.shell.line(`host: handshake from ${ready.origin}`);
@@ -110,6 +159,7 @@ async function boot() {
   client = new StudioHost(ready.origin, ready.token);
   await armCredential(ready);
   win = createWindow();
+  closeStarting();
   guard(win.webContents);
   win.webContents.once("render-process-gone", (_event, details) => {
     if (win.isVisible() || details.reason !== "crashed") return;
@@ -201,6 +251,7 @@ function onWindowClose(event) {
 // showWindow brings it back from wherever it went. Show alone is a no-op on a
 // window that is merely buried, so the focus is what actually raises it.
 function showWindow() {
+  if (starting && !starting.isDestroyed()) starting.focus();
   if (quitting || !win || win.isDestroyed()) return;
   if (win.isMinimized()) win.restore();
   reload?.revive();
@@ -423,7 +474,11 @@ function handOver(act) {
   if (act === "quit") app.quit();
 }
 
-app.on("window-all-closed", () => app.quit());
+// Before the handshake the only window is the starting one, and the launch
+// decides for itself whether to go on.
+app.on("window-all-closed", () => {
+  if (handshaken) app.quit();
+});
 
 // Closing this end of the pipe is what tells the kernel to drain. Without it a
 // session file is left being written by a process nobody is holding open.
