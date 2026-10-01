@@ -26,7 +26,13 @@ interface Props {
   onInstalled: () => void;
 }
 
-export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
+export function AddServer(props: Props) {
+  const [connection, setConnection] = useState({ port: props.port, generation: 0 });
+  if (connection.port !== props.port) setConnection({ port: props.port, generation: connection.generation + 1 });
+  return <ServerInput key={connection.generation} {...props} />;
+}
+
+function ServerInput({ port, canProject, onClose, onInstalled }: Props) {
   // Mounted only while open, so this component is the layer Escape closes.
   useEscape(true, onClose);
   const [text, setText] = useState("");
