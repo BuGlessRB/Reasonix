@@ -14,6 +14,7 @@ import { useDismiss } from "./dismiss";
 import { asksDelete } from "./keys";
 import { clearDraftForSession } from "./drafts";
 import { WorkspaceOrder, workspaceMenuKeys } from "./WorkspaceOrder";
+import { WorkspaceReveal } from "./WorkspaceReveal";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -406,23 +407,7 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
                           <b>{ws.name}</b>
                           <small className="session-pop-path" title={ws.root}>{ws.root}</small>
                         </div>
-                        {hub.revealsWorkspaces() && (
-                          <div className="session-pop-group">
-                            <button
-                              role="menuitem"
-                              data-action="workspace.reveal"
-                              data-target={ws.root}
-                              disabled={ws.missing}
-                              onClick={() => {
-                                dismissMenu();
-                                hub.revealWorkspace(ws.root).catch(onError);
-                              }}
-                            >
-                              <StudioIcon name="reveal" /><span>{t("在文件管理器中显示")}</span>
-                              {ws.missing && <small>{t("文件夹已不在磁盘上")}</small>}
-                            </button>
-                          </div>
-                        )}
+                        <WorkspaceReveal ws={ws} hub={hub} dismiss={dismissMenu} onError={onError} />
                         {ws.remembered && <WorkspaceOrder root={ws.root} position={tree.filter((w) => w.remembered).findIndex((w) => w.root === ws.root)} total={tree.filter((w) => w.remembered).length}
                           hub={hub} reload={reload} dismiss={dismissMenu} onError={onError} />}
                         <div className="session-pop-group">

@@ -163,6 +163,8 @@ export const EN_KERNEL: Record<string, string> = {
   "无法在 {ip} 上开启监听：{error}": "Could not listen on {ip}: {error}",
   "没有这台已配对的设备，可能已被移除。": "No paired device has that id; it may already have been removed.",
   "这个内核没有窗口，打不开本机的编辑器。": "This kernel has no window, so it cannot open an editor on this machine.",
+  "这个文件夹不在当前窗口的项目列表里。": "That folder is not a project in this window.",
+  "项目文件夹已不在磁盘上。": "The project folder is no longer on disk.",
   "这个内核不在本机，没法在系统文件管理器中显示它的文件。": "This kernel is not on this machine, so its files cannot be shown in the system file manager.",
   "这个系统没有可用的文件夹选择框，请直接填写路径。": "This system has no folder picker available; type the path instead.",
   "打不开文件夹选择框：{error}": "The folder picker could not be opened: {error}",
