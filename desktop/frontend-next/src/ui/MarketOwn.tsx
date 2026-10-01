@@ -24,6 +24,8 @@ export function OwnInstall({ port, pkg, onBack, onInstalled, onViewInstalled, on
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const generation = useRef(0);
+  const connection = useRef({ port });
+  if (connection.current.port !== port) connection.current = { port };
   const replace = !!pkg.installed && pkg.installed.version !== pkg.latestVersion;
 
   useEffect(() => {
@@ -48,6 +50,7 @@ export function OwnInstall({ port, pkg, onBack, onInstalled, onViewInstalled, on
   const install = async () => {
     if (!plan) return;
     const current = generation.current;
+    const owner = connection.current;
     setBusy(true);
     onApplying?.(true);
     setError("");
@@ -55,9 +58,8 @@ export function OwnInstall({ port, pkg, onBack, onInstalled, onViewInstalled, on
       const out = await port.installOwnMarket({
         slug: pkg.slug, version: plan.version, planId: plan.planId, replace, digest: plan.contentDigest,
       });
-      if (current !== generation.current) return;
-      setDone(out);
-      if (out.applied) onInstalled();
+      if (current === generation.current) setDone(out);
+      if (out.applied && connection.current === owner) onInstalled();
     } catch (e) {
       if (current === generation.current) setError(reason(e));
     } finally {

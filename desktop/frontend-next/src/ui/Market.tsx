@@ -361,6 +361,9 @@ const VIEWS: [View, string][] = [["browse", "浏览"], ["mine", "我的发布"],
 // page rather than two sections: what the market adds shows up on the other tab.
 // Publishing spends the account session, so it is offered only while signed in.
 export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSignIn, onApplying }: Props & { account: AccountState | null; onSignIn: () => void; onApplying?: (applying: boolean) => void }) {
+  const connection = useRef({ port });
+  if (connection.current.port !== port) connection.current = { port };
+  const owner = connection.current;
   const [view, setView] = useState<View>("browse");
   const [applying, setApplying] = useState(false);
   const applyingChanged = useCallback((busy: boolean) => { setApplying(busy); onApplying?.(busy); }, [onApplying]);
@@ -388,7 +391,9 @@ export function MarketGroup({ port, onInstalled, onViewInstalled, account, onSig
         )
       )}
       {at === "browse" && <Market port={port} onInstalled={onInstalled} onViewInstalled={onViewInstalled} onSignIn={onSignIn} />}
-      {at === "mine" && <MyPackages port={port} onInstalled={onInstalled} onViewInstalled={onViewInstalled} onApplying={applyingChanged} />}
+      {at === "mine" && <MyPackages port={port} onInstalled={() => {
+        if (connection.current === owner) onInstalled();
+      }} onViewInstalled={onViewInstalled} onApplying={applyingChanged} />}
       {at === "publish" && handle && <PublishForm port={port} handle={handle} onMine={() => setView("mine")} />}
     </Group>
   );
