@@ -91,8 +91,17 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source, onAppl
   };
 
   const pick = async () => {
-    const dir = await port.pickFolder();
-    if (dir) setText(dir);
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const dir = await port.pickFolder();
+      if (dir) setText(dir);
+    } catch (e) {
+      setError(reason(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   // An update has nothing to type: its source was recorded at install. Going
@@ -107,7 +116,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source, onAppl
   // you agree to install it. A tab has no path to fill it with, so nothing is
   // typed there and the box still takes an address.
   const [over, setOver] = useState(false);
-  const drop = useFileDrop((d) => d.paths[0] && setText(d.paths[0]), setOver);
+  const drop = useFileDrop((d) => !busy && d.paths[0] && setText(d.paths[0]), setOver);
 
   if (done) {
     return (
@@ -201,13 +210,14 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source, onAppl
   }
 
   return (
-    <div className="addpkg" data-stage="paste" ref={drop} data-over={over ? "" : undefined}>
+    <div className="addpkg" data-stage="paste" ref={drop} data-over={over ? "" : undefined} aria-busy={busy}>
       <textarea
         className="paste"
         data-action-keydown="extensions.inspect"
         rows={3}
         autoFocus
         value={text}
+        disabled={busy}
         placeholder={PLACEHOLDER}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -219,7 +229,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source, onAppl
       />
       <div className="acts">
         <span className="note">{t("仓库地址，或将文件夹拖入此处")}</span>
-        <button className="act" data-action="extensions.pick-folder" onClick={() => void pick()}>
+        <button className="act" data-action="extensions.pick-folder" disabled={busy} onClick={() => void pick()}>
           {t("选文件夹")}
         </button>
         <button className="act" data-action="extensions.cancel" onClick={onClose}>
@@ -235,7 +245,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source, onAppl
           {t(busy ? "读取中…" : "查看内容")}
         </button>
       </div>
-      {error && <div className="why">{error}</div>}
+      {error && <div className="why" role="alert">{error}</div>}
     </div>
   );
 }
