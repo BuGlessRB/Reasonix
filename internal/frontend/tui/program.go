@@ -59,8 +59,8 @@ func Run(ctx context.Context, opts Options) error {
 		go p.Send(clusterReport)
 	}
 	// Full screen repaints every frame, so the diff formatter runs off the render
-	// path: built-in rows now, formatted ones when the run lands. Inline writes to
-	// the scrollback, where a row cannot be repainted, so it stays inline.
+	// path: placeholder rows now, formatted ones when the run lands. Inline writes
+	// to the scrollback, where a row cannot be repainted, so it stays inline.
 	if !opts.Inline {
 		termrender.SetDiffFormatNotify(func(k termrender.DiffKey) { p.Send(diffFormattedMsg{key: k}) })
 		defer termrender.SetDiffFormatNotify(nil)
@@ -125,7 +125,7 @@ type model struct {
 
 type (
 	updateMsg struct {
-		u  Update
+		us []Update
 		ok bool
 	}
 	actionMsg struct {
@@ -151,7 +151,7 @@ type (
 	statusTickMsg struct{}
 	// diffFormattedMsg is the diff formatter's background run reporting a
 	// result; the model repaints the rows that asked for that key so the
-	// formatted rows replace the built-in ones drawn while the run was in flight.
+	// formatted rows replace the placeholder drawn while the run was in flight.
 	diffFormattedMsg struct {
 		key termrender.DiffKey
 	}
@@ -197,10 +197,39 @@ func (m *model) Init() tea.Cmd {
 	return tea.Sequence(m.greet(), tea.Batch(cmds...))
 }
 
+// resize records the new terminal size and drops any held viewport position: the
+// rows re-wrap, so a held position no longer means what it did.
+func (m *model) resize(msg tea.WindowSizeMsg) {
+	m.width, m.height = msg.Width, msg.Height
+	m.composer.SetWidth(max(msg.Width-4, 10))
+	if m.scr != nil && m.scr.follow {
+		m.scr.yoff = 0
+	}
+}
+
+// waitUpdate hands the model the next stream frames. It coalesces everything
+// already queued into one message so a burst of deltas costs one render rather
+// than one per delta: the view re-parses the whole growing answer each time it
+// is drawn, so drawing a token at a time is quadratic in the stream length.
+// Order is kept, and a slow stream still delivers each frame as it arrives.
 func (m *model) waitUpdate() tea.Cmd {
 	return func() tea.Msg {
 		u, ok := <-m.updates
-		return updateMsg{u: u, ok: ok}
+		if !ok {
+			return updateMsg{ok: false}
+		}
+		us := []Update{u}
+		for {
+			select {
+			case v, ok := <-m.updates:
+				if !ok {
+					return updateMsg{us: us, ok: true}
+				}
+				us = append(us, v)
+			default:
+				return updateMsg{us: us, ok: true}
+			}
+		}
 	}
 }
 
@@ -254,8 +283,7 @@ func tickStatus() tea.Cmd {
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
-		m.composer.SetWidth(max(msg.Width-4, 10))
+		m.resize(msg)
 		return m, nil
 	case tea.ModeReportMsg:
 		noteCells(msg)
@@ -264,13 +292,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !msg.ok {
 			return m, nil
 		}
-		if msg.u.Gap {
-			return m, tea.Batch(m.fetchHistory(false), m.waitUpdate())
-		}
 		was := m.tr.Running
-		m.tr.Apply(msg.u.Event)
-		cmds := []tea.Cmd{m.commit(), m.waitUpdate(), m.noteRunning(was)}
-		if msg.u.Event.Kind == "turn_done" {
+		rearm := m.waitUpdate()
+		turnDone := false
+		for _, u := range msg.us {
+			if u.Gap {
+				// Frames between two points are gone: reload the record rather
+				// than apply a frame that follows a hole.
+				return m, tea.Batch(m.fetchHistory(false), rearm)
+			}
+			m.tr.Apply(u.Event)
+			if u.Event.Kind == "turn_done" {
+				turnDone = true
+			}
+		}
+		cmds := []tea.Cmd{m.commit(), rearm, m.noteRunning(was)}
+		if turnDone {
 			m.noteTurnEnd()
 			cmds = append(cmds, m.commit(), m.fetchMeters())
 		}
