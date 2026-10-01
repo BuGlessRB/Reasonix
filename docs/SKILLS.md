@@ -77,7 +77,7 @@ Each skill's body is loaded when that skill is invoked.
 | `read-only` | Run a subagent skill with writer tools removed and read-only shell. |
 | `invocation` | `manual` keeps the skill out of the model's listing; it stays callable by name unless model invocation is disabled. |
 | `disable-model-invocation` | `true` prevents model calls; the user can still invoke the skill explicitly. |
-| `requires` | Capabilities the skill needs, e.g. `mcp-server:github`. |
+| `requires` | Ready capabilities required for model invocation, e.g. `mcp-server:github`. See the MCP requirements example below. |
 
 Unknown keys are ignored, so a skill written for another agent loads as-is.
 
@@ -97,6 +97,46 @@ disabled_skills = ["review"]                  # hidden until /skills enable
 ```
 
 Skills also arrive inside plugin packages; see [PLUGIN_PACKAGES.md](PLUGIN_PACKAGES.md).
+
+## Declaring MCP requirements
+
+1. Use the configured server name and its actual tool names. For a server named
+   `notes` exposing `read`, a skill can declare both requirements:
+
+   ```markdown
+   ---
+   name: notes-check
+   description: Check notes using the configured MCP reader
+   requires: mcp-server:notes, mcp-tool:notes/read
+   ---
+   Read the notes available from the configured notes server.
+   Report the relevant entries and identify anything that could not be verified.
+   ```
+
+2. Confirm IDs in the session's capability catalog: ask the model to inspect
+   `mcp-server:notes` with `use_capability`, then copy the returned IDs.
+   The reader must already be configured; `requires` does not install it,
+   supply credentials, or grant permission.
+
+3. Model calls through `run_skill`, `read_skill`, `use_capability` and
+   `slash_command` require every declared capability to be `ready`. Missing
+   tools, disabled servers and cached schemas without a live connection do not
+   qualify. Correct IDs or connect the enabled server in Studio, then retry.
+
+4. An enabled server with no usable schema cache may connect at startup to
+   discover its tools. Once schemas are cached, a deferred server can remain
+   disconnected until needed; its cached tools alone do not make a required
+   capability `ready`.
+
+5. A user explicitly typing `/notes-check` can still load the playbook when its
+   dependencies are unavailable, for example to ask about setup. That does not
+   connect a disabled server or bypass the tool's own execution checks.
+   Write the body so it explains missing setup rather than claiming a result.
+
+6. Use [capability diagnostics](CAPABILITY_DIAGNOSTICS.md) to check configuration;
+   its live probe is separate from an open session's connection. `reasonix doctor`
+   warns about missing or host-failed MCP servers for `auto-use: require` skills.
+   A clean report does not prove runtime readiness.
 
 ## Sharing a skill with a repository
 
