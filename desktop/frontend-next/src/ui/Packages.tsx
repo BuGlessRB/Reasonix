@@ -8,13 +8,14 @@ interface Props {
   port: AgentPort;
   packages: PluginPackage[];
   onChanged: () => void;
+  onReloadError?: (message: string) => void;
   // Only one package can be mid-update: the confirmation is a full pane, and
   // two of them open at once would be two plans competing for one answer.
   updating: string;
   onUpdate: (name: string) => void;
 }
 
-export function Packages({ port, packages, onChanged, updating, onUpdate }: Props) {
+export function Packages({ port, packages, onChanged, onReloadError, updating, onUpdate }: Props) {
   const [connection, setConnection] = useState({ port, generation: 0 });
   const currentConnection = useRef(connection);
   currentConnection.current = connection;
@@ -28,6 +29,9 @@ export function Packages({ port, packages, onChanged, updating, onUpdate }: Prop
           port={port}
           onDone={() => {
             if (currentConnection.current === connection) onChanged();
+          }}
+          onReloadError={(message) => {
+            if (currentConnection.current === connection) onReloadError?.(message);
           }}
           updating={updating}
           onUpdate={() => onUpdate(p.name)}
@@ -59,9 +63,10 @@ function summary(p: PluginPackage): string {
 }
 
 function Package({
-  p, port, onDone, updating, onUpdate,
+  p, port, onDone, onReloadError, updating, onUpdate,
 }: {
   p: PluginPackage; port: AgentPort; onDone: () => void; updating: string; onUpdate: () => void;
+  onReloadError: (message: string) => void;
 }) {
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
@@ -138,6 +143,7 @@ function Package({
           void run("remove", async () => {
             const out = await port.removePlugin(p.name);
             setConfirming(false);
+            if (out.applied && out.reloadError) onReloadError(out.reloadError);
             if (!out.ok) setFailed(out.error || out.next || t("没能删掉"));
           })
         }

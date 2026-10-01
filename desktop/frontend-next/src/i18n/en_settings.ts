@@ -346,6 +346,7 @@ export const EN_SETTINGS: Record<string, string> = {
     "Use this after editing extension code, or installing, removing, enabling or disabling a package. The current turn is unaffected; the next one uses the new configuration.",
   "正在重启常驻进程，重新扫描技能、命令和钩子…": "Restarting resident processes and rescanning skills, commands and hooks…",
   "已生效，下一轮开始用新的扩展": "Live — the next turn runs the new extensions",
+  "更改已保存，运行时未重载：{reason}。请用「重载运行时」重试。": "Changes saved, but the runtime did not reload: {reason}. Use Reload runtime to retry.",
   "插件包": "Plugin packages",
   "一个包可以同时提供技能、命令、自动化钩子和外部服务。安装与导入是同一个操作：提供一个仓库地址，或本机的一个文件夹。":
     "One package can bring skills, commands, automation hooks and external services at once. Installing and importing are the same action: give it a repository address or a folder on this machine.",
