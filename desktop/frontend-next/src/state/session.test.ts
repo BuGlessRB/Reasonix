@@ -100,6 +100,7 @@ describe("a turn the user cancelled", () => {
     const s = run([partial("c1"), { kind: "turn_done", cancelled: true, err: "context canceled" } as SessionEvent]);
     expect(s.items.filter((i) => i.t === "notice" && i.level === "error")).toHaveLength(0);
     expect(s.terminal).toEqual({ kind: "cancelled" });
+    expect(s.doing).toBe("已取消");
   });
 
   it("still draws a genuine failure", () => {

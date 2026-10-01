@@ -92,7 +92,7 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 	done := event.Event{
 		Kind:           event.TurnDone,
 		Err:            err,
-		Cancelled:      cancelRequested,
+		Cancelled:      cancelRequested && (err == nil || errors.Is(err, context.Canceled)),
 		Outcome:        turnOutcome(err),
 		CheckpointTurn: c.validatedCheckpointTurn(completion),
 		Receipt:        c.executor.CompletionReceipt(),

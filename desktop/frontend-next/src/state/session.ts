@@ -608,7 +608,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
         ...s,
         running: false,
         terminal: turnTerminal(ev),
-        doing: ev.outcome === "no_progress" ? "已暂停" : ev.err ? "已中断" : "已完成",
+        doing: ev.outcome === "no_progress" ? "已暂停" : ev.cancelled ? "已取消" : ev.err ? "已中断" : "已完成",
         waiting: {},
         plan: livePlan(s.plan),
         items: withReceipt(sealTurn(sealSay(s.items, true), ev.outcome === "no_progress" || ev.cancelled ? undefined : ev.err), ev.receipt),
