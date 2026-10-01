@@ -126,3 +126,20 @@ func TestContextBudgetNoticeEventForUnmeasuredBudgetHasNoCode(t *testing.T) {
 		t.Fatalf("an unmeasured budget has no figures to localize, got code=%q text=%q", ev.Code, ev.Text)
 	}
 }
+
+// Both rungs must say that the fold is automatic and the task goes on: a notice
+// that only reports shrinking room reads as the end of the window, and the model
+// hands the work back to the user.
+func TestBudgetNoticeStatesCompactionContinuesTheTask(t *testing.T) {
+	for rung := 1; rung <= len(contextBudgetNoticeRatios); rung++ {
+		text := contextBudgetNoticeText(budgetAt(9_500, 10_000, 12_000), rung)
+		if !strings.Contains(text, budgetContinuationClause) {
+			t.Fatalf("rung %d omits the continuation clause:\n%s", rung, text)
+		}
+		for _, figure := range []string{"500 tokens", "12000"} {
+			if !strings.Contains(text, figure) {
+				t.Fatalf("rung %d omits %q:\n%s", rung, figure, text)
+			}
+		}
+	}
+}
