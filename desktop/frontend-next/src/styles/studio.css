@@ -1202,7 +1202,7 @@ body { background: var(--page) !important; }
 .studio-meterrail > .studio-meter-cost {
   height: 25px; display: inline-flex; align-items: center; gap: 5px; padding: 0 6px;
   border: 0; border-radius: 5px; background: transparent; color: var(--faint);
-  white-space: nowrap; font: 500 10px/1 var(--ui);
+  white-space: nowrap; font: 500 10px/1 var(--ui); font-variant-numeric: tabular-nums;
 }
 .studio-meterrail > button,
 .studio-meterrail .studio-context-anchor > button,
@@ -1213,7 +1213,8 @@ body { background: var(--page) !important; }
   background: color-mix(in srgb, var(--text) 7%, transparent);
   color: var(--text);
 }
-.studio-meterrail b { color: inherit; font: 500 10px/1 var(--ui); }
+.studio-meterrail b { color: inherit; font: 500 10px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.studio-meterrail .studio-meter-speed b { min-width: 5ch; text-align: right; }
 .studio-meterrail .studio-icon { width: 13px; height: 13px; }
 /* The line reads before the figure: the shape answers "is it moving" at a
    glance, and the number is what you look at once it has. It takes no room
