@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/tool"
 )
 
@@ -105,5 +106,23 @@ func TestContextBudgetUnmeasuredWithoutWindow(t *testing.T) {
 	}
 	if budget.Status != "unmeasured" || budget.Reason == "" {
 		t.Fatalf("unmeasured budget must name a reason: %+v", budget)
+	}
+}
+
+func TestContextBudgetNoticeEventCarriesTypedFigures(t *testing.T) {
+	ev := contextBudgetNoticeEvent(budgetAt(83, 100, 200))
+	if ev.Kind != event.Notice || ev.Level != event.LevelWarn || ev.Code != event.NoticeCodeContextBudget {
+		t.Fatalf("want a warn notice coded context_budget, got kind=%v level=%v code=%q", ev.Kind, ev.Level, ev.Code)
+	}
+	figures, ok := event.DecodeContextBudgetFigures(ev.Detail)
+	if !ok || figures.Percent != 83 || figures.Remaining != 17 {
+		t.Fatalf("Detail must decode to the percent and remaining tokens, got %+v ok=%v from %q", figures, ok, ev.Detail)
+	}
+}
+
+func TestContextBudgetNoticeEventForUnmeasuredBudgetHasNoCode(t *testing.T) {
+	ev := contextBudgetNoticeEvent(unmeasuredContextBudget("no window"))
+	if ev.Code != "" || ev.Text == "" {
+		t.Fatalf("an unmeasured budget has no figures to localize, got code=%q text=%q", ev.Code, ev.Text)
 	}
 }
