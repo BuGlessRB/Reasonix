@@ -210,6 +210,7 @@ func TestAPairedDeviceCannotReachTheWindowsOwnRoutes(t *testing.T) {
 		{http.MethodPost, "/share/cloud-offer"},
 		{http.MethodGet, "/share"},
 		{http.MethodPost, "/host/pick-folder"},
+		{http.MethodGet, "/host/workspaces/locate?root=%2Ftmp"},
 		{http.MethodGet, "/remotes"},
 	} {
 		resp := rig.device(t, c.method, c.path, "{}", cookie)

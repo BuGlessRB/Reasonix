@@ -190,7 +190,7 @@ class ElectronHost implements HostPort {
     return this.api.pickFolder(startIn);
   }
   revealsFiles() {
-    return typeof this.api.revealPath === "function";
+    return typeof this.api.revealPath === "function" && typeof this.api.revealWorkspace === "function";
   }
   revealPath(base: string, path: string) {
     return this.api.revealPath?.(base, path) ?? Promise.resolve({ error: "this shell cannot show files" });
