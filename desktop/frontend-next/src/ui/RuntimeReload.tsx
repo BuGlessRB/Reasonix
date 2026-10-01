@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import type { AgentPort } from "../port/port";
@@ -17,24 +17,34 @@ const SETTLED_MS = 4000;
 // A hook rather than a component: the button belongs in the group's header slot
 // and the note in its body, and one component cannot fill two slots.
 export function useRuntimeReload(port: AgentPort, onDone: () => void) {
+  const [connection, setConnection] = useState({ port });
+  const currentConnection = useRef(connection);
+  currentConnection.current = connection;
   const [state, setState] = useState<State>("");
   const [note, setNote] = useState("");
+  if (connection.port !== port) {
+    setConnection({ port });
+    setState("");
+    setNote("");
+  }
 
   const go = useCallback(async () => {
     setState("run");
     setNote(t("正在重启常驻进程，重新扫描技能、命令和钩子…"));
     try {
       await port.reloadExtensions();
+      if (currentConnection.current !== connection) return;
       setState("ok");
       setNote(t("已生效，下一轮开始用新的扩展"));
       onDone();
     } catch (e) {
+      if (currentConnection.current !== connection) return;
       // A refusal is the kernel's, and it knows why: a turn in flight, a
       // background job, a session that moved. Say its reason, not a generic one.
       setState("bad");
       setNote(reason(e));
     }
-  }, [port, onDone]);
+  }, [port, onDone, connection]);
 
   useEffect(() => {
     if (state !== "ok") return;
