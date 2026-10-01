@@ -212,6 +212,7 @@ function PackageList({ port, onInstalled, onViewInstalled, onApplying }: MinePro
     try {
       const pkg = await port.submitMarket(slug);
       setRows((prev) => prev?.map((p) => (p.slug === slug ? { ...p, ...pkg, installed: p.installed } : p)) ?? null);
+      setAttempt((n) => n + 1);
     } catch (e) {
       setSendError([slug, reason(e)]);
     } finally {
