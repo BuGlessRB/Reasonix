@@ -721,23 +721,6 @@ func (c *Controller) onInboxTurnDone() {
 	c.inbox.mu.Unlock()
 }
 
-// onInboxUnappliedSteer keeps accepted-but-unapplied steers for inspection.
-func (c *Controller) onInboxUnappliedSteer(itemID string) {
-	if itemID == "" {
-		return
-	}
-	st, err := c.ensureInbox()
-	if err != nil {
-		return
-	}
-	_ = st.SetStateCoded(itemID, sessioninbox.StateUncertain, sessioninbox.BlockSteerUnapplied, "steer accepted but unapplied before turn exit")
-	_ = st.SetPaused(true)
-	c.inbox.mu.Lock()
-	c.inbox.untrackActive(itemID)
-	c.inbox.mu.Unlock()
-	sessioninbox.NoteUncertain()
-}
-
 // onInboxSteerConsumed marks steer_accepted → steer_consumed.
 func (c *Controller) onInboxSteerConsumed(itemID string) {
 	if itemID == "" {

@@ -112,8 +112,12 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 // Cancel aborts the in-flight turn. A goroutine blocked awaiting approval
 // unblocks via the cancelled context.
 func (c *Controller) Cancel() {
+	c.cancelTurn(causeStop)
+}
+
+func (c *Controller) cancelTurn(cause cancelCause) {
 	c.mu.Lock()
-	cancel := c.gate.requestCancel()
+	cancel := c.gate.requestCancel(cause)
 	c.mu.Unlock()
 	if cancel != nil {
 		c.approval.clearAll()

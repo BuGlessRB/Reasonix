@@ -15,6 +15,7 @@ import (
 	"reasonix/internal/runtime/agent"
 	"reasonix/internal/state/sessioninbox"
 	"reasonix/internal/state/sessionstore"
+	"reasonix/internal/state/store"
 )
 
 func TestInboxSnapshotRecoversUnownedInFlightItem(t *testing.T) {
@@ -440,4 +441,50 @@ func TestInboxCompletionFailuresCarryTypedBlockCodes(t *testing.T) {
 		c.onInboxTurnDone()
 		held(t, c, id, sessioninbox.BlockSnapshotFailed)
 	})
+}
+
+// After a skip, an item whose body can no longer be read is not requeued: the
+// queue never re-runs what it cannot re-read, so it stays held for inspection.
+func TestSkippedAskKeepsAnUnreadableItemHeld(t *testing.T) {
+	dir := testenv.TempDir(t)
+	session := filepath.Join(dir, "s.jsonl")
+	if err := os.WriteFile(session, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := New(Options{SessionPath: session, SessionDir: dir, Sink: event.Discard})
+	rec, err := c.EnqueueInbox(InboxRequest{Intent: sessioninbox.IntentSteer, Submit: "body that will vanish"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := c.ensureInbox()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetState(rec.ItemID, sessioninbox.StateSteerAccepted, ""); err != nil {
+		t.Fatal(err)
+	}
+	blobs := filepath.Join(store.SessionInboxDir(session), "blobs")
+	entries, err := os.ReadDir(blobs)
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("expected a blob to remove: %v %v", entries, err)
+	}
+	for _, e := range entries {
+		if err := os.Remove(filepath.Join(blobs, e.Name())); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.mu.Lock()
+	c.gate.running, c.gate.canceling, c.gate.cause = true, true, causeAskSkipped
+	c.mu.Unlock()
+	c.inbox.mu.Lock()
+	c.inbox.trackActive(rec.ItemID)
+	c.inbox.mu.Unlock()
+
+	c.onInboxUnappliedSteer(rec.ItemID)
+
+	snap := c.InboxSnapshot()
+	if !snap.Paused || len(snap.Items) != 1 || snap.Items[0].State != sessioninbox.StateUncertain ||
+		snap.Items[0].BlockCode != sessioninbox.BlockSteerUnapplied {
+		t.Fatalf("an unreadable item must stay uncertain and paused, got %+v", snap)
+	}
 }
