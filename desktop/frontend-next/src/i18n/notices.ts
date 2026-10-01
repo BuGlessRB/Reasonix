@@ -17,5 +17,7 @@ export const NOTICE_TEXT: Record<string, string> = {
   suspected_injection: "一条外部内容看起来在向智能体下指令，已提醒它只当资料看待",
   await_user: "等待你的输入",
   approval_mode_unrecognized: "配置里的默认审批档位本版本不认识，已按每次询问处理；在界面里选一个档位即可替换",
+  unapplied_steer: "引导没有生效：这一轮在处理它之前就结束了。如果仍然需要，请再发送一次：",
+  context_budget: "上下文已用到压缩阈值的 {percent}%，已告知模型约剩 {remaining} 个词元的空间。",
   perseveration_loop: "模型卡在重复输出同一段文字，这一轮已停止；可以重试、补充引导，或换一个供应商/模型",
 };

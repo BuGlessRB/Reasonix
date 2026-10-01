@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 
+	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/tool"
 )
 
@@ -112,12 +113,25 @@ Work narrower from here: scope searches, read ranges rather than whole files, an
 </context-budget>`, budget.TokensRemaining, budget.TokensUsed, budget.Window, budget.CompactAt)
 }
 
-// contextBudgetNoticeSummary is the user-facing one-liner for the same event.
-// The model gets the instructions; the user gets to see that it was told.
-func contextBudgetNoticeSummary(budget tool.ContextBudget) string {
+// contextBudgetNoticeEvent is the user-facing record of the same event. The
+// model gets the instructions; the user gets to see that it was told. Frontends
+// localize by Code and read the figures from Detail; Text is the English
+// fallback for sinks that know no code.
+func contextBudgetNoticeEvent(budget tool.ContextBudget) event.Event {
 	if !budget.Known() {
-		return "Context budget unmeasured; the model was not notified."
+		return event.Event{Kind: event.Notice, Level: event.LevelWarn,
+			Text: "Context budget unmeasured; the model was not notified."}
 	}
-	return fmt.Sprintf("Context at %d%% of the compaction threshold — the model was told it has about %d tokens of room left.",
-		int(float64(budget.TokensUsed)/float64(budget.CompactAt)*100), budget.TokensRemaining)
+	figures := event.ContextBudgetFigures{
+		Percent:   int(float64(budget.TokensUsed) / float64(budget.CompactAt) * 100),
+		Remaining: budget.TokensRemaining,
+	}
+	return event.Event{
+		Kind:   event.Notice,
+		Level:  event.LevelWarn,
+		Code:   event.NoticeCodeContextBudget,
+		Detail: figures.Encode(),
+		Text: fmt.Sprintf("Context at %d%% of the compaction threshold — the model was told it has about %d tokens of room left.",
+			figures.Percent, figures.Remaining),
+	}
 }

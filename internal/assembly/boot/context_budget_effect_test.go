@@ -126,3 +126,63 @@ func TestEffectContextBudgetToolIsOffered(t *testing.T) {
 		t.Fatalf("context_budget absent from the provider tool surface: %v", toolNames(reqs[0]))
 	}
 }
+
+// TestEffectContextBudgetNoticeReachesTheFrontendCoded proves the user-facing
+// half at the frontend sink: the notice that tells the user the model was warned
+// carries its code and figures, so every frontend can word it in its own language.
+func TestEffectContextBudgetNoticeReachesTheFrontendCoded(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+
+	rec := &budgetEffectProvider{bulk: strings.Repeat("work output line with detail. ", 400)}
+	provider.Register("boot-budget-effect-sink", func(provider.Config) (provider.Provider, error) {
+		return rec, nil
+	})
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+compact_ratio = 0.5
+recent_keep = 2
+
+[[providers]]
+name = "test-model"
+kind = "boot-budget-effect-sink"
+model = "x"
+context_window = 32000
+`)
+	approveWorkspace(t, dir)
+
+	var mu sync.Mutex
+	var coded []event.Event
+	sink := event.FuncSink(func(e event.Event) {
+		if e.Kind == event.Notice && e.Code == event.NoticeCodeContextBudget {
+			mu.Lock()
+			coded = append(coded, e)
+			mu.Unlock()
+		}
+	})
+	ctrl, err := Build(context.Background(), Options{Sink: sink})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+
+	for _, prompt := range []string{"start the task", "keep going", "keep going", "keep going", "keep going"} {
+		if err := ctrl.Run(context.Background(), prompt); err != nil {
+			t.Fatalf("Run(%q): %v", prompt, err)
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(coded) == 0 {
+		t.Fatal("the frontend never received a coded context_budget notice")
+	}
+	figures, ok := event.DecodeContextBudgetFigures(coded[0].Detail)
+	if !ok || figures.Percent < 75 {
+		t.Fatalf("Detail must carry the figures at or past the first rung, got %+v ok=%v", figures, ok)
+	}
+}

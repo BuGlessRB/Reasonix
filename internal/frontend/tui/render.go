@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"reasonix/internal/base/i18n"
+	"reasonix/internal/base/textutil"
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/eventwire"
 	"reasonix/internal/contract/pricing"
@@ -281,6 +282,26 @@ func renderCompaction(it *Item, width int) string {
 	return "\n" + strings.Join(lines, "\n")
 }
 
+// codedNoticeText words a coded notice in the UI language from its typed payload; a
+// code with no wording here, or a payload that does not decode, keeps the
+// kernel's English.
+const unappliedSteerCap = 400
+
+func codedNoticeText(it *Item) string {
+	switch it.Code {
+	case event.NoticeCodeContextBudget:
+		if f, ok := event.DecodeContextBudgetFigures(it.Detail); ok {
+			return fmt.Sprintf(i18n.M.NoticeContextBudgetFmt, f.Percent, f.Remaining)
+		}
+	case event.NoticeCodeUnappliedSteer:
+		if it.Detail != "" {
+			return fmt.Sprintf(i18n.M.NoticeUnappliedSteerFmt, textutil.TruncateGraphemes(textutil.SanitizeDisplay(it.Detail), unappliedSteerCap, "…"))
+		}
+		return textutil.TruncateGraphemes(textutil.SanitizeDisplay(it.Text), unappliedSteerCap, "…")
+	}
+	return it.Text
+}
+
 func renderNotice(it *Item) string {
 	mark := termrender.Dim("  · ")
 	switch it.Level {
@@ -289,7 +310,7 @@ func renderNotice(it *Item) string {
 	case "warn", "warning":
 		mark = termrender.Yellow("  ! ")
 	}
-	text := it.Text
+	text := codedNoticeText(it)
 	if it.Count > 1 {
 		text += termrender.Dim(fmt.Sprintf(" (×%d)", it.Count))
 	}

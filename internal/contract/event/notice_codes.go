@@ -53,4 +53,6 @@ const (
 	NoticeCodeAwaitUser = "await_user"
 	// A slash command nothing resolves, refused rather than sent as prose.
 	NoticeCodeUnknownCommand = "unknown_command"
+	// The model was told the compaction trigger is near; Detail is a ContextBudgetFigures.
+	NoticeCodeContextBudget = "context_budget"
 )

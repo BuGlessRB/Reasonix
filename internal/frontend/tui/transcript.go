@@ -501,6 +501,7 @@ func (t *Transcript) foldNotice(ev eventwire.Event) {
 			((last.Code != "" && last.Code == ev.Code) || (last.Code == "" && ev.Code == "" && last.Text == ev.Text))
 		if same {
 			last.Count = max(last.Count, 1) + 1
+			last.Text, last.Detail = ev.Text, ev.Detail
 			return
 		}
 	}
