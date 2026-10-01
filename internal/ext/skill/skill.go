@@ -97,14 +97,9 @@ type Skill struct {
 	// registry: writer tools are stripped and bash enforces the read-only
 	// command policy at execution time (frontmatter `read-only:`). This is a
 	// tool-boundary contract, not a prompt promise.
-	ReadOnly bool
-	Color    string // optional display tag for UI surfaces (frontmatter `color:`); no runtime effect
-	// Invocation gates whether this skill enters the pinned Skills index the
-	// model reads every turn. "auto" (default) behaves like every skill always
-	// has. "manual" keeps the skill invocable by name (/<name>, run_skill) but
-	// invisible to model-initiated discovery — for user-authored subagent
-	// profiles meant to be triggered deliberately, not autonomously.
-	Invocation string // auto | manual (frontmatter `invocation:`)
+	ReadOnly   bool
+	Color      string // optional display tag for UI surfaces (frontmatter `color:`); no runtime effect
+	Invocation string // auto lists, manual hides; DisableModelInvocation independently gates model calls
 	InvocationFlags
 	// Routing metadata is intentionally kept out of the cache-stable Skills
 	// index; it feeds per-turn capability hints only.
