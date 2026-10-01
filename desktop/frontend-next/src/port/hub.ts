@@ -49,6 +49,15 @@ export interface TreeSession {
   versions?: TreeSession[];
 }
 
+export interface HostCapabilities {
+  // The kernel can open a picker on its own machine. A browser on a headless
+  // server gets false and must offer the path API instead.
+  pickFolder: boolean;
+  // The kernel exposes POST /tree/workspaces. This is what makes the fallback
+  // meaningful rather than sending the reader back to the desktop shell.
+  addWorkspace: boolean;
+}
+
 export interface TreeWorkspace {
   root: string;
   name: string;
@@ -115,6 +124,10 @@ export interface HubPort extends SharePort {
   // kernel that would ask is the one this build cannot reach.
   onRemoteAsk(cb: (ask: RemoteAsk) => void): () => void;
   answerRemote(id: string, ok: boolean, text: string): void;
+  // What the kernel can do independently of the desktop window. It is a
+  // separate read so the page can choose a usable fallback before invoking a
+  // host-only action.
+  hostCapabilities(): Promise<HostCapabilities>;
   pickFolder(): Promise<string | null>;
   // Absolute paths of every file dropped anywhere on the window. It belongs
   // here rather than on a pane because the window has one of it: the shell
@@ -357,6 +370,30 @@ export class SseHub implements HubPort {
       this.asked.set(ask.askId, ask);
       this.askSubs.forEach((cb) => cb(ask));
     }
+  }
+
+  async hostCapabilities() {
+    const shellCanPick = await host()
+      .describe()
+      .then((info) => info.shell === "electron")
+      .catch(() => false);
+
+    const res = await fetch("/host/capabilities", { credentials: "same-origin" });
+    // A kernel predating this probe has no route and keeps the old picker
+    // attempt; the caller already treats null as "no picker" safely.
+    if (res.status === 404 || res.status === 501 || res.status === 503) {
+      return { pickFolder: true, addWorkspace: true };
+    }
+    if (!res.ok) await SseHub.fail("/host/capabilities", res);
+
+    const body = (await res.json().catch(() => null)) as Partial<HostCapabilities> | null;
+    if (typeof body?.pickFolder !== "boolean" || typeof body.addWorkspace !== "boolean") {
+      return { pickFolder: true, addWorkspace: true };
+    }
+    return {
+      pickFolder: shellCanPick || body.pickFolder,
+      addWorkspace: body.addWorkspace,
+    };
   }
 
   async pickFolder() {

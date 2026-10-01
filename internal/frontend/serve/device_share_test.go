@@ -209,6 +209,7 @@ func TestAPairedDeviceCannotReachTheWindowsOwnRoutes(t *testing.T) {
 		{http.MethodPost, "/share/offer"},
 		{http.MethodPost, "/share/cloud-offer"},
 		{http.MethodGet, "/share"},
+		{http.MethodGet, "/host/capabilities"},
 		{http.MethodPost, "/host/pick-folder"},
 		{http.MethodGet, "/host/workspaces/locate?root=%2Ftmp"},
 		{http.MethodGet, "/remotes"},
