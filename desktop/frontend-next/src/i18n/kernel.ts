@@ -104,6 +104,7 @@ const SAID: Record<string, string> = {
   "backup.not_found": "这份备份已不存在",
   "backup.limit_reached": "备份数量已达上限，请先删除一份旧备份",
   "backup.consent_required": "有会在本机运行程序或改变密钥去向的项目，需要逐项确认后才能恢复",
+  "workspace.limit_reached": "项目列表已满（32 个），请先移除一个项目再添加",
   "workspace.changing_disabled": "这台服务器不支持切换工作区",
   "settings.unknown_preset": "不存在该预设",
   "drop.too_many_paths": "本次拖入 {count} 个，最多允许 {limit} 个",

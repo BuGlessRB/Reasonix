@@ -188,6 +188,15 @@ export class MockHub implements HubPort {
     return Promise.resolve();
   }
 
+  moveWorkspace(path: string, direction: -1 | 1) {
+    const at = this.roots.indexOf(path);
+    const to = at + direction;
+    if (at >= 0 && to >= 0 && to < this.roots.length) {
+      [this.roots[at], this.roots[to]] = [this.roots[to], this.roots[at]];
+    }
+    return Promise.resolve();
+  }
+
   removeSession(_path: string) {
     return Promise.resolve();
   }

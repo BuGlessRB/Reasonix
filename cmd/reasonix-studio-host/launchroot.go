@@ -15,7 +15,7 @@ import (
 // the app's own folder in the sidebar again after every removal.
 func launchWorkspace(appExe string) string {
 	home, _ := os.UserHomeDir()
-	return pickLaunchWorkspace(boot.ResolveWorkspaceRoot(""), appExe, serve.Workspaces(), home)
+	return pickLaunchWorkspace(boot.ResolveWorkspaceRoot(""), appExe, serve.LaunchWorkspaces(), home)
 }
 
 func pickLaunchWorkspace(cwd, appExe string, remembered []string, home string) string {

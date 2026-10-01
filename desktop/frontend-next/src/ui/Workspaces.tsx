@@ -13,6 +13,7 @@ import { useTreeKeys } from "./tree";
 import { useDismiss } from "./dismiss";
 import { asksDelete } from "./keys";
 import { clearDraftForSession } from "./drafts";
+import { WorkspaceOrder, workspaceMenuKeys } from "./WorkspaceOrder";
 
 const parentOf = (root: string) => root.replace(/[/\\]+$/, "").split(/[/\\]/).slice(-2, -1)[0] ?? "";
 
@@ -79,7 +80,17 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
   const [sessionMenuAt, setSessionMenuAt] = useState({ left: 0, top: 0 });
   const sessionMenuBox = useRef<HTMLDivElement>(null);
   const sessionMenuPortal = useRef<HTMLDivElement>(null);
-  useDismiss(!!sessionMenu, sessionMenuBox, () => setSessionMenu(""), sessionMenuPortal);
+  const workspaceMenuTrigger = useRef<HTMLButtonElement | null>(null);
+  const dismissMenu = () => {
+    if (workspaceMenuTrigger.current?.dataset.target === sessionMenu) workspaceMenuTrigger.current.focus();
+    setSessionMenu("");
+  };
+  useDismiss(!!sessionMenu, sessionMenuBox, dismissMenu, sessionMenuPortal);
+  useEffect(() => {
+    if (sessionMenu && workspaceMenuTrigger.current?.dataset.target === sessionMenu) {
+      sessionMenuPortal.current?.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')?.focus();
+    }
+  }, [sessionMenu]);
   // What was already sent for this session, so Enter's commit and the blur it
   // causes do not both reach the host with the same name.
   const renamed = useRef<Record<string, string>>({});
@@ -371,10 +382,12 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
                         title={t("更多操作")}
                         aria-label={t("项目操作：{name}", { name: ws.name })}
                         aria-expanded={sessionMenu === ws.root}
+                        aria-haspopup="menu"
                         onClick={(ev) => {
                           ev.stopPropagation();
                           const opening = sessionMenu !== ws.root;
                           if (opening) {
+                            workspaceMenuTrigger.current = ev.currentTarget;
                             const anchor = ev.currentTarget.getBoundingClientRect();
                             setSessionMenuAt({
                               left: Math.min(window.innerWidth - 240, anchor.right + 8),
@@ -388,13 +401,15 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
                       </button>
                     </span>
                     {sessionMenu === ws.root && createPortal(
-                      <div ref={sessionMenuPortal} className="session-pop" role="menu" aria-label={t("项目操作")} style={sessionMenuAt} onClick={(ev) => ev.stopPropagation()}>
+                      <div ref={sessionMenuPortal} className="session-pop" role="menu" aria-label={t("项目操作")} style={sessionMenuAt} data-action-keydown="workspace.menu" data-target={ws.root} onKeyDown={workspaceMenuKeys} onClick={(ev) => ev.stopPropagation()}>
                         <div className="session-pop-head">
                           <b>{ws.name}</b>
                           <small className="session-pop-path" title={ws.root}>{ws.root}</small>
                         </div>
+                        {ws.remembered && <WorkspaceOrder root={ws.root} position={tree.filter((w) => w.remembered).findIndex((w) => w.root === ws.root)} total={tree.filter((w) => w.remembered).length}
+                          hub={hub} reload={reload} dismiss={dismissMenu} onError={onError} />}
                         <div className="session-pop-group">
-                          <button className="danger" role="menuitem" data-action="workspace.remove" onClick={() => { setConfirm(ws.root); setSessionMenu(""); }}>
+                          <button className="danger" role="menuitem" data-action="workspace.remove" onClick={() => { setConfirm(ws.root); dismissMenu(); }}>
                             <StudioIcon name="close" /><span>{t("从列表移除")}</span><small>{t("不删除文件")}</small>
                           </button>
                         </div>

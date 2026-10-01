@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,5 +60,33 @@ func TestPickLaunchWorkspaceFallbackOrder(t *testing.T) {
 		if got := pickLaunchWorkspace(c.cwd, exe, c.remembered, home); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+func TestLaunchWorkspaceKeepsLaunchProjectAfterSidebarReorder(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "state")
+	app := filepath.Join(base, "app")
+	a, b := filepath.Join(base, "a"), filepath.Join(base, "b")
+	for _, dir := range []string{home, app, a, b} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("REASONIX_HOME", home)
+	t.Chdir(app)
+	data, _ := json.Marshal(map[string]any{"paths": []string{b, a}, "launch": a})
+	if err := os.WriteFile(filepath.Join(home, "serve-workspaces.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(app, "Reasonix Studio")
+	if got := launchWorkspace(exe); got != a {
+		t.Fatalf("launchWorkspace = %q, want the pre-reorder launch project %q", got, a)
+	}
+	if err := os.Remove(a); err != nil {
+		t.Fatal(err)
+	}
+	if got := launchWorkspace(exe); got != b {
+		t.Fatalf("missing launch project = %q, want next remembered folder %q", got, b)
 	}
 }

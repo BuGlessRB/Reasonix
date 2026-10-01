@@ -71,6 +71,7 @@ export interface HubPort extends SharePort {
   tree(): Promise<TreeWorkspace[]>;
   addWorkspace(path: string): Promise<TreeWorkspace>;
   removeWorkspace(path: string): Promise<void>;
+  moveWorkspace(path: string, direction: -1 | 1): Promise<void>;
   removeSession(path: string): Promise<void>;
   archiveSession(path: string, archived: boolean): Promise<void>;
   renameSession(path: string, title: string): Promise<void>;
@@ -202,6 +203,10 @@ export class SseHub implements HubPort {
 
   async removeWorkspace(path: string) {
     await this.post<void>("/tree/workspaces/remove", { path });
+  }
+
+  async moveWorkspace(path: string, direction: -1 | 1) {
+    await this.post<void>("/tree/workspaces/move", { path, direction });
   }
 
   async removeSession(path: string) {

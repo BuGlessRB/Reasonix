@@ -68,6 +68,7 @@ func (h *Hub) registerTreeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /tree", h.tree)
 	mux.HandleFunc("POST /tree/workspaces", h.addWorkspace)
 	mux.HandleFunc("POST /tree/workspaces/remove", h.removeWorkspace)
+	mux.HandleFunc("POST /tree/workspaces/move", h.moveWorkspace)
 	mux.HandleFunc("POST /tree/sessions/remove", h.removeSession)
 	mux.HandleFunc("POST /tree/sessions/archive", h.archiveSession)
 	mux.HandleFunc("POST /tree/sessions/rename", h.renameSession)
@@ -314,7 +315,14 @@ func (h *Hub) addWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	rememberWorkspace(dir)
+	if err := addRememberedWorkspace(r.Context(), dir); err != nil {
+		if errors.Is(err, errWorkspaceListFull) {
+			refuse(w, http.StatusConflict, "workspace.limit_reached", err.Error(), nil)
+		} else {
+			writeErr(w, http.StatusInternalServerError, err)
+		}
+		return
+	}
 	writeJSON(w, treeWorkspace{Root: dir, Name: fileutil.RootName(dir), Sessions: []treeSession{}})
 }
 
@@ -486,8 +494,9 @@ type rootRef struct {
 // roots returns the sidebar's folders: everything remembered, plus whatever a
 // pane is driving, so an open workspace can never be missing from the tree.
 func (h *Hub) roots() []rootRef {
+	paths := Workspaces()
 	saved := map[string]bool{}
-	for _, dir := range Workspaces() {
+	for _, dir := range paths {
 		if dir = strings.TrimSpace(dir); dir != "" {
 			saved[dir] = true
 		}
@@ -502,11 +511,11 @@ func (h *Hub) roots() []rootRef {
 		seen[dir] = true
 		out = append(out, rootRef{dir: dir, remembered: saved[dir]})
 	}
+	for _, dir := range paths {
+		add(dir)
+	}
 	for _, rt := range h.localRuntimes() {
 		add(rt.Server.Controller().WorkspaceRoot())
-	}
-	for _, dir := range Workspaces() {
-		add(dir)
 	}
 	return out
 }
