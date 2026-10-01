@@ -60,15 +60,15 @@ function ServerInput({ port, canProject, onClose, onInstalled }: Props) {
     if (!draft) return;
     setBusy(true);
     setError("");
+    const out: McpInstallResult[] = [];
     try {
-      const out: McpInstallResult[] = [];
       for (const s of draft.servers) out.push(await port.installMcp(s, scope));
       setResults(out);
-      if (out.some((r) => r.state !== "issue")) onInstalled();
     } catch (e) {
       setError(reason(e));
     } finally {
       setBusy(false);
+      if (out.some((r) => r.state !== "issue")) onInstalled();
     }
   };
 
