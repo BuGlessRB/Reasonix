@@ -7,7 +7,8 @@ import fs from "node:fs";
 
 const require = createRequire(import.meta.url);
 const { parse, readActs } = require("../src/host.js");
-const { contextTemplate } = require("../src/editmenu.js");
+const { contextTemplate, editMenuTemplate } = require("../src/editmenu.js");
+const { uiLanguage } = require("../src/uilang.js");
 const { externalTarget } = require("../src/links.js");
 const { offerCleanup, ownBundle } = require("../src/legacy.js");
 const { stripPackageGrants, readReport, unpaintedWindowCause } = require("../src/packagegrants.js");
@@ -61,6 +62,34 @@ test("the context menu mirrors what the page says is possible", () => {
   assert.deepEqual(byRole, {
     undo: true, redo: false, cut: true, copy: true, paste: false, selectAll: true,
   });
+});
+
+test("the edit menu's labels follow the interface language, not the system's", () => {
+  const params = { isEditable: true, selectionText: "", editFlags: {} };
+  const labels = (lang) => contextTemplate(params, lang).filter((i) => i.role).map((i) => i.label);
+  assert.deepEqual(labels("zh"), ["撤销", "重做", "剪切", "复制", "粘贴", "全选"]);
+  assert.deepEqual(labels("en"), ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"]);
+  assert.equal(editMenuTemplate("zh").label, "编辑");
+  assert.deepEqual(editMenuTemplate("zh").submenu.filter((i) => i.role).map((i) => i.role),
+    ["undo", "redo", "cut", "copy", "paste", "selectAll"]);
+});
+
+test("the interface language is the page's own choice, else the machine's", () => {
+  assert.equal(uiLanguage({ "rx-lang": "zh" }, "en-US"), "zh");
+  assert.equal(uiLanguage({ "rx-lang": "en" }, "zh-CN"), "en");
+  assert.equal(uiLanguage({ "rx-lang": "" }, "zh-Hans-CN"), "zh");
+  assert.equal(uiLanguage({}, "fr-FR"), "en");
+  assert.equal(uiLanguage(undefined, undefined), "en");
+});
+
+test("a saved preference tells the shell so it can follow it", () => {
+  const handlers = {};
+  const ipc = { on: (name, fn) => { handlers[name] = fn; } };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rx-prefs-"));
+  let saved = 0;
+  registerPrefs(ipc, () => path.join(dir, "p.json"), () => true, () => { saved++; });
+  handlers["prefs:save"]({ returnValue: null }, { "rx-lang": "zh" });
+  assert.equal(saved, 1);
 });
 
 test("only http and https ever reach the platform opener", () => {

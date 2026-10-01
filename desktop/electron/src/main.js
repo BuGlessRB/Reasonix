@@ -13,6 +13,7 @@ const { StudioHost } = require("./hostclient");
 const { installTray } = require("./tray");
 const { instanceID, profileFor } = require("./instance");
 const { installApplicationMenu, installContextMenu } = require("./menu");
+const { uiLanguage } = require("./uilang");
 const { installFullScreenKey } = require("./fullscreen");
 const { installReload } = require("./reload");
 const { externalTarget } = require("./links");
@@ -24,7 +25,7 @@ const { stripPackageGrants, unpaintedWindowCause } = require("./packagegrants");
 const { BrowserProtocol } = require("./browserprotocol");
 const { BrowserViews } = require("./browserviews");
 const { startBrowserRelay } = require("./browserrelay");
-const { prefsFile, registerPrefs } = require("./prefs");
+const { loadPrefs, prefsFile, registerPrefs } = require("./prefs");
 const { openLogs, redactArgv, failStartup } = require("./shelllog");
 
 // A page in a minimized or fully covered window counts as hidden, and a hidden
@@ -166,7 +167,8 @@ async function boot() {
     const cause = unpaintedWindowCause(grants, app.getLocale());
     if (cause) dialog.showErrorBox(cause.title, cause.detail);
   });
-  installContextMenu(win.webContents, win);
+  installContextMenu(win.webContents, win, uiLang);
+  installApplicationMenu(uiLang);
   installFullScreenKey(win.webContents, win);
   reload = installReload(win.webContents, win);
   win.once("ready-to-show", () => win.show());
@@ -314,7 +316,8 @@ function fromWindow(event) {
   return win && !win.isDestroyed() && event.sender === win.webContents ? win : null;
 }
 
-registerPrefs(ipcMain, () => prefsFile(app.getPath("userData")), fromWindow);
+const uiLang = () => uiLanguage(loadPrefs(prefsFile(app.getPath("userData"))), app.getLocale());
+registerPrefs(ipcMain, () => prefsFile(app.getPath("userData")), fromWindow, () => installApplicationMenu(uiLang));
 
 ipcMain.handle("window:minimise", (event) => {
   fromWindow(event)?.minimize();
@@ -428,7 +431,7 @@ if (!primary) {
 
 app.whenReady().then(() => {
   if (!primary) return;
-  installApplicationMenu();
+  installApplicationMenu(uiLang);
   boot().catch((err) => {
     console.error("reasonix-studio:", err.message);
     if (quitting) {
