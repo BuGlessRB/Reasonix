@@ -670,6 +670,27 @@ what exists.
 - The connect card grows inside the opening scene rather than starting a second
   screen, so the introduction above it stays present and the palette follows the
   scene (a dark ground) rather than the app theme.
+- The stage is exactly the window's height and is the scroll container, because
+  the body clips.
+- That height is `100dvh / var(--zoom)`, as on the body: `vh` does not scale
+  with the zoom setting, so a bare `100dvh` stage would be taller than the
+  zoomed window.
+- The title bar is `position: sticky; top: 0` inside the stage: it holds the
+  drag region and the window buttons, which must stay on screen however far
+  the card is scrolled.
+- A stage with only a `min-height` grows with its content and never overflows
+  itself, so the connected state pushed the start button below a short window
+  with nothing to scroll.
+- The ambient glow is `position: fixed`: absolutely positioned inside a scroll
+  container it counts as scrollable overflow, and at a wide window (38vw tall)
+  it let the stage scroll far past the card.
+- The shell is `flex: none`: a shrinkable shell is cut off instead of making
+  the stage scroll.
+- The stage's `scroll-padding-top` equals the title bar's 64px, so focus moving
+  up the form scrolls the field below the sticky bar rather than under it.
+- The title bar and footer are `flex: none` too; as shrinkable flex items they
+  were squeezed to half height once the card overflowed.
+- The shell clips with `overflow: clip`, so it is not a scroll container.
 - Its labels are not uppercased: tracking pulls apart the Chinese particles in
   mixed text. The "get a key" entry sits at the label's right end with tracking
   zeroed, because the label's .06em is for Latin small labels.

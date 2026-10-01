@@ -45,7 +45,7 @@ class BenchPort extends MockPort {
   }
 
   async providerSetup() {
-    return null;
+    return ONBOARDING ? { required: true, provider: "", model: "" } : null;
   }
 
   async appearance() {
@@ -149,6 +149,7 @@ const WORKSPACES = Number(query.get("ws") ?? 0);
 // ?pref= 是「内核记着的语言」。真机上它来自 config；这里由地址给，好让
 // 一次验证能把两侧摆成同一个值——否则 adopt 会认为本地缓存过期。
 const PREF = query.get("pref");
+const ONBOARDING = query.has("onboarding");
 const SESSIONS = Number(query.get("sess") ?? 0);
 // ?turns= is how long the conversation being opened already is.
 const TURNS = Number(query.get("turns") ?? 0);
