@@ -89,8 +89,8 @@ copyable first extension: it includes a Manifest v2 file, a minimal sidecar,
 cross-platform build commands, linked installation, `/reload`, and a visible
 input-rewrite check.
 
-[`examples/fullsidecar`](examples/fullsidecar/main.go) is the reference
-extension: input rewriting (try the `/fs ` trigger), tool interception
+[`examples/fullsidecar`](examples/fullsidecar/README.md) is the reference
+extension: protocol-level input rewriting, tool interception
 (block + argument rewrite), system-prompt strategy replacement, a fake
 streaming provider (text chunks, a tool call, usage), structured UI (status +
 card on session start, a form prompt behind the `demo` action), and a clean
@@ -102,12 +102,12 @@ cp ./examples/fullsidecar/reasonix-plugin.json /tmp/full-sidecar/
 go build -o /tmp/full-sidecar/bin/full-sidecar ./examples/fullsidecar
 ```
 
-The resulting directory is a complete Manifest v2 plugin package. The binary
-speaks the protocol on stdin/stdout, so install the directory as a plugin
-package (or point the host-side conformance suite at it) rather than running
-the binary interactively. It is installed into a temporary Reasonix home and
-driven end-to-end against the real host by `internal/ext/extension/conformance` in
-the Reasonix repository.
+The resulting directory is a complete Manifest v2 plugin package. Follow the
+example's [installation and host checks](examples/fullsidecar/README.md) to
+install it and exercise its declared demo action. The binary speaks the
+protocol on stdin/stdout, so do not run it interactively. The repository's
+conformance suite checks its wire behavior; the boot effect test checks its
+installed strategy, provider catalog, and UI round trip at the host boundary.
 
 ## Generated wire types
 
