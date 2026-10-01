@@ -136,8 +136,10 @@ func EnsureServe(ctx context.Context, conn Conn, opts Options) (Result, error) {
 		return Result{State: st, Token: tok, Reused: true, Workspace: target.NativePath(st.Workspace)}, nil
 	}
 
-	// 3. Locate or install a usable reasonix.
-	bin, version, err := ensureBinary(ctx, conn, target, fs, opts, home, goos, goarch, paths)
+	// 3. Locate or install a usable reasonix. A reattach never gets here, so
+	// it never pays for the login-shell capture.
+	conn, env := connWithLoginEnv(ctx, conn, target)
+	bin, version, err := ensureBinary(ctx, conn, env, target, fs, opts, home, goos, goarch, paths)
 	if err != nil {
 		return Result{}, err
 	}

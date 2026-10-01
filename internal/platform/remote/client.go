@@ -199,46 +199,55 @@ type ExecResult struct {
 	ExitCode int
 }
 
-// Exec runs cmd via `sh -c` on a fresh session and collects its output.
+// Exec runs cmd via `sh -c` on a fresh session and collects its output. When
+// ctx ends first the session is closed, so the channel is not held open by a
+// command that never returns.
 func (c *Client) Exec(ctx context.Context, cmd string) (ExecResult, error) {
 	cl, err := c.SSH()
 	if err != nil {
 		return ExecResult{}, err
 	}
-	type res struct {
-		out ExecResult
-		err error
+	sess, err := cl.NewSession()
+	if err != nil {
+		return ExecResult{}, err
 	}
-	ch := make(chan res, 1)
-	go func() {
-		sess, serr := cl.NewSession()
-		if serr != nil {
-			ch <- res{err: serr}
-			return
-		}
-		defer sess.Close()
-		var stdout, stderr bytes.Buffer
-		sess.Stdout = &stdout
-		sess.Stderr = &stderr
-		runErr := sess.Run(cmd)
+	return runExec(ctx, &sshExecSession{Session: sess}, cmd)
+}
+
+// execSession is the part of *ssh.Session runExec drives.
+type execSession interface {
+	Run(cmd string) error
+	Close() error
+	capture(stdout, stderr *bytes.Buffer)
+}
+
+type sshExecSession struct{ *ssh.Session }
+
+func (s *sshExecSession) capture(stdout, stderr *bytes.Buffer) {
+	s.Stdout, s.Stderr = stdout, stderr
+}
+
+func runExec(ctx context.Context, sess execSession, cmd string) (ExecResult, error) {
+	defer sess.Close()
+	var stdout, stderr bytes.Buffer
+	sess.capture(&stdout, &stderr)
+	done := make(chan error, 1)
+	go func() { done <- sess.Run(cmd) }()
+	select {
+	case <-ctx.Done():
+		_ = sess.Close()
+		return ExecResult{}, ctx.Err()
+	case runErr := <-done:
 		out := ExecResult{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}
 		if runErr != nil {
 			var ee *ssh.ExitError
 			if errors.As(runErr, &ee) {
 				out.ExitCode = ee.ExitStatus()
-				ch <- res{out: out}
-				return
+				return out, nil
 			}
-			ch <- res{out: out, err: runErr}
-			return
+			return out, runErr
 		}
-		ch <- res{out: out}
-	}()
-	select {
-	case <-ctx.Done():
-		return ExecResult{}, ctx.Err()
-	case r := <-ch:
-		return r.out, r.err
+		return out, nil
 	}
 }
 
