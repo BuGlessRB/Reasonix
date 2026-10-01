@@ -76,3 +76,36 @@ disabled_skills = ["review"]                  # hidden until /skills enable
 ```
 
 Skills also arrive inside plugin packages; see [PLUGIN_PACKAGES.md](PLUGIN_PACKAGES.md).
+
+## Sharing a skill with a repository
+
+Commit a project skill so collaborators receive the same playbook with the
+repository. From the repository root, create a small review checklist:
+
+```bash
+mkdir -p .agents/skills/team-review
+cat > .agents/skills/team-review/SKILL.md <<'EOF'
+---
+name: team-review
+description: Review local changes using the team checklist
+---
+Read the current diff and the files it changes.
+Report correctness issues with a file path, a concrete trigger, and the expected behavior.
+Separate findings from verification that still needs to run.
+EOF
+git add .agents/skills/team-review/SKILL.md
+git commit -m "Add shared review skill"
+```
+
+Check that the file is tracked, including any required files in its skill
+folder. Open Reasonix in the checkout, confirm `/skills` lists `team-review`
+from the project path, and invoke `/team-review inspect this change`.
+A project skill takes precedence over a personal skill with the same name.
+
+`/skills disable team-review` records a personal project switch in your
+Reasonix home; it does not edit the committed playbook. Linked worktrees of
+the same repository share that project switch within one Reasonix home.
+Collaborators using separate homes can choose independently.
+
+Use `/skills enable team-review` to restore it. To retire the shared playbook,
+remove its tracked folder through the repository's normal review process.
