@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobEntry } from "../port/port";
 import { t } from "../i18n";
 import { StudioIcon } from "./StudioIcon";
@@ -21,6 +21,13 @@ export function DeckChips({ tasks, jobs, open, onOpen, onCancelJob }: { tasks: T
   const jobsBox = useRef<HTMLDivElement>(null);
   const [viewing, setViewing] = useState("");
   const viewed = viewing ? tasks.find((x) => x.id === viewing) : undefined;
+  useEffect(() => {
+    if (viewing && !viewed) setViewing("");
+  }, [viewing, viewed]);
+  const closeView = useCallback(() => {
+    setViewing("");
+    agentsBox.current?.querySelector<HTMLElement>('[data-action="deck.agents"]')?.focus();
+  }, []);
   const shut = useCallback(() => onOpen(() => ""), [onOpen]);
   useDismiss(open === "agents", agentsBox, shut);
   useDismiss(open === "jobs", jobsBox, shut);
@@ -42,7 +49,7 @@ export function DeckChips({ tasks, jobs, open, onOpen, onCancelJob }: { tasks: T
             onClick={() => onOpen((was) => (was === "agents" ? "" : "agents"))}
           >
             <StudioIcon name="branch" />
-            <b>{liveAgents || agentsIn(tasks)}</b>
+            <b>{agentsIn(tasks)}</b>
             <span>{t("子代理")}</span>
           </button>
           <div className="studio-deck-pop" role="dialog" aria-label={t("子代理")}>
@@ -50,7 +57,7 @@ export function DeckChips({ tasks, jobs, open, onOpen, onCancelJob }: { tasks: T
           </div>
         </div>
       )}
-      {viewed && <AgentTranscript task={viewed} onClose={() => setViewing("")} />}
+      {viewed && <AgentTranscript task={viewed} onClose={closeView} />}
       {jobs.length > 0 && (
         <div ref={jobsBox} className="studio-deck-anchor" data-open={open === "jobs" ? "" : undefined}>
           <button

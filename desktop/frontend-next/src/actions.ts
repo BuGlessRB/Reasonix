@@ -95,6 +95,10 @@ export const ACTIONS: UIAction[] = [
 
   { id: "tool.image-open", kind: "view", target: "none", proof: "interaction" },
   { id: "tool.image-close", kind: "view", target: "none", proof: "interaction" },
+  { id: "tool.show-all", kind: "view", target: "none", proof: "interaction" },
+  { id: "agent.open", kind: "view", target: "entity", proof: "interaction" },
+  { id: "agent.focus-trap", kind: "navigation", target: "none", proof: "interaction" },
+  { id: "agent.close", kind: "view", target: "none", proof: "interaction" },
 
   // ── The turn ─────────────────────────────────────────────────────────────
   // Send and stop remain two actions even when they sit together: during a

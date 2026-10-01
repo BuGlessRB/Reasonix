@@ -63,3 +63,35 @@ it("offers no show-all for an output that fits", () => {
   render(<NestedCall tool={child("c1", "short")} />);
   expect(screen.queryByRole("button", { name: "显示全部" })).toBeNull();
 });
+
+it("moves focus into the overlay, keeps Tab inside it, and returns focus to the chip on close", async () => {
+  render(<Host tasks={[task("b", false, "Review", [child("c1", "x")])]} />);
+  await userEvent.click(screen.getByRole("button", { name: "查看完整记录：Review" }));
+  const dialog = screen.getByRole("dialog", { name: "子代理完整记录：Review" });
+  expect(document.activeElement).toBe(dialog);
+  await userEvent.tab();
+  await userEvent.tab();
+  await userEvent.tab();
+  expect(dialog.contains(document.activeElement)).toBe(true);
+  await userEvent.click(screen.getByRole("button", { name: "关闭" }));
+  expect(document.activeElement).toBe(document.querySelector('[data-action="deck.agents"]'));
+});
+
+it("closes quietly when the viewed task is gone", async () => {
+  const { rerender } = render(<Host tasks={[task("b", false, "Review")]} />);
+  await userEvent.click(screen.getByRole("button", { name: "查看完整记录：Review" }));
+  rerender(<Host tasks={[task("z", false, "Other")]} />);
+  expect(screen.queryByRole("dialog", { name: "子代理完整记录：Review" })).toBeNull();
+});
+
+it("caps what the overlay draws and says so", () => {
+  render(<AgentTranscript task={task("b", false, "Review", [child("c1", "y".repeat(250_000))])} onClose={() => {}} />);
+  expect(screen.getByRole("dialog").textContent).toContain("仅显示前 200000 个字符");
+});
+
+it("keeps the count stable when the last running delegate finishes", () => {
+  const n = (ts: Task[]) => render(<Host tasks={ts} />).container.querySelector('[data-action="deck.agents"] b')?.textContent;
+  expect(n([task("a", true, "A"), task("b", false, "B")])).toBe("2");
+  cleanup();
+  expect(n([task("a", false, "A"), task("b", false, "B")])).toBe("2");
+});

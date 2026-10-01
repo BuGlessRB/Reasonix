@@ -312,6 +312,7 @@ function changeCounts(tool: Tool): { added: number; removed: number } | null {
 }
 
 const NESTED_PREVIEW = 400;
+const NESTED_WHOLE_CAP = 200_000;
 
 export function NestedCall({ tool, whole = false }: { tool: Tool; whole?: boolean }) {
   const [all, setAll] = useState(false);
@@ -335,7 +336,8 @@ export function NestedCall({ tool, whole = false }: { tool: Tool; whole?: boolea
         </div>
         {tool.output && (
           <div className="out">
-            <Term text={clipped && !all ? tool.output.slice(0, NESTED_PREVIEW) : tool.output} />
+            <Term text={clipped && !all ? tool.output.slice(0, NESTED_PREVIEW) : tool.output.slice(0, NESTED_WHOLE_CAP)} />
+            {(whole || all) && tool.output.length > NESTED_WHOLE_CAP && <div className="bound bad">{t("输出过长，仅显示前 200000 个字符")}</div>}
             {clipped && (
               <div className="bound">
                 {all ? null : t("仅显示前 400 个字符")}
