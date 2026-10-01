@@ -77,7 +77,7 @@ export function ServerRow({
         data-action="mcp.enabled"
         data-target={m.name}
         on={m.enabled}
-        busy={busy === "toggle"}
+        busy={!!busy}
         label={t(m.enabled ? "关闭 {name}" : "启用 {name}", { name: m.name })}
         onClick={() => void run("toggle", () => port.setMcpEnabled(m.name, !m.enabled, "project", root || undefined))}
       />
@@ -89,7 +89,7 @@ export function ServerRow({
       <span className="q">
         {t("从 {where} 中删除 {name}？若只是暂时停用，关闭开关即可。", { name: m.name, where: m.source || t("配置") })}
       </span>
-      <button className="act" data-action="mcp.remove" data-target={m.name} data-value="cancel" onClick={() => setConfirming(false)}>
+      <button className="act" data-action="mcp.remove" data-target={m.name} data-value="cancel" disabled={!!busy} onClick={() => setConfirming(false)}>
         {t("取消")}
       </button>
       <button
@@ -97,7 +97,7 @@ export function ServerRow({
         data-action="mcp.remove"
         data-target={m.name}
         data-value="confirm"
-        disabled={busy === "remove"}
+        disabled={!!busy}
         onClick={() =>
           void run("remove", async () => {
             const r = await port.removeMcp(m.name);
@@ -145,7 +145,7 @@ export function ServerRow({
       {tools.length ? <Clip className="fold">{t("{n} 个工具", { n: m.tools })}</Clip> : null}
       {tag && <i className="ld" data-pending={tag.pending ? "" : undefined}>{tag.text}</i>}
       <Clip className="meta">{meta}</Clip>
-      {m.localOverride && <Exception onClear={() => void run("clear", () => port.clearMcpOverride(m.name, root || undefined))} busy={busy === "clear"} />}
+      {m.localOverride && <Exception onClear={() => void run("clear", () => port.clearMcpOverride(m.name, root || undefined))} busy={!!busy} />}
       {actions}
     </>
   );
@@ -164,7 +164,7 @@ export function ServerRow({
   const why = m.error || failed;
   if (!tools.length) {
     return (
-      <div className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined}>
+      <div className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined} aria-busy={!!busy}>
         <div className="srv-hd">{head}</div>
         {about}
         {why && <div className="why">{why}</div>}
@@ -175,7 +175,7 @@ export function ServerRow({
   return (
     // Asking to remove has to open the row: the confirmation lives inside the
     // fold, and what the server contributes is worth seeing before dropping it.
-    <details className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined} open={confirming || undefined}>
+    <details className="srv" data-st={m.state} data-local={m.localOverride ? "" : undefined} aria-busy={!!busy} open={confirming || undefined}>
       <summary>{head}</summary>
       {about}
       {why && <div className="why">{why}</div>}
