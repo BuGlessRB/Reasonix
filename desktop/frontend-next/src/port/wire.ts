@@ -281,6 +281,9 @@ export interface AskOrigin {
   source: string;
   message?: string;
   note?: string;
+  url?: string;
+ urlHost?: string;
+ urlLocal?: boolean;
 }
 
 export interface Ask {
@@ -645,6 +648,7 @@ export type ExecutionGraphRead = ExecutionGraphView & ExecutionGraphSnapshot;
 
 export interface WireEvent {
   kind: Kind;
+ nonPersistable?: boolean;
   text?: string;
   detail?: string;
   code?: string;

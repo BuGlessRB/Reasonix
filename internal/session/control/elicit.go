@@ -12,6 +12,12 @@ import (
 // marked with who is asking. Nothing given back is a refusal for the party,
 // not a skip that ends the turn.
 func (c *Controller) Elicit(ctx context.Context, req tool.ElicitRequest) (tool.ElicitReply, error) {
+	if req.URL != "" {
+		if c.observe != nil {
+			return tool.ElicitReply{Declined: true, Action: "decline"}, nil
+		}
+		return c.elicitURL(ctx, req)
+	}
 	questions := make([]event.AskQuestion, len(req.Fields))
 	for i, f := range req.Fields {
 		q := event.AskQuestion{ID: f.Name, Header: f.Title, Prompt: f.Description, Reason: event.AskReasonMissingValue, Multi: f.Multi, Default: f.Default}
@@ -45,6 +51,16 @@ func (c *Controller) Elicit(ctx context.Context, req tool.ElicitRequest) (tool.E
 // it: the values were given to that party, and a receipt travels to every
 // attached device, the session file and the trajectory.
 func formReceipt(origin *event.AskOrigin, questions []event.AskQuestion, answers []event.AskAnswer) (subject, outcome string) {
+	if origin.URL != "" {
+		outcome := "declined"
+		switch elicitURLAction(answers) {
+		case "accept":
+			outcome = "accepted"
+		case "cancel":
+			outcome = "cancelled"
+		}
+		return clipUTF8("external interaction from "+origin.Source, 240), outcome
+	}
 	names := make([]string, len(questions))
 	for i, q := range questions {
 		names[i] = q.ID

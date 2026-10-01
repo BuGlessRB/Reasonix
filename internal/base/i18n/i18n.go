@@ -193,6 +193,17 @@ type Messages struct {
 	DiffFoldDisabled                string // notice when /diff-fold disables folding (shows all lines)
 
 	// `ask` tool question card.
+	AskURLSourceFmt      string
+	AskURLHint           string
+	AskURLWarning        string
+	AskURLLocalWarning   string
+	AskURLOpen           string
+	AskURLContinue       string
+	AskURLDecline        string
+	AskURLCancel         string
+	AskURLOpenFailed     string
+	AskURLSending        string
+	AskURLAnswerFailed   string
 	AskTypeSomething     string // the "type your own answer" option label
 	AskTypingHint        string // shown on that row while entering free text
 	AskNoteHint          string // shown under a single-choice pick while typing its note

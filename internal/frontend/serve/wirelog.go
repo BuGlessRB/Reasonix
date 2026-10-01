@@ -152,9 +152,13 @@ func (w *wireLog) write(sessionPath string, frame []byte) {
 		return
 	}
 	var head struct {
-		Kind string `json:"kind"`
+		Kind           string `json:"kind"`
+		NonPersistable bool   `json:"nonPersistable"`
 	}
 	if err := json.Unmarshal(frame, &head); err != nil || !wireLogKinds[head.Kind] {
+		return
+	}
+	if head.NonPersistable {
 		return
 	}
 	w.mu.Lock()

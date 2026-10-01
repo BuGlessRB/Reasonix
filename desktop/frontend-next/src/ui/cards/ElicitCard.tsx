@@ -4,18 +4,18 @@ import { t } from "../../i18n";
 import type { Item } from "../../state/session";
 import { answerSource } from "../source";
 import { useViewer } from "../../state/viewer";
+import { ElicitURLCard } from "./ElicitURLCard";
 
-interface Props {
+export interface ElicitProps {
   item: Extract<Item, { t: "ask" }>;
   onAnswer: (itemId: string, id: string, answers: { questionId: string; selected: string[] }[]) => Promise<void>;
 }
 
-// A form an external party — an MCP server mid tool call — asks the person to
-// fill. It is laid out whole, unlike the agent's own questions: the party wrote
-// its fields to be read together, and which of them are required is its call,
-// checked by the host, which sends the form back with the reason if it is not.
-// Refusing is an answer to that party; it does not stop the turn.
-export function ElicitCard({ item, onAnswer }: Props) {
+export function ElicitCard(props: ElicitProps) {
+  return props.item.ask.origin?.url ? <ElicitURLCard {...props} /> : <ElicitFormCard {...props} />;
+}
+
+function ElicitFormCard({ item, onAnswer }: ElicitProps) {
   const qs = item.ask.questions;
   const origin = item.ask.origin;
   const answeredBy = answerSource(item.by, useViewer(), item.said);

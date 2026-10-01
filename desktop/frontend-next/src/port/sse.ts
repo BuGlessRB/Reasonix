@@ -371,9 +371,8 @@ export class SsePort extends SseFeedback implements AgentPort {
     if (why) throw new HttpError(0, why.error || "not shown", why, !!(why.code || why.error));
   }
 
-  openExternal(url: string): Promise<void> {
-    host().openExternal(url);
-    return Promise.resolve();
+  async openExternal(url: string): Promise<void> {
+    await host().openExternal(url);
   }
 
   async pickFolder(): Promise<string | null> {
