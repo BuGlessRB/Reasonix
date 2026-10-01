@@ -481,6 +481,7 @@ export const EN_SETTINGS: Record<string, string> = {
   " · 缺 key": " · no key",
   "安装这个版本": "Install this version",
   "保存中…": "Saving…",
+  "无法保存": "Could not save",
   "不发送": "Do not send",
   "当前版本": "Current version",
   "读取中…": "Reading…",

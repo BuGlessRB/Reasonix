@@ -133,7 +133,7 @@ export const EN_KERNEL: Record<string, string> = {
   "任务正在运行，请先停止再重载扩展": "A task is running — stop it before reloading extensions",
   "该来源正在使用中，请先切换模型再删除": "This source is in use — switch models before deleting it",
   "请为该来源填写名称": "Give this source a name",
-  "名称只能包含字母、数字、点、连字符和下划线": "A name may use letters, digits, dot, dash and underscore only",
+  "名称只能用字母、数字、点、连字符和下划线，以字母或数字开头，最长 64 个字符": "Use only letters, digits, dots, hyphens and underscores, starting with a letter or digit, up to 64 characters",
   "已经有名为「{name}」的连接了，换一个名称": "A connection named “{name}” already exists; pick another name",
   "读不到配置文件，没法安全地选择密钥存放位置，请检查配置后重试": "The configuration could not be read, so there is no safe place to store the key; check the config and try again",
   "请填写接口地址": "Enter an endpoint address",
