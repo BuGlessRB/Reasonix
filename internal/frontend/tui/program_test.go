@@ -599,7 +599,7 @@ func TestUTF16Offsets(t *testing.T) {
 // while it still has work in it.
 func TestTodosFollowTheKernel(t *testing.T) {
 	m, _ := testModel(t)
-	_, cmd := m.Update(updateMsg{u: Update{Event: eventwire.Event{Kind: "todo_progress"}}, ok: true})
+	_, cmd := m.Update(updateMsg{us: []Update{{Event: eventwire.Event{Kind: "todo_progress"}}}, ok: true})
 	run(m, cmd)
 	v := m.View().Content
 	for _, want := range []string{"✔ read the code", "▶ fix the bug", "○ run tests"} {
@@ -660,5 +660,68 @@ func TestShellModeRunsTheCommandLocally(t *testing.T) {
 	}
 	if len(m.tr.awaiting) != 0 {
 		t.Fatalf("the command waits to be named by a turn: %v", m.tr.awaiting)
+	}
+}
+
+// TestWaitUpdateCoalescesQueuedFrames proves a burst of queued stream frames is
+// handed to the model as one message, so a burst costs one render rather than
+// one render per frame — the view re-parses the whole growing answer each draw.
+func TestWaitUpdateCoalescesQueuedFrames(t *testing.T) {
+	m, _ := testModel(t)
+	ch := make(chan Update, 8)
+	m.updates = ch
+	for range 5 {
+		ch <- Update{Event: eventwire.Event{Kind: "text", Text: "x"}}
+	}
+	msg, ok := m.waitUpdate()().(updateMsg)
+	if !ok {
+		t.Fatalf("waitUpdate returned %T, want updateMsg", msg)
+	}
+	if len(msg.us) != 5 || !msg.ok {
+		t.Fatalf("coalesced %d frames (ok=%v), want 5 frames and ok", len(msg.us), msg.ok)
+	}
+}
+
+// TestWaitUpdateReportsAClosedStream proves the wait ends rather than spinning
+// once the stream is gone.
+func TestWaitUpdateReportsAClosedStream(t *testing.T) {
+	m, _ := testModel(t) // testModel wires a closed updates channel
+	msg, ok := m.waitUpdate()().(updateMsg)
+	if !ok {
+		t.Fatalf("waitUpdate returned %T, want updateMsg", msg)
+	}
+	if msg.ok {
+		t.Fatal("a closed stream should report ok=false")
+	}
+}
+
+// TestViewportHoldsOnShrink proves the transcript does not scroll back up when
+// the content shrinks under a following viewport and the freed rows still fit
+// inside it — a settled diff collapsing its raw preamble to one formatted line,
+// say. A shrink larger than the viewport cannot hold (it would blank the
+// transcript) and re-anchors instead: TestCollapsedDiffReanchorsTheTranscript.
+func TestViewportHoldsOnShrink(t *testing.T) {
+	m, _ := testModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	rows := func(n int) func(int, bool) string {
+		return func(int, bool) string { return strings.Repeat("row\n", n) }
+	}
+	m.scr.blocks = append(m.scr.blocks, block{render: rows(40)})
+	m.View()
+	held := m.scr.yoff
+	if held == 0 {
+		t.Fatalf("viewport did not follow the tail: yoff=%d", held)
+	}
+
+	m.scr.blocks[0].render, m.scr.blocks[0].lines = rows(37), nil
+	m.View()
+	if m.scr.yoff != held {
+		t.Fatalf("viewport moved on shrink: yoff %d -> %d", held, m.scr.yoff)
+	}
+
+	m.scr.blocks[0].render, m.scr.blocks[0].lines = rows(60), nil
+	m.View()
+	if m.scr.yoff <= held {
+		t.Fatalf("viewport did not scroll on growth: yoff %d -> %d", held, m.scr.yoff)
 	}
 }

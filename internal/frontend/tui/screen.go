@@ -345,9 +345,21 @@ func (m *model) fullView(bottom []string, composerAt int) tea.View {
 	rows := m.content(m.liveLines())
 	total := len(rows)
 	if s.follow {
-		s.yoff = total - h
+		// Follow the newest rows, but never scroll back up when the live rows
+		// shrink (a settled diff collapsing to fewer lines): hold the position,
+		// leave the freed rows blank, and let later rows fill the gap.
+		if next := total - h; next > s.yoff {
+			s.yoff = next
+		}
+		s.yoff = max(s.yoff, 0)
+		// A shrink larger than the viewport holds the position past the
+		// content and blanks the whole transcript, so re-anchor to its tail.
+		if s.yoff > total-1 {
+			s.yoff = max(total-h, 0)
+		}
+	} else {
+		s.yoff = max(min(s.yoff, total-h), 0)
 	}
-	s.yoff = max(min(s.yoff, total-h), 0)
 	cw := m.contentWidth()
 	blank := strings.Repeat(" ", cw)
 	showBar := !m.scrollbarHidden()
@@ -450,7 +462,7 @@ func (m *model) scrollKey(k string) bool {
 	case "ctrl+home":
 		m.scr.yoff, m.scr.follow = 0, false
 	case "ctrl+end":
-		m.scr.follow = true
+		m.scr.yoff, m.scr.follow = 0, true
 	case "ctrl+b":
 		m.toggleLatestShell()
 	case "ctrl+o":
