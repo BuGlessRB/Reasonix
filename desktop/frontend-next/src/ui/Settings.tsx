@@ -130,7 +130,6 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
   const [ruleCount, setRuleCount] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const veiled = useRef(false);
-  const currentPort = useRef(port); currentPort.current = port;
   const reloadExt = useCallback(() => {
     const refresh = ++extRefresh.current;
     const current = () => extRefresh.current === refresh;
@@ -156,12 +155,13 @@ export function Settings({ hub, onError, port, networkPort, networkHost, status,
       .catch(() => { if (current()) setSkills([]); });
     void Promise.allSettled([mcpRead, packageRead, skillRead]).then(() => { if (current()) setExtRefreshing(false); });
   }, [port, scopeAt]);
-  // An extension switch moves the metrics rail too, so the change has to leave
-  // this pane as well as refresh it.
+  const currentExt = useRef({ port, reloadExt, onChanged });
+  currentExt.current = { port, reloadExt, onChanged };
   const afterExtChange = useCallback(() => {
-    if (currentPort.current !== port) return;
-    reloadExt(); onChanged();
-  }, [port, reloadExt, onChanged]);
+    if (currentExt.current.port !== port) return;
+    currentExt.current.reloadExt();
+    currentExt.current.onChanged();
+  }, [port]);
   const reload = useRuntimeReload(port, afterExtChange);
 
   // Adding or removing a source changes what the picker above can offer, so

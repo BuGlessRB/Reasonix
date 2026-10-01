@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { AgentPort, SkillEntry } from "../port/port";
 import { Exception } from "./CapabilityScope";
@@ -28,7 +28,18 @@ export function SkillRow({
   sk: SkillEntry; implicit: boolean; port: AgentPort; onDone: () => void; root: string;
   onFailed: (why: string) => void;
 }) {
+  const [owner, setOwner] = useState({ port, root });
+  const currentOwner = useRef(owner);
+  currentOwner.current = owner;
   const [busy, setBusy] = useState(false);
+  if (owner.port !== port || owner.root !== root) {
+    setOwner({ port, root });
+    setBusy(false);
+  }
+  useEffect(() => {
+    currentOwner.current = owner;
+    return () => { currentOwner.current = { ...owner }; };
+  }, [owner]);
   const note = triggerNote(sk, implicit);
   const local = sk.switchScope === "project";
   const act = async (fn: () => Promise<void>) => {
@@ -37,9 +48,11 @@ export function SkillRow({
     try {
       await fn();
     } catch (e) {
-      onFailed(reason(e));
+      if (currentOwner.current === owner) onFailed(reason(e));
     } finally {
-      setBusy(false);
+      if (currentOwner.current === owner) {
+        setBusy(false);
+      }
       onDone();
     }
   };
