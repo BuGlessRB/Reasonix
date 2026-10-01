@@ -156,10 +156,10 @@ function Package({
     </>
   );
 
-  const why = p.error || failed;
   const notes = (
     <>
-      {why && <div className="why">{why}</div>}
+      {p.error && <div className="why">{p.error}</div>}
+      {failed && <div className="why" role="alert">{failed}</div>}
       {p.status === "disabled_incompatible" && (
         <div className="why">{p.statusReason || t("这个包和当前版本不兼容，已经被停用。")}</div>
       )}
@@ -180,7 +180,7 @@ function Package({
   );
 
   return (
-    <details className="srv" data-extension-name={p.name} data-st={p.enabled ? "ready" : "disabled"} aria-busy={locked} open={confirming || undefined}>
+    <details className="srv" data-extension-name={p.name} data-st={p.enabled ? "ready" : "disabled"} aria-busy={locked} open={confirming || !!failed || undefined}>
       <summary>{head}</summary>
       {confirm}
       {notes}
