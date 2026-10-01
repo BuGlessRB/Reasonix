@@ -75,7 +75,10 @@ describe("disambiguate", () => {
 
 describe("sourceNameUsable", () => {
   it.each([
-    ["a", true], ["a".repeat(64), true], ["a".repeat(65), false], [".a", false], ["-a", false],
-    ["_a", false], ["a.", true], ["a b", false], ["a/b", false], ["公司", false], ["ａｂｃ", false], ["relay-1.x_y", true],
+    ["", false], ["   ", false],
+    ["a", true], ["a".repeat(64), true], ["a".repeat(65), false],
+    [".a", false], ["-a", false], ["_a", false], ["a.", true], ["a b", false], ["a/b", false],
+    ["公司中转站", false], ["ｒｅｌａｙ", false], ["relay\u0301", false], ["relay-1.x_y", true],
+    [" company-relay.1_x ", true], ["Relay_1.x-y", true],
   ])("%j -> %s", (name, ok) => expect(sourceNameUsable(name)).toBe(ok));
 });

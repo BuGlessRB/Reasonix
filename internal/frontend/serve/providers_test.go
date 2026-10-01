@@ -222,6 +222,12 @@ func TestSaveProviderRejectsWhatItCannotStore(t *testing.T) {
 	// the code and the 422 and wrote a bare 400.
 	for name, tc := range map[string]struct{ body, code string }{
 		"a name that would break the model ref": {`{"name":"a/b","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`, "provider.name_invalid"},
+		"an empty name":                         {`{"name":"","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`, "provider.name_invalid"},
+		"a whitespace-only name":                {`{"name":"   ","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`, "provider.name_invalid"},
+		"a Chinese name":                        {`{"name":"公司中转站","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`, "provider.name_invalid"},
+		"a Unicode-normalizable name":           {`{"name":"ｒｅｌａｙ","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`, "provider.name_invalid"},
+		"a combining-mark name":                 {`{"name":"relay\u0301","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`, "provider.name_invalid"},
+		"a name longer than 64 characters":      {`{"name":"` + strings.Repeat("a", 65) + `","kind":"openai","baseUrl":"https://x.invalid","models":["m"]}`, "provider.name_invalid"},
 		"an unsupported protocol":               {`{"name":"x","kind":"grpc","baseUrl":"https://x.invalid","models":["m"]}`, "provider.kind_unsupported"},
 		"no endpoint":                           {`{"name":"x","kind":"openai","baseUrl":"","models":["m"]}`, "provider.endpoint_required"},
 		"no models":                             {`{"name":"x","kind":"openai","baseUrl":"https://x.invalid","models":[]}`, "provider.no_models_picked"},
@@ -423,13 +429,39 @@ func TestSaveProviderAcceptsEveryCatalogedWire(t *testing.T) {
 	}
 }
 
+func TestSaveProviderTrimsASCIIName(t *testing.T) {
+	s := newProviderEditServer(t)
+	s.AllowProviderEdit()
+	srv := httptest.NewServer(operatorHandler(s))
+	defer srv.Close()
+
+	resp := postProvider(t, srv.URL, "/providers", `{
+		"name":"  company-relay.1_x  ","kind":"openai","baseUrl":"https://relay.example/v1",
+		"models":["m1"]
+	}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := readAllString(resp)
+		t.Fatalf("POST /providers with surrounding spaces = %d: %s", resp.StatusCode, b)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.Provider("company-relay.1_x"); !ok {
+		t.Fatalf("trimmed provider name was not stored: %#v", cfg.Providers)
+	}
+}
+
 // The panel mirrors this pattern in vendors.ts (sourceNameUsable); the same
 // cases are asserted there so the two copies cannot drift apart silently.
 func TestProviderNameRE_Boundaries(t *testing.T) {
 	cases := map[string]bool{
+		"": false, "   ": false,
 		"a": true, strings.Repeat("a", 64): true, strings.Repeat("a", 65): false,
 		".a": false, "-a": false, "_a": false, "a.": true, "a b": false, "a/b": false,
-		"公司": false, "ａｂｃ": false, "relay-1.x_y": true,
+		"公司中转站": false, "ｒｅｌａｙ": false, "relay\u0301": false,
+		" company-relay.1_x ": false, "Relay_1.x-y": true,
 	}
 	for name, want := range cases {
 		if got := providerNameRE.MatchString(name); got != want {
