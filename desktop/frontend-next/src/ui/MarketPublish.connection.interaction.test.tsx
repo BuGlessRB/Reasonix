@@ -54,7 +54,7 @@ describe("my packages connection lifetime", () => {
     const next = new MockPort() as unknown as AgentPort;
     const pkg = { ...(await port.myMarket()).find((p) => p.slug === "demo/ship-notes")!, status: "private" };
     vi.spyOn(port, "myMarket").mockResolvedValue([pkg]);
-    vi.spyOn(next, "myMarket").mockResolvedValue([pkg]);
+    const nextRows = vi.spyOn(next, "myMarket").mockResolvedValue([pkg]);
     let finishOld!: (pkg: MarketPackage) => void;
     let failOld!: (error: Error) => void;
     let finishNew!: (pkg: MarketPackage) => void;
@@ -77,7 +77,10 @@ describe("my packages connection lifetime", () => {
     expect(sending.disabled).toBe(true);
     await userEvent.click(sending);
     expect(submit).toHaveBeenCalledTimes(1);
-    await act(async () => finishNew({ ...pkg, status: "pending" }));
+    await act(async () => {
+      nextRows.mockResolvedValue([{ ...pkg, status: "pending" }]);
+      finishNew({ ...pkg, status: "pending" });
+    });
     expect(screen.getByText("审核中")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "提交中…" })).toBeNull();
   });
