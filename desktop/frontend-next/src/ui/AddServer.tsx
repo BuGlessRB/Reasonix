@@ -74,7 +74,7 @@ function ServerInput({ port, canProject, onClose, onInstalled }: Props) {
     }
   };
 
-  if (results.length > 0 && !error && !busy) {
+  if (results.length > 0 && remaining.length === 0 && !error && !busy) {
     return (
       <div className="addsrv" data-stage="done">
         {results.map((r) => (
