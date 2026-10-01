@@ -626,8 +626,8 @@ export const EN_SETTINGS: Record<string, string> = {
   "在浏览器里打开的页面输入这串代码。没自动打开就手动访问 {uri}":
     "Type this code into the page your browser opened. If none opened, go to {uri}",
   "装好了，下一轮就能用": "Installed — the next turn can use it",
-  "装好了，但这一轮还在跑：等它结束或新建会话后生效":
-    "Installed, but this turn is still running: it takes effect when the turn ends, or in a new session",
+  "装好了，但运行时未重载：{reason}。请用「重载运行时」重试。":
+    "Installed, but the runtime did not reload: {reason}. Use Reload runtime to retry.",
   "没装上": "Not installed",
   "这个地址上已经有「{name}」了。留空 key": "This address already holds “{name}”. Leave the key blank",
   "已就位 · {n} 个工具，下一轮就能用": "In place · {n} tools, ready next turn",
