@@ -105,11 +105,11 @@ function PublishDraft({ port, handle, onMine }: PublishProps) {
 
   const ready = d.name.trim() !== "" && d.source.trim() !== "" && !busy;
   return (
-    <div className="mkt mkt-pub">
+    <div className="mkt mkt-pub" aria-busy={busy}>
       <p className="mkt-sum">{t("以 @{handle} 的名义提交，审核通过后公开。只收来源地址，不上传文件。", { handle })}</p>
       <div className="seg" data-text role="radiogroup" aria-label={t("类型")}>
         {KINDS.map(([id, name]) => (
-          <button key={id} role="radio" aria-checked={d.kind === id} data-action="market.draft" data-value="kind" onClick={() => setD({ ...d, kind: id })}>
+          <button key={id} role="radio" aria-checked={d.kind === id} disabled={busy} data-action="market.draft" data-value="kind" onClick={() => setD({ ...d, kind: id })}>
             {t(name)}
           </button>
         ))}
@@ -118,38 +118,38 @@ function PublishDraft({ port, handle, onMine }: PublishProps) {
       <div className="mkt-fields">
         <label>
           <span>{t("名称")}</span>
-          <input value={d.name} data-action="market.draft" data-value="name" placeholder="my-package" spellCheck={false} onChange={set("name")} />
+          <input value={d.name} disabled={busy} data-action="market.draft" data-value="name" placeholder="my-package" spellCheck={false} onChange={set("name")} />
           <em className="mkt-tip">{t("小写字母、数字、点、下划线、连字符，最多 64 个字符。")}</em>
         </label>
         <label>
           <span>{t("版本")}</span>
-          <input value={d.version} data-action="market.draft" data-value="version" placeholder="0.1.0" spellCheck={false} onChange={set("version")} />
+          <input value={d.version} disabled={busy} data-action="market.draft" data-value="version" placeholder="0.1.0" spellCheck={false} onChange={set("version")} />
           <em className="mkt-tip">{t("留空时新包为 0.1.0，更新自动加一个补丁号。")}</em>
         </label>
         <label className="full">
           <span>{t("来源地址")}</span>
-          <input className="mono" value={d.source} data-action="market.draft" data-value="source" spellCheck={false} onChange={set("source")} />
+          <input className="mono" value={d.source} disabled={busy} data-action="market.draft" data-value="source" spellCheck={false} onChange={set("source")} />
           <em className="mkt-tip">{t(SOURCE_TIP[d.kind])}</em>
         </label>
         <label className="full">
           <span>{t("摘要")}</span>
-          <input value={d.summary} data-action="market.draft" data-value="summary" maxLength={200} onChange={set("summary")} />
+          <input value={d.summary} disabled={busy} data-action="market.draft" data-value="summary" maxLength={200} onChange={set("summary")} />
         </label>
         <label className="full">
           <span>{t("描述")}</span>
-          <textarea rows={4} value={d.description} data-action="market.draft" data-value="description" maxLength={8000} onChange={set("description")} />
+          <textarea rows={4} value={d.description} disabled={busy} data-action="market.draft" data-value="description" maxLength={8000} onChange={set("description")} />
         </label>
         <label>
           <span>{t("仓库")}</span>
-          <input className="mono" value={d.repoUrl} data-action="market.draft" data-value="repoUrl" placeholder="https://github.com/…" spellCheck={false} onChange={set("repoUrl")} />
+          <input className="mono" value={d.repoUrl} disabled={busy} data-action="market.draft" data-value="repoUrl" placeholder="https://github.com/…" spellCheck={false} onChange={set("repoUrl")} />
         </label>
         <label>
           <span>{t("标签")}</span>
-          <input value={d.tags} data-action="market.draft" data-value="tags" placeholder={t("用逗号分隔，最多 8 个")} onChange={set("tags")} />
+          <input value={d.tags} disabled={busy} data-action="market.draft" data-value="tags" placeholder={t("用逗号分隔，最多 8 个")} onChange={set("tags")} />
         </label>
       </div>
       <label className="mkt-seen">
-        <input type="checkbox" data-action="market.draft" data-value="visibility" checked={d.private} onChange={(e) => setD({ ...d, private: e.target.checked })} />
+        <input type="checkbox" data-action="market.draft" data-value="visibility" disabled={busy} checked={d.private} onChange={(e) => setD({ ...d, private: e.target.checked })} />
         {t("仅自己可见：不提交审核，社区市场里只有你的账号能看到并安装")}
       </label>
       {error && (
