@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n";
 import type { GoalLifecycleView } from "../lib/types";
 
@@ -29,6 +29,13 @@ export function GoalLifecycleActions({
 
   const [draft, setDraft] = useState<{ objective: string; rounds: string; invalid: boolean } | null>(null);
 
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !draft) editButtonRef.current?.focus();
+    wasOpen.current = draft !== null;
+  }, [draft]);
+
   const openEditor = () => {
     if (!goalView) return;
     setDraft({ objective: goalView.objective, rounds: goalView.maxGoalRounds?.toString() ?? "", invalid: false });
@@ -49,12 +56,12 @@ export function GoalLifecycleActions({
 
   return <>
     {draft && (
-      <form className="goal-edit-form" data-goal-edit-form="" onSubmit={submitEdit} onKeyDown={(e) => { if (e.key === "Escape") setDraft(null); }}>
+      <form className="goal-edit-form" data-goal-edit-form="" onSubmit={submitEdit} onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setDraft(null); } }}>
         <label>
           {t("composer.goalEditObjective")}
           <textarea
             className="remote-secret-dialog__input"
-            rows={4}
+            rows={2}
             data-goal-edit-objective=""
             autoFocus
             value={draft.objective}
@@ -71,12 +78,14 @@ export function GoalLifecycleActions({
             onChange={(e) => setDraft({ ...draft, rounds: e.target.value, invalid: false })}
           />
         </label>
-        {draft.invalid && <p role="alert" data-goal-edit-error="">{t("composer.goalEditInvalidRounds")}</p>}
-        <button type="button" className="composer-intent-menu__stop" onClick={() => setDraft(null)}>{t("common.cancel")}</button>
-        <button type="submit" className="composer-intent-menu__stop" disabled={draft.objective.trim() === ""}>{t("common.save")}</button>
+        {draft.invalid && <p className="goal-edit-form__error" role="alert" data-goal-edit-error="">{t("composer.goalEditInvalidRounds")}</p>}
+        <div className="goal-edit-form__actions">
+          <button type="button" className="btn" onClick={() => setDraft(null)}>{t("common.cancel")}</button>
+          <button type="submit" className="btn btn--primary" disabled={draft.objective.trim() === ""}>{t("common.save")}</button>
+        </div>
       </form>
     )}
-    {goalView && <button type="button" className="composer-intent-menu__stop" onClick={openEditor} disabled={disabled}>
+    {goalView && <button ref={editButtonRef} type="button" className="composer-intent-menu__stop" onClick={openEditor} disabled={disabled || draft !== null}>
       {t("composer.taskModeEditGoal")}
     </button>}
     {resumable ? (

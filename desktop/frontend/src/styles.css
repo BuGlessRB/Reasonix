@@ -38203,8 +38203,22 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
 .goal-edit-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   padding: 8px;
   font-size: 12px;
   color: var(--fg-dim);
+}
+.goal-edit-form textarea {
+  resize: none;
+  max-height: 80px;
+  overflow-y: auto;
+}
+.goal-edit-form__error {
+  margin: 0;
+  color: var(--err);
+}
+.goal-edit-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
