@@ -99,7 +99,7 @@ export function BackupRestore({ port, backup, onClose }: { port: AgentPort; back
                     <span className="nm">{p.name}</span>
                     <code className="meta">{p.source}{p.version ? " · " + p.version : ""}</code>
                   </div>
-                  <button className="btn sm" data-action="backup.install-plugin" data-target={p.name} onClick={() => setInstalling(p)}>
+                  <button className="btn sm" data-action="backup.install-plugin" data-target={p.name} disabled={installing?.name === p.name} onClick={() => setInstalling({ ...p })}>
                     {t("安装…")}
                   </button>
                 </li>
@@ -111,7 +111,7 @@ export function BackupRestore({ port, backup, onClose }: { port: AgentPort; back
           <button className="act" data-action="backup.done" onClick={onClose}>{t("完成")}</button>
         </div>
         {installing && (
-          <AddPlugin port={port} source={installing.source} onClose={() => setInstalling(null)} onInstalled={() => setInstalling(null)} />
+          <AddPlugin key={installing.name} port={port} source={installing.source} onClose={() => setInstalling(null)} onInstalled={() => setInstalling((current) => current === installing ? null : current)} />
         )}
       </div>
     );
