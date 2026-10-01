@@ -93,6 +93,21 @@ describe("sealing a turn", () => {
   });
 });
 
+// The kernel flags a turn the user's own action ended. Its err is the sentinel's
+// wording, which says nothing the flag does not, so it is not a failure card.
+describe("a turn the user cancelled", () => {
+  it("does not draw the cancellation as an error card", () => {
+    const s = run([partial("c1"), { kind: "turn_done", cancelled: true, err: "context canceled" } as SessionEvent]);
+    expect(s.items.filter((i) => i.t === "notice" && i.level === "error")).toHaveLength(0);
+    expect(s.terminal).toEqual({ kind: "cancelled" });
+  });
+
+  it("still draws a genuine failure", () => {
+    const s = run([{ kind: "turn_done", err: "provider down" } as SessionEvent]);
+    expect(notices(s)).toEqual(["provider down"]);
+  });
+});
+
 describe("rebuilding a reopened transcript", () => {
   const users = (msgs: HistoryMessage[]) =>
     fromHistory(msgs).items.filter((i): i is Extract<Item, { t: "user" }> => i.t === "user");

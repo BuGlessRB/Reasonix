@@ -107,7 +107,8 @@ function sealTurn(items: Item[], err?: string): Item[] {
   }
   if (!err) return sealed;
   // The kernel's own words: classifying them here would be this file guessing
-  // at failures it cannot see.
+  // at failures it cannot see. A turn it flagged as cancelled never gets here:
+  // the flag is the identity, and its err only repeats the sentinel.
   return [...sealed, { t: "notice" as const, id: nextId(), level: "error", text: err }];
 }
 
@@ -610,7 +611,7 @@ function apply(s: SessionState, ev: SessionEvent): SessionState {
         doing: ev.outcome === "no_progress" ? "已暂停" : ev.err ? "已中断" : "已完成",
         waiting: {},
         plan: livePlan(s.plan),
-        items: withReceipt(sealTurn(sealSay(s.items, true), ev.outcome === "no_progress" ? undefined : ev.err), ev.receipt),
+        items: withReceipt(sealTurn(sealSay(s.items, true), ev.outcome === "no_progress" || ev.cancelled ? undefined : ev.err), ev.receipt),
       };
 
     default:
