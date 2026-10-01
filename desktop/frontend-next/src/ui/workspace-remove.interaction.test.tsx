@@ -15,7 +15,7 @@ function draw() {
   const removeWorkspace = vi.fn().mockResolvedValue(undefined);
   render(
     <Workspaces
-      hub={{ removeWorkspace, revealsWorkspaces: () => false } as never}
+      hub={{ removeWorkspace } as never}
       tree={workspaces}
       treeRead
       runtimes={[]}

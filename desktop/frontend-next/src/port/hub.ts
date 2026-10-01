@@ -72,8 +72,6 @@ export interface HubPort extends SharePort {
   tree(): Promise<TreeWorkspace[]>;
   addWorkspace(path: string): Promise<TreeWorkspace>;
   removeWorkspace(path: string): Promise<void>;
-  /** Whether this window can show a project folder in the system file manager. */
-  revealsWorkspaces(): boolean;
   /** Show a listed project's folder in the system file manager. */
   revealWorkspace(path: string): Promise<void>;
   moveWorkspace(path: string, direction: -1 | 1): Promise<void>;
@@ -204,10 +202,6 @@ export class SseHub implements HubPort {
 
   addWorkspace(path: string) {
     return this.post<TreeWorkspace>("/tree/workspaces", { path });
-  }
-
-  revealsWorkspaces() {
-    return host().revealsFiles();
   }
 
   async revealWorkspace(path: string) {

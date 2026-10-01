@@ -4,6 +4,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "./testkit";
 import { Workspaces } from "./Workspaces";
+
+const shell = vi.hoisted(() => ({ reveals: true }));
+vi.mock("../port/host", () => ({ host: () => ({ revealsFiles: () => shell.reveals }) }));
 import type { TreeWorkspace } from "../port/hub";
 
 afterEach(cleanup);
@@ -12,9 +15,10 @@ function draw(over: Partial<TreeWorkspace> = {}, reveals = true) {
   const tree: TreeWorkspace[] = [{ root: "/w", name: "w", sessions: [], ...over }];
   const revealWorkspace = vi.fn().mockResolvedValue(undefined);
   const onError = vi.fn();
+  shell.reveals = reveals;
   render(
     <Workspaces
-      hub={{ revealWorkspace, revealsWorkspaces: () => reveals } as never}
+      hub={{ revealWorkspace } as never}
       tree={tree}
       treeRead
       runtimes={[]}

@@ -1,4 +1,5 @@
 import type { HubPort, TreeWorkspace } from "../port/hub";
+import { host } from "../port/host";
 import { t } from "../i18n";
 import { StudioIcon } from "./StudioIcon";
 
@@ -8,7 +9,7 @@ export function WorkspaceReveal({ ws, hub, dismiss, onError }: {
   dismiss: () => void;
   onError: (e: unknown) => void;
 }) {
-  if (!hub.revealsWorkspaces()) return null;
+  if (!host().revealsFiles()) return null;
   return (
     <div className="session-pop-group">
       <button
