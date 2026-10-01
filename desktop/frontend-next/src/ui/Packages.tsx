@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { t } from "../i18n";
 import type { AgentPort, PluginExport, PluginItem, PluginPackage } from "../port/port";
 import { Switch } from "./Switch";
@@ -15,14 +15,20 @@ interface Props {
 }
 
 export function Packages({ port, packages, onChanged, updating, onUpdate }: Props) {
+  const [connection, setConnection] = useState({ port, generation: 0 });
+  const currentConnection = useRef(connection);
+  currentConnection.current = connection;
+  if (connection.port !== port) setConnection({ port, generation: connection.generation + 1 });
   return (
     <>
       {packages.map((p) => (
         <Package
-          key={p.name}
+          key={`${connection.generation}:${p.name}`}
           p={p}
           port={port}
-          onDone={onChanged}
+          onDone={() => {
+            if (currentConnection.current === connection) onChanged();
+          }}
           updating={updating}
           onUpdate={() => onUpdate(p.name)}
         />
