@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 )
 
@@ -22,11 +21,12 @@ func (h *Hub) locateWorkspace(w http.ResponseWriter, r *http.Request) {
 		missingField(w, "root")
 		return
 	}
-	if !h.listsWorkspace(root) {
+	listed, ok := h.listedWorkspace(root)
+	if !ok {
 		refuse(w, http.StatusNotFound, codeWorkspaceUnknown, "that folder is not a project in this window", nil)
 		return
 	}
-	abs, err := filepath.Abs(root)
+	abs, err := filepath.Abs(listed)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -39,11 +39,18 @@ func (h *Hub) locateWorkspace(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, workspaceLocation{Path: abs, Dir: true})
 }
 
-func (h *Hub) listsWorkspace(root string) bool {
-	if slices.Contains(LaunchWorkspaces(), root) {
-		return true
+// listedWorkspace returns the window's own copy of the listed root that equals
+// root, so nothing downstream touches the request's string.
+func (h *Hub) listedWorkspace(root string) (string, bool) {
+	for _, dir := range LaunchWorkspaces() {
+		if dir == root {
+			return dir, true
+		}
 	}
-	return len(h.panesWhere(func(rt *Runtime) bool {
-		return rt.Local() && rt.Server.Controller().WorkspaceRoot() == root
-	})) > 0
+	for _, rt := range h.panesWhere(func(rt *Runtime) bool { return rt.Local() }) {
+		if dir := rt.Server.Controller().WorkspaceRoot(); dir == root {
+			return dir, true
+		}
+	}
+	return "", false
 }
