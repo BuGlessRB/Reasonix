@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode, memo, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n";
 import { seconds } from "../i18n/format";
@@ -81,17 +81,25 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
   const [sessionMenuAt, setSessionMenuAt] = useState({ left: 0, top: 0 });
   const sessionMenuBox = useRef<HTMLDivElement>(null);
   const sessionMenuPortal = useRef<HTMLDivElement>(null);
-  const workspaceMenuTrigger = useRef<HTMLButtonElement | null>(null);
+  const menuTrigger = useRef<HTMLElement | null>(null);
   const dismissMenu = () => {
-    if (workspaceMenuTrigger.current?.dataset.target === sessionMenu) workspaceMenuTrigger.current.focus();
+    if (menuTrigger.current?.dataset.target === sessionMenu) menuTrigger.current.focus();
     setSessionMenu("");
   };
   useDismiss(!!sessionMenu, sessionMenuBox, dismissMenu, sessionMenuPortal);
   useEffect(() => {
-    if (sessionMenu && workspaceMenuTrigger.current?.dataset.target === sessionMenu) {
+    if (sessionMenu && menuTrigger.current?.dataset.target === sessionMenu) {
       sessionMenuPortal.current?.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')?.focus();
     }
   }, [sessionMenu]);
+  useLayoutEffect(() => {
+    const menu = sessionMenuPortal.current;
+    if (!menu || menuTrigger.current?.getAttribute("role") !== "treeitem") return;
+    const { width, height } = menu.getBoundingClientRect();
+    const left = Math.max(12, Math.min(sessionMenuAt.left, window.innerWidth - width - 12));
+    const top = Math.max(12, Math.min(sessionMenuAt.top, window.innerHeight - height - 12));
+    if (left !== sessionMenuAt.left || top !== sessionMenuAt.top) setSessionMenuAt({ left, top });
+  }, [sessionMenu, sessionMenuAt]);
   // What was already sent for this session, so Enter's commit and the blur it
   // causes do not both reach the host with the same name.
   const renamed = useRef<Record<string, string>>({});
@@ -388,7 +396,7 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
                           ev.stopPropagation();
                           const opening = sessionMenu !== ws.root;
                           if (opening) {
-                            workspaceMenuTrigger.current = ev.currentTarget;
+                            menuTrigger.current = ev.currentTarget;
                             const anchor = ev.currentTarget.getBoundingClientRect();
                             setSessionMenuAt({
                               left: Math.min(window.innerWidth - 240, anchor.right + 8),
@@ -450,9 +458,11 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
                       <div
                         ref={sessionMenu === session.path ? sessionMenuBox : undefined}
                         data-action-click="session.open"
+                        data-action-contextmenu="session.menu"
+                        aria-haspopup="menu"
                         data-action-keydown={["session.open", "session.delete"]}
                         data-target={session.path}
-                        className="sessrow"
+                        className="sessrow sessrow-context"
                         role="treeitem"
                         aria-selected={on}
                         data-on={on ? "" : undefined}
@@ -461,6 +471,14 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
                         data-just-done={session.runtimeId && justDone.has(session.runtimeId) ? "" : undefined}
                         data-busy={busy === session.path ? "" : undefined}
                         onClick={() => void pick(ws, session)}
+                        onContextMenu={(ev) => {
+                          if ((ev.target as HTMLElement).closest("input, textarea, [role='menu']")) return;
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          menuTrigger.current = ev.currentTarget;
+                          setSessionMenuAt({ left: ev.clientX, top: ev.clientY });
+                          setSessionMenu(session.path);
+                        }}
                         tabIndex={0}
                         onKeyDown={(ev) => {
                           if (ev.target !== ev.currentTarget) return;
@@ -530,30 +548,8 @@ function WorkspacesView({ hub, tree, treeRead, runtimes, active, folded, reload,
                             {`+${kept.length}`}
                           </button>
                         )}
-                        <button
-                          className="session-more"
-                          data-action="session.menu"
-                          data-target={session.path}
-                          title={t("更多操作")}
-                          aria-label={t("会话操作：{title}", { title: rowLabel(session) })}
-                          aria-expanded={sessionMenu === session.path}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            const opening = sessionMenu !== session.path;
-                            if (opening) {
-                              const anchor = ev.currentTarget.getBoundingClientRect();
-                              setSessionMenuAt({
-                                left: Math.min(window.innerWidth - 240, anchor.right + 8),
-                                top: Math.max(12, Math.min(window.innerHeight - 270, anchor.top - 7)),
-                              });
-                            }
-                            setSessionMenu(opening ? session.path : "");
-                          }}
-                        >
-                          <StudioIcon name="more" />
-                        </button>
                         {sessionMenu === session.path && createPortal(
-                          <div ref={sessionMenuPortal} className="session-pop" role="menu" aria-label={t("会话操作")} style={sessionMenuAt} onClick={(ev) => ev.stopPropagation()}>
+                          <div ref={sessionMenuPortal} className="session-pop" role="menu" aria-label={t("会话操作")} style={{ ...sessionMenuAt, maxHeight: "calc(100vh - 24px)", overflowY: "auto" }} onClick={(ev) => ev.stopPropagation()}>
                             <div className="session-pop-head">
                               <b>{rowLabel(session)}</b>
                               <small>{session.runtimeId && liveIds([session.runtimeId]).length ? t("执行中") : t("已完成")} · {t("本地工作区")}</small>

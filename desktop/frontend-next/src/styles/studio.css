@@ -1890,6 +1890,8 @@ body { font-size: 14px; line-height: 1.75; }
   display: flex; align-items: center; overflow: hidden;
   font: 400 11px/1.45 var(--ui); letter-spacing: -.01em;
 }
+.rail .sessrow-context > .sesstitle { padding-inline-end: 9px; }
+.rail .sessrow-context > .sesscopies { margin-inline-end: 8px; }
 .rail .sesstitle > span {
   min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden; white-space: normal; overflow-wrap: anywhere; word-break: break-word;
