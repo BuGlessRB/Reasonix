@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { t } from "../i18n";
 import type { AgentPort, McpEntry } from "../port/port";
 import { Exception } from "./CapabilityScope";
@@ -35,9 +35,18 @@ export function ServerRow({
 }: {
   m: McpEntry; port: AgentPort; onDone: () => void; root: string; live: boolean;
 }) {
+  const [owner, setOwner] = useState({ port, root });
+  const currentOwner = useRef(owner);
+  currentOwner.current = owner;
   const [busy, setBusy] = useState("");
   const [failed, setFailed] = useState("");
   const [confirming, setConfirming] = useState(false);
+  if (owner.port !== port || owner.root !== root) {
+    setOwner({ port, root });
+    setBusy("");
+    setFailed("");
+    setConfirming(false);
+  }
   // 状态码是主机答上来的事实，画出来即可；它是不是「需要你重新认证」还要看自动
   // 刷新有没有跑过，那件事目前无人知道。m.error 是外部服务器自己写的文本，只作
   // 详情显示,不参与任何判断。
@@ -50,11 +59,11 @@ export function ServerRow({
     setFailed("");
     try {
       const r = (await fn()) as { error?: string } | void;
-      if (r && typeof r === "object" && r.error) setFailed(r.error);
+      if (currentOwner.current === owner && r && typeof r === "object" && r.error) setFailed(r.error);
     } catch (e) {
-      setFailed(reason(e));
+      if (currentOwner.current === owner) setFailed(reason(e));
     } finally {
-      setBusy("");
+      if (currentOwner.current === owner) setBusy("");
       onDone();
     }
   };
@@ -101,6 +110,7 @@ export function ServerRow({
         onClick={() =>
           void run("remove", async () => {
             const r = await port.removeMcp(m.name);
+            if (currentOwner.current !== owner) return;
             setConfirming(false);
             // A lower-precedence declaration with the same name may have taken
             // over; saying so beats a list that looks like the delete failed.
