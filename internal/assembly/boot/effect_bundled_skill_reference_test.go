@@ -52,6 +52,7 @@ func TestEffectBundledSkillReferenceReachesProviderAfterCopyInstall(t *testing.T
 	}{
 		{name: "release-note-kit", skill: "release-note", references: []string{"format.md"}},
 		{name: "issue-fix-kit", skill: "issue-fix", references: []string{"delivery.md", "scenario.md"}},
+		{name: "frontend-page-kit", skill: "frontend-page", references: []string{"delivery.md", "scenario.md", "../fixture/brief.md", "../fixture/tickets.json"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source := robustTempDir(t)

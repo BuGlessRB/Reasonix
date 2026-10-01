@@ -16,6 +16,8 @@ The [multi-file skill example](../examples/release-note-kit/README.md) shows
 how a plugin keeps a required reference file with its skill.
 For an issue-to-PR-draft exercise with a deliberately failing local fixture,
 see the [repository workflow example](../examples/issue-fix-kit/README.md).
+For a frontend task with a brief, sample data, and browser acceptance steps,
+see the [local interface example](../examples/frontend-page-kit/README.md).
 
 ## CLI Mode
 
