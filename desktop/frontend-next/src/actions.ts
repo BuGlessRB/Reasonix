@@ -248,6 +248,7 @@ export const ACTIONS: UIAction[] = [
   { id: "market.mine-retry", kind: "view", target: "none", proof: "interaction" },
   { id: "market.submit", kind: "kernel-mutation", target: "none", proof: "interaction" },
   { id: "market.vote", kind: "kernel-mutation", target: "none", proof: "interaction" },
+  { id: "market.vote-retry", kind: "view", target: "none", proof: "interaction" },
   // Taking back the innermost open thing: a popover, an inline form. One
   // intent, reached by pressing away and by Escape.
   { id: "layer.dismiss", kind: "navigation", target: "none", proof: "interaction" },
