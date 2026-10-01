@@ -88,7 +88,7 @@ export class SseExtensions extends SseLook {
     const res = await fetch(this.base + "/plugins/" + encodeURIComponent(name) + "/export", {
       credentials: "same-origin",
     });
-    if (!res.ok) throw new Error(`/plugins/${name}/export: ${res.status}`);
+    if (!res.ok) await SseExtensions.fail(`/plugins/${encodeURIComponent(name)}/export`, res);
     const required = (res.headers.get("X-Reasonix-Required-Env") ?? "").split(",").filter(Boolean);
     const url = URL.createObjectURL(await res.blob());
     const a = document.createElement("a");
