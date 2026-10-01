@@ -372,16 +372,28 @@ function contributes(a: PluginAction): string[] {
 // leaves the package on disk and out of this session, and saying so is the
 // difference between waiting and re-installing.
 export function Outcome({ plan }: { plan: PluginPlan }) {
-  const state = plan.reloadError ? "action_required" : plan.ok ? "ready" : "issue";
-  return (
+  const state = !plan.ok ? "issue" : plan.reloadError ? "action_required" : "ready";
+  const failed = plan.actions?.filter((action) => action.status === "failed") ?? [];
+  return <>
     <div className="outcome" data-state={state}>
       <i className="pip" />
       <span className="nm">{plan.actions?.[0]?.name || t("安装")}</span>
       <span className="dt">
         {state === "ready" && t("装好了，下一轮就能用")}
         {state === "action_required" && t("装好了，但运行时未重载：{reason}。请用「重载运行时」重试。", { reason: plan.reloadError! })}
-        {state === "issue" && (plan.error || plan.next || t("没装上"))}
+        {state === "issue" && (plan.error || (failed.length ? t("有项目未安装成功，原因见下方。") : plan.next || t("没装上")))}
       </span>
     </div>
-  );
+    {failed.map((action, i) => (
+      <div className="why" role="alert" key={`${action.kind}:${action.name}:${i}`}>
+        {action.name || action.kind}: {action.error || action.next || t("没装上")}
+        {action.error && action.next && <div>{action.next}</div>}
+      </div>
+    ))}
+    {state === "issue" && plan.reloadError && (
+      <div className="why" role="status">
+        {t("运行时未重载：{reason}。请用「重载运行时」重试。", { reason: plan.reloadError })}
+      </div>
+    )}
+  </>;
 }

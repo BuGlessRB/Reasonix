@@ -629,6 +629,9 @@ export const EN_SETTINGS: Record<string, string> = {
   "装好了，下一轮就能用": "Installed — the next turn can use it",
   "装好了，但运行时未重载：{reason}。请用「重载运行时」重试。":
     "Installed, but the runtime did not reload: {reason}. Use Reload runtime to retry.",
+  "运行时未重载：{reason}。请用「重载运行时」重试。":
+    "The runtime did not reload: {reason}. Use Reload runtime to retry.",
+  "有项目未安装成功，原因见下方。": "Not all items were installed. See the failures below.",
   "没装上": "Not installed",
   "这个地址上已经有「{name}」了。留空 key": "This address already holds “{name}”. Leave the key blank",
   "已就位 · {n} 个工具，下一轮就能用": "In place · {n} tools, ready next turn",
