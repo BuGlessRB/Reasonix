@@ -301,6 +301,7 @@ empty when nothing was, and a refusal never changes the exit code. The same
 | `code` | Cause |
 | --- | --- |
 | `permission.unattended` | It needed an approval and nobody could give one. |
+| `permission.untrusted_folder` | The folder is not trusted, so it needed an approval nobody could give. The denial's `remedy` names `reasonix trust --dir <folder>`, which shows what the folder would run before approving; `--fail-on-unverified` exits `3` and the result's `unverified_by` carries the code. |
 | `permission.read_only` | The session is in `read-only`. |
 | `permission.deny_rule` | A deny rule matched. |
 | `permission.declined` | A person answered no. |
@@ -344,7 +345,7 @@ Exit statuses of `reasonix run`:
 | `0` | The model finished, including with refused calls or unmet readiness. |
 | `1` | The run failed: provider, configuration, limit, or cancellation. |
 | `2` | The command line was invalid. |
-| `3` | `--fail-on-unverified` was given and final readiness stayed unmet. |
+| `3` | `--fail-on-unverified` was given and final readiness stayed unmet, or the folder is not trusted and its edits were refused. |
 
 ### Redacted machine interfaces
 

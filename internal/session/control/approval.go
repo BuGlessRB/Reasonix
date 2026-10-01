@@ -97,6 +97,10 @@ func NewHeadlessPermissionGate(policy permission.Policy) *freshHumanHeadlessGate
 // a task sub-agent run a write an explicit ask
 // rule was supposed to deny under auto.
 func BuildHeadlessApprovalGate(policy permission.Policy, mode string) *freshHumanHeadlessGate {
+	return buildHeadlessGate(policy, mode, nil)
+}
+
+func buildHeadlessGate(policy permission.Policy, mode string, folder *folderRefusal) *freshHumanHeadlessGate {
 	// An empty mode is the boot-time placeholder used by interactive frontends
 	// before they install their real gate. Keep that compatibility path distinct
 	// from an explicit headless Ask posture, which has nobody to approve it.
@@ -120,7 +124,13 @@ func BuildHeadlessApprovalGate(policy permission.Policy, mode string) *freshHuma
 		return &freshHumanHeadlessGate{gate: permission.NewGate(policy, denyPermissionApprover{})}
 	default:
 		policy.Mode = permission.Ask
-		return &freshHumanHeadlessGate{gate: permission.NewGate(policy, denyPermissionApprover{})}
+		if folder != nil {
+			f := *folder
+			f.trusted = policy
+			f.trusted.Mode, f.trusted.AllowDynamicBash = permission.Allow, true
+			folder = &f
+		}
+		return &freshHumanHeadlessGate{gate: permission.NewGate(policy, denyPermissionApprover{folder: folder})}
 	}
 }
 

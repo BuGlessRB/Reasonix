@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -21,7 +22,20 @@ import (
 
 // denyPermissionApprover answers for a session nobody is watching: a headless
 // run has no prompt to show, so a call that needs approval can only be refused.
-type denyPermissionApprover struct{}
+type denyPermissionApprover struct {
+	// folder is set when the refusals exist because the workspace folder is not
+	// trusted, the one cause the person can remove for good.
+	folder *folderRefusal
+}
+
+// folderRefusal is why a headless run opened on the asking posture: the folder
+// it works in holds no trust decision that lets edits and commands run.
+type folderRefusal struct {
+	root     string
+	declined bool
+	// trusted is the policy trusting the folder would run the session under.
+	trusted permission.Policy
+}
 
 func (denyPermissionApprover) Approve(context.Context, string, string, json.RawMessage) (bool, bool, error) {
 	return false, false, nil
@@ -31,11 +45,65 @@ func (denyPermissionApprover) Approve(context.Context, string, string, json.RawM
 // a person declining.
 func (denyPermissionApprover) Unattended() bool { return true }
 
+// RefusalCodeFor names the folder-trust cause only for a call trusting the
+// folder would let through.
+func (a denyPermissionApprover) RefusalCodeFor(tool, subject, policyReason string, args json.RawMessage) string {
+	if a.folder.explains(tool, subject, policyReason, args) {
+		return permission.RefusalUntrustedFolder
+	}
+	return ""
+}
+
+// UntrustedFolderCause is why a headless run in this folder asks, in one place
+// for the model, the run summary and the result.
+func UntrustedFolderCause(declined bool) string {
+	if declined {
+		return "is not trusted: the person declined trust for it earlier"
+	}
+	return "is not trusted: no trust decision is recorded for it"
+}
+
+// UntrustedFolderRemedy is what the person does so this folder's edits and
+// commands stop needing approval. Plain `trust` shows what the folder's own
+// files would run before approving; `--yes` skips that, so it is not offered.
+func UntrustedFolderRemedy(root string, declined bool) string {
+	dir := "<this folder>"
+	if !strings.ContainsAny(root, "\r\n\x00") {
+		dir = "'" + strings.ReplaceAll(root, "'", `'\''`) + "'"
+	}
+	remedy := fmt.Sprintf("review and trust it with `reasonix trust --dir %s` (add --yes only after reading what it lists), or pass --permission-mode auto for this run only", dir)
+	if declined {
+		return "if the person has changed their mind, " + remedy
+	}
+	return remedy
+}
+
+// explains reports whether the folder is what refused this call: no rule asks
+// about it, no class of call needs a person whatever the posture, so a trusted
+// folder would let it run.
+func (f *folderRefusal) explains(tool, subject, policyReason string, args json.RawMessage) bool {
+	return f != nil && policyReason == "" && explicitApprovalReason(tool, subject) == "" && !RequiresFreshHumanApprovalTool(tool) &&
+		f.trusted.Decide(tool, false, args) == permission.Allow
+}
+
+func (f folderRefusal) reason() string {
+	return fmt.Sprintf("this workspace folder %s %s, so file edits and shell commands in it need approval, and this run has nobody to give it. Nobody declined this call and retrying or rewriting it cannot change that. The person can %s. Do the part that needs no approval, then call conclude_blocked naming the untrusted folder.", strconv.Quote(f.root), UntrustedFolderCause(f.declined), UntrustedFolderRemedy(f.root, f.declined))
+}
+
 // ApproveWithReason says which refusal this is: without a reason the gate reports
 // "the user declined this tool call", untrue when there was no user, and the
 // model goes to ask someone who was never there. A call only a person may
 // answer leads with why, so the model learns which of its steps needed one.
-func (denyPermissionApprover) ApproveWithReason(_ context.Context, tool, subject string, _ json.RawMessage) (bool, bool, string, error) {
+func (a denyPermissionApprover) ApproveWithReason(ctx context.Context, tool, subject string, args json.RawMessage) (bool, bool, string, error) {
+	return a.ApproveWithPolicyReason(ctx, tool, subject, args, "")
+}
+
+// ApproveWithPolicyReason is ApproveWithReason knowing which rule asked, so a
+// refusal the folder's trust would not lift is not blamed on the folder.
+func (a denyPermissionApprover) ApproveWithPolicyReason(_ context.Context, tool, subject string, args json.RawMessage, policyReason string) (bool, bool, string, error) {
+	if a.folder.explains(tool, subject, policyReason, args) {
+		return false, false, a.folder.reason(), nil
+	}
 	reason := "this session has no interactive approver, so any call that needs approval is refused — nobody declined it, and neither retrying nor rewriting it can change that. If this work is meant to run unattended, it needs a permission mode that does not ask (or an explicit allow rule for this tool). Otherwise do the part that needs no approval and call conclude_blocked naming what was refused."
 	if why := explicitApprovalReason(tool, subject); why != "" {
 		reason = why + " " + reason
@@ -419,7 +487,13 @@ func NewSharedHeadlessGate(policy permission.Policy, mode string) *SharedHeadles
 // concurrently with Check (a turn may be mid-flight on another goroutine when
 // the user switches modes).
 func (g *SharedHeadlessGate) Update(mode string) {
-	g.set(BuildHeadlessApprovalGate(g.policy, mode))
+	g.UpdateFor(mode, nil)
+}
+
+// UpdateFor is Update for a run whose asking posture comes from an untrusted
+// folder, so the sub-agents' refusals name it too.
+func (g *SharedHeadlessGate) UpdateFor(mode string, folder *folderRefusal) {
+	g.set(buildHeadlessGate(g.policy, mode, folder))
 }
 
 // UpdateAttended is Update for a session a person is watching. A sub-agent

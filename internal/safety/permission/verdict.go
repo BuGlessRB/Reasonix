@@ -16,12 +16,15 @@ const (
 	// RefusalParked is a call that needed a person, was recorded for one, and
 	// did not run. Unlike RefusalUnattended it names a record the model can cite.
 	RefusalParked = "permission.parked"
+	// RefusalUntrustedFolder is a call that needed approval because the person
+	// never trusted this workspace folder, in a run nobody could ask.
+	RefusalUntrustedFolder = "permission.untrusted_folder"
 )
 
 // IsRefusalCode reports whether code is one a permission gate produces.
 func IsRefusalCode(code string) bool {
 	switch code {
-	case RefusalDenyRule, RefusalReadOnly, RefusalDeclined, RefusalUnattended, RefusalParked:
+	case RefusalDenyRule, RefusalReadOnly, RefusalDeclined, RefusalUnattended, RefusalParked, RefusalUntrustedFolder:
 		return true
 	}
 	return false
@@ -39,6 +42,14 @@ type Verdict struct {
 // the absence of a person, which is a different fact from a person declining.
 type UnattendedApprover interface {
 	Unattended() bool
+}
+
+// CodedRefuser is an unattended approver that knows why nobody can approve a
+// given call: it returns that call's refusal code, or "" for the generic
+// RefusalUnattended. policyReason is the matched rule the gate asked about.
+type CodedRefuser interface {
+	UnattendedApprover
+	RefusalCodeFor(toolName, subject, policyReason string, args json.RawMessage) string
 }
 
 const readOnlyRefusal = "read-only mode: this session changes nothing — no file writes, no shell command that is not a known read, no tool that is not declared read-only. Do not retry it or rewrite it into another form; report what you would change, and the user can leave read-only mode to let it run."
@@ -102,6 +113,11 @@ func (g *Gate) ask(ctx context.Context, toolName string, args json.RawMessage, r
 		}
 		if u, ok := g.Approver.(UnattendedApprover); ok && u.Unattended() {
 			v.Code = RefusalUnattended
+			if c, ok := u.(CodedRefuser); ok {
+				if code := c.RefusalCodeFor(toolName, Subject(args), ruleReason, args); code != "" {
+					v.Code = code
+				}
+			}
 		}
 		return v, nil
 	}

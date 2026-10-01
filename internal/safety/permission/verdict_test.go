@@ -82,6 +82,10 @@ func TestVerdictNamesWhoRefused(t *testing.T) {
 	if v, _ := noApprover.Verdict(ctx, ExtendWritePaths, json.RawMessage(`{"path":"/x"}`), false); v.Allow || v.Code != RefusalUnattended {
 		t.Fatalf("a human-only question with no approver is unattended, got %+v", v)
 	}
+	coded := NewGate(New("ask", nil, nil, nil), &codedApprover{})
+	if v, _ := coded.Verdict(ctx, "write_file", write, false); v.Code != RefusalUntrustedFolder || !IsRefusalCode(v.Code) {
+		t.Fatalf("an unattended approver that names its cause carries that code, got %+v", v)
+	}
 	deny := NewGate(New("allow", nil, nil, []string{"write_file"}), nil)
 	if v, _ := deny.Verdict(ctx, "write_file", write, false); v.Code != RefusalDenyRule {
 		t.Fatalf("a deny rule is its own identity, got %+v", v)
@@ -126,4 +130,10 @@ func TestDenialWithoutARuleNamesThePosture(t *testing.T) {
 	if _, refused := PostureRefusal(ctx, checkOnly{}, "x", nil, false); refused {
 		t.Fatal("a gate with no posture to report is not read-only")
 	}
+}
+
+type codedApprover struct{ unattendedApprover }
+
+func (codedApprover) RefusalCodeFor(string, string, string, json.RawMessage) string {
+	return RefusalUntrustedFolder
 }

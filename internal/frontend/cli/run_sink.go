@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"time"
 
@@ -23,6 +24,8 @@ type runSinkChain struct {
 	resultOutput *runOutputSink
 	metrics      *metricsSink
 	trajectory   *trajectory.Recorder
+	// tally is set for a text run that prints no result object.
+	tally *runDenialTally
 }
 
 // buildRunSink assembles `run`'s sink chain: stdout rendering innermost, then
@@ -45,7 +48,8 @@ func buildRunSink(format runOutputFormat, printOnly, showThinking bool, metricsP
 		}
 		textSink := agent.NewTextSink(os.Stdout, renderer, termW)
 		textSink.SetShowReasoning(showThinking)
-		chain.sink = textSink
+		chain.tally = newRunDenialTally(textSink)
+		chain.sink = chain.tally
 	}
 	if metricsPath != "" {
 		chain.metrics = &metricsSink{
@@ -102,4 +106,34 @@ func recordTrajectoryHeader(rec *trajectory.Recorder, ctrl *control.Controller, 
 		Capabilities:     caps,
 		CapabilitiesHash: capsHash,
 	})
+}
+
+// settlePosture opens the run on its approval mode and tells the sinks which
+// folder a refusal is about. With no mode named the build's default decides.
+func (c runSinkChain) settlePosture(ctrl *control.Controller, defaulted bool, named string) string {
+	mode := named
+	if defaulted {
+		mode = ctrl.ApplyDefaultHeadlessApprovalMode()
+	} else {
+		ctrl.ApplyHeadlessApprovalMode(named)
+	}
+	c.resultOutput.SetPermissionMode(mode)
+	note := newFolderNote(ctrl)
+	c.resultOutput.setFolderNote(note)
+	if c.tally != nil {
+		c.tally.setNote(note)
+	}
+	return mode
+}
+
+// refusedByFolderTrust reports whether an edit or command was refused because
+// the folder is untrusted. A text run with no result object has not yet said
+// what it was refused, so it says so on w now.
+func (c runSinkChain) refusedByFolderTrust(w io.Writer) bool {
+	if c.tally == nil {
+		return c.resultOutput.refusedByFolderTrust()
+	}
+	denials := c.tally.snapshot()
+	writeDenialWarning(w, denials)
+	return refusedByFolderTrust(denials)
 }

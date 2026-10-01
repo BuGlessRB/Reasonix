@@ -532,11 +532,7 @@ func runAgent(args []string, version string) int {
 	}
 	defer ctrl.Close()
 	SetTaskJobKiller(ctrlKillerAdapter{ctrl})
-	if strings.TrimSpace(*f.permissionMode) == "" {
-		permissions.approval = ctrl.DefaultApprovalMode()
-	}
-	ctrl.ApplyHeadlessApprovalMode(permissions.approval)
-	resultOutput.SetPermissionMode(permissions.approval)
+	permissions.approval = chain.settlePosture(ctrl, strings.TrimSpace(*f.permissionMode) == "", permissions.approval)
 
 	if err := bindRunSession(ctrl, leases, resumeSession, resumePath); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)
@@ -546,7 +542,7 @@ func runAgent(args []string, version string) int {
 	chain.begin(ctrl, version, prompt)
 	runErr := ctrl.Run(ctx, prompt)
 	reporter.RecordRecovery(ctrl.DrainRecoveryMetrics())
-	completion := classifyRunCompletion(runErr).withFailOnUnverified(*f.failOnUnverified)
+	completion := classifyRunCompletion(runErr).withFolderRefusal(chain.refusedByFolderTrust(os.Stderr)).withFailOnUnverified(*f.failOnUnverified)
 	if cfg != nil {
 		notify.SendEvent(newNotificationSender(), i18n.M, cfg.Notifications, event.Event{
 			Kind:    event.TurnDone,

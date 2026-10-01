@@ -258,7 +258,7 @@ reasonix run "运行测试" --output-format stream-json
 }
 ```
 
-`permission_denials` 列出本次运行的权限门拒绝的调用，没有被拒时为空数组；被拒不改变退出码。
+`permission_denials` 列出本次运行的权限门拒绝的调用，没有被拒时为空数组；被拒不改变退出码，唯独在 `--fail-on-unverified` 下 `permission.untrusted_folder` 退出 `3`。
 同一个 `code` 也随被拒的工具结果出现：`stream-json` 里是 `refusalCode`，`--events-jsonl`
 里是 `refusal_code`。
 
@@ -267,6 +267,7 @@ reasonix run "运行测试" --output-format stream-json
 | `code` | 原因 |
 | --- | --- |
 | `permission.unattended` | 需要批准，但无人可以批准。 |
+| `permission.untrusted_folder` | 因工作区文件夹没有信任决定而需要批准，且无人可以批准。该条记录带 `remedy`：`reasonix trust --dir <文件夹>`（先展示该文件夹会运行什么再批准），或为单次运行加 `--permission-mode auto`；结果里的 `unverified_by` 给出该码。 |
 | `permission.read_only` | 会话处于 `read-only`。 |
 | `permission.deny_rule` | 命中 deny 规则。 |
 | `permission.declined` | 有人拒绝了。 |
@@ -304,7 +305,7 @@ reasonix run "运行测试" --output-format stream-json
 | `0` | 模型已结束，包括有调用被拒或就绪检查未满足的情况。 |
 | `1` | 运行失败：模型服务、配置、上限或取消。 |
 | `2` | 命令行参数无效。 |
-| `3` | 指定了 `--fail-on-unverified` 且最终就绪检查未满足。 |
+| `3` | 指定了 `--fail-on-unverified`，且最终就绪检查未满足，或因文件夹未被信任而所有编辑和命令都被拒绝。 |
 
 ### 脱敏机器接口
 

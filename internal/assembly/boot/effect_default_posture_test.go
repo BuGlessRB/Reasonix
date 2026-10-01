@@ -246,3 +246,29 @@ func TestEffectYoloKeepsTheSandbox(t *testing.T) {
 		t.Fatal("a YOLO shell command wrote outside the sandbox's write roots")
 	}
 }
+
+// A headless run nobody named a mode for opens on the asking posture, and where
+// that is because the folder holds no trust decision, the refusal says so: the
+// code the run reports, and the cause and remedy the model reads.
+func TestEffectDefaultHeadlessPostureNamesTheUntrustedFolder(t *testing.T) {
+	if !sandbox.Available() {
+		t.Skip("no OS sandbox backend; the default asks here for a different reason")
+	}
+	run := buildPostureRun(t, "[sandbox]\nbash = \"enforce\"\n", writeCall("w", "notes.md"))
+	if got := run.ctrl.ApplyDefaultHeadlessApprovalMode(); got != control.ToolApprovalAsk {
+		t.Fatalf("default headless posture %q, want ask", got)
+	}
+	_ = run.ctrl.Run(context.Background(), "do the task")
+	if _, err := os.Stat(filepath.Join(run.dir, "notes.md")); err == nil {
+		t.Fatal("the write landed in an untrusted folder")
+	}
+	if got := run.results["w"].RefusalCode; got != permission.RefusalUntrustedFolder {
+		t.Fatalf("the refused write carries %q, want %q", got, permission.RefusalUntrustedFolder)
+	}
+	saw := run.modelSaw(t, "w")
+	for _, want := range []string{"no trust decision", control.UntrustedFolderRemedy(run.ctrl.WorkspaceRoot(), false)} {
+		if !strings.Contains(saw, want) {
+			t.Fatalf("the model read %q, want %q", saw, want)
+		}
+	}
+}

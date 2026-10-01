@@ -12,6 +12,7 @@ import (
 
 	"reasonix/internal/base/testenv"
 	"reasonix/internal/safety/permission"
+	"reasonix/internal/safety/sandbox"
 )
 
 func runPlainAnswerFixture(t *testing.T) {
@@ -79,7 +80,11 @@ func TestRunReportsPermissionDenials(t *testing.T) {
 		t.Fatalf("permission_denials = %v, want the refused write_file", result["permission_denials"])
 	}
 	denial := denials[0].(map[string]any)
-	if denial["tool_name"] != "write_file" || denial["tool_use_id"] != "call_1" || denial["code"] != permission.RefusalUnattended {
+	wantCode := permission.RefusalUnattended
+	if sandbox.Available() {
+		wantCode = permission.RefusalUntrustedFolder
+	}
+	if denial["tool_name"] != "write_file" || denial["tool_use_id"] != "call_1" || denial["code"] != wantCode {
 		t.Fatalf("denial = %v", denial)
 	}
 
