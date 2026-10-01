@@ -1152,7 +1152,7 @@ body { background: var(--page) !important; }
 .turntools .studio-branch { max-width: 160px; }
 .turntools .studio-branch .lb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .turntools .model-picker { max-width: 180px; }
-.turntools .model-picker .nm { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turntools .model-picker .nm { max-width: 130px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .compose .mode {
   min-height: 28px;
   border-color: transparent;
@@ -1433,7 +1433,7 @@ body { background: var(--page) !important; }
 .workbench-filelist em { color: var(--warn); font-style: normal; }
 .workbench-no-files { margin: 18px 12px; color: var(--faint); font: 500 10px/1.4 var(--ui); text-align: center; }
 .workbench-filebar { min-height: 39px; padding: 0 10px; flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; border-bottom: 1px solid var(--hair); }
-.workbench-filebar strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 11px/1 var(--mono); }
+.workbench-filebar strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 11px/1.5 var(--mono); }
 .workbench-filebar [role="group"] { display: flex; padding: 2px; background: var(--page); border: 1px solid var(--hair); border-radius: 5px; }
 .workbench-filebar button { min-height: 25px; padding: 0 8px; border: 0; border-radius: 3px; background: transparent; color: var(--muted); font: 600 10px/1 var(--ui); }
 .workbench-filebar button[aria-pressed="true"] { background: var(--raised); color: var(--text); }
@@ -2178,7 +2178,7 @@ body { font-size: 14px; line-height: 1.75; }
 }
 .studio-user-foot .acctrow { width: 30px; min-width: 30px; height: 30px; margin: 0; padding: 0; overflow: hidden; }
 .studio-user-foot .ini { width: 28px; height: 28px; }
-.studio-workspace-kind { color: var(--faint); font: 500 11px/1 var(--ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-workspace-kind { color: var(--faint); font: 500 11px/1.5 var(--ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .turntools > .attach { order: 1 !important; }
 .turntools > .studio-mode-control { order: 2 !important; }
@@ -2217,7 +2217,7 @@ body { font-size: 14px; line-height: 1.75; }
 .studio-mode-picker .studio-icon:last-child,
 .studio-effort-picker .studio-icon:last-child,
 .model-picker .studio-icon:last-child { width: 11px; height: 11px; color: var(--ghost); }
-.studio-model-control .model-picker .nm { max-width: 125px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-model-control .model-picker .nm { max-width: 125px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-model-control .model-picker {
   min-height: 28px;
   justify-content: flex-start;
