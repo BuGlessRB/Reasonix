@@ -37,6 +37,7 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
   const [results, setResults] = useState<McpInstallResult[]>([]);
 
   const parse = async () => {
+    if (busy || !text.trim()) return;
     setBusy(true);
     setError("");
     try {
@@ -93,7 +94,10 @@ export function AddServer({ port, canProject, onClose, onInstalled }: Props) {
             placeholder={PLACEHOLDER}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") void parse();
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                void parse();
+              }
             }}
           />
           <div className="acts">

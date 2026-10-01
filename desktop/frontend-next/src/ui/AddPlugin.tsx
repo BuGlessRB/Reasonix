@@ -52,6 +52,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source, onAppl
   });
 
   const look = async () => {
+    if (busy || !text.trim()) return;
     setBusy(true);
     setError("");
     try {
@@ -210,7 +211,10 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source, onAppl
         placeholder={PLACEHOLDER}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") void look();
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            void look();
+          }
         }}
       />
       <div className="acts">
