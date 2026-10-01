@@ -88,7 +88,13 @@ func Export(name, root string) ([]byte, []string, error) {
 		if total > ExportSizeLimit {
 			return fmt.Errorf("plugin %q exceeds the %d MB export limit", name, ExportSizeLimit>>20)
 		}
-		w, err := zw.Create(path.Join(name, rel))
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		header := &zip.FileHeader{Name: path.Join(name, rel), Method: zip.Deflate}
+		header.SetMode(info.Mode().Perm())
+		w, err := zw.CreateHeader(header)
 		if err != nil {
 			return err
 		}
