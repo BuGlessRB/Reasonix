@@ -223,8 +223,8 @@ func (c *Controller) newInteractiveGate() *permission.Gate {
 	return gate
 }
 
-func (c *Controller) newHeadlessGate(mode string) *freshHumanHeadlessGate {
-	gate := BuildHeadlessApprovalGate(c.policy, mode)
+func (c *Controller) newHeadlessGate(mode string, folder *folderRefusal) *freshHumanHeadlessGate {
+	gate := buildHeadlessGate(c.policy, mode, folder)
 	gate.allowLowRiskFreshAction = func(toolName string, args json.RawMessage) bool {
 		return toolName == memoryRememberTool && c.allowLowRiskRemember(args)
 	}
@@ -252,16 +252,20 @@ func (c *Controller) newHeadlessGate(mode string) *freshHumanHeadlessGate {
 // by the gate for every mode. The only exception is a controller-assessed,
 // create-only project/reference memory; every other memory write remains denied.
 func (c *Controller) ApplyHeadlessApprovalMode(mode string) {
+	c.applyHeadless(mode, nil)
+}
+
+func (c *Controller) applyHeadless(mode string, folder *folderRefusal) {
 	if c.observe != nil {
 		return
 	}
 	mode = normalizeToolApprovalMode(mode)
 	c.approval.setMode(mode)
 	if c.subagentGate != nil {
-		c.subagentGate.Update(mode)
+		c.subagentGate.UpdateFor(mode, folder)
 	}
 	if c.executor != nil {
-		c.executor.SetGate(c.newHeadlessGate(mode))
+		c.executor.SetGate(c.newHeadlessGate(mode, folder))
 	}
 }
 

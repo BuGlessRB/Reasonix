@@ -12,7 +12,6 @@ import (
 
 	"reasonix/internal/contract/event"
 	"reasonix/internal/contract/eventwire"
-	"reasonix/internal/safety/permission"
 )
 
 type runOutputFormat string
@@ -58,6 +57,7 @@ type runResultUsage struct {
 // the run settled on and every call its gate refused.
 type runPermissionRecord struct {
 	mode    string
+	note    folderNote
 	denials []runPermissionDenial
 }
 
@@ -65,6 +65,9 @@ type runPermissionDenial struct {
 	ToolName  string `json:"tool_name"`
 	ToolUseID string `json:"tool_use_id"`
 	Code      string `json:"code"`
+	// Remedy is what the person does so this refusal stops, when the code has one.
+	Remedy string `json:"remedy,omitempty"`
+	Cause  string `json:"cause,omitempty"`
 }
 
 type runResult struct {
@@ -97,8 +100,11 @@ type runResult struct {
 	PermissionMode string `json:"permission_mode,omitempty"`
 	// Readiness is the unmet final-readiness judgement, if any; the run still
 	// exits 0 unless --fail-on-unverified asked otherwise.
-	Readiness  *eventwire.FinalReadiness    `json:"readiness,omitempty"`
-	Completion *eventwire.CompletionSummary `json:"completion,omitempty"`
+	Readiness *eventwire.FinalReadiness `json:"readiness,omitempty"`
+	// UnverifiedBy is the refusal code that left the work undone when the run
+	// still reports success; `--fail-on-unverified` turns it into exit 3.
+	UnverifiedBy string                       `json:"unverified_by,omitempty"`
+	Completion   *eventwire.CompletionSummary `json:"completion,omitempty"`
 }
 
 type machineEventUsage struct {
@@ -256,8 +262,8 @@ func (s *runOutputSink) Emit(e event.Event) {
 	if e.Kind == event.TurnDone {
 		s.turns++
 	}
-	if e.Kind == event.ToolResult && permission.IsRefusalCode(e.Tool.RefusalCode) {
-		s.permissions.denials = append(s.permissions.denials, runPermissionDenial{ToolName: e.Tool.Name, ToolUseID: e.Tool.ID, Code: e.Tool.RefusalCode})
+	if d, ok := denialOf(e, s.permissions.note); ok {
+		s.permissions.denials = append(s.permissions.denials, d)
 	}
 	s.verdict.observe(e)
 	// stdout carries the answer alone, so a warning had nowhere to go and was
@@ -386,6 +392,7 @@ func (s *runOutputSink) Finalize(sessionID string, started time.Time, runErr err
 		PermissionDenials: append([]runPermissionDenial{}, s.permissions.denials...),
 		PermissionMode:    s.permissions.mode,
 		Readiness:         runReadiness(runErr),
+		UnverifiedBy:      unverifiedBy(s.permissions.denials),
 		Completion:        s.verdict.completion,
 	})
 }
@@ -472,6 +479,26 @@ func machineEventKind(kind event.Kind) string {
 		return names[kind]
 	}
 	return "unknown"
+}
+
+// setFolderNote says what a refusal for an untrusted folder tells the person.
+func (s *runOutputSink) setFolderNote(n folderNote) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.permissions.note = n
+	s.mu.Unlock()
+}
+
+// refusedByFolderTrust reports whether a refusal came from an untrusted folder.
+func (s *runOutputSink) refusedByFolderTrust() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return refusedByFolderTrust(s.permissions.denials)
 }
 
 // SetPermissionMode records the posture the run settled on. A nil sink, which
