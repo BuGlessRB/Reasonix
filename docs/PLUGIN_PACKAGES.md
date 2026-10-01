@@ -267,6 +267,10 @@ third-party install scripts during plugin installation.
 
 Plugin hook execution is explicit:
 
+- A hook with `contextFile` reads that package-relative file directly; it
+  does not run a command. The [session-start context example](../examples/review-context-kit/README.md)
+  includes a complete package, copy/link instructions, and provider-boundary
+  verification of first-turn delivery and session rotation.
 - When `args` is present, including `"args": []`, the hook uses **exec form**.
   `command` is the executable and every argument is passed literally, without
   shell parsing or interpolation.
