@@ -7,7 +7,7 @@ import { MockPort } from "../port/mock";
 import type { AgentPort, ApprovalMode, Attachment, Completion, ModelEntry, Preset, SessionStatus } from "../port/port";
 import { draftKey } from "./drafts";
 
-afterEach(() => { cleanup(); localStorage.clear(); });
+afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 
 const status = (over: Partial<SessionStatus> = {}) =>
   ({
@@ -25,6 +25,19 @@ function deferred<T>() {
     resolve = done;
   });
   return { promise, resolve };
+}
+
+function touchPointer() {
+  vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({
+    matches: query === "(pointer: coarse)",
+    media: query,
+    onchange: null,
+    addListener() {},
+    removeListener() {},
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent: () => false,
+  }) as MediaQueryList);
 }
 
 function draw(
@@ -56,6 +69,16 @@ describe("composer submission", () => {
     expect((screen.getByRole("button", { name: "发送" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(box, { target: { value: "检查这次改动", selectionStart: 6 } });
     expect((screen.getByRole("button", { name: "发送" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("keeps Enter in the textarea when a touch-first pointer has focus", () => {
+    touchPointer();
+    const { box, onSubmit } = draw();
+    fireEvent.change(box, { target: { value: "两行输入", selectionStart: 4 } });
+    expect(fireEvent.keyDown(box, { key: "Enter" })).toBe(true);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("点按发送 · 回车换行")).toBeTruthy();
+    expect(box.hasAttribute("aria-keyshortcuts")).toBe(false);
   });
 
   it("locks repeated Enter presses until the first submit settles", async () => {
