@@ -1309,3 +1309,20 @@ test("a host that exits before its handshake is logged and shown, not swallowed"
     shell.cleanup();
   }
 });
+
+test("the tray has a file for every Windows scale, at exactly 16 * scale pixels", () => {
+  const { trayAsset, SCALES } = require("../src/trayimage.js");
+  const dim = (f) => {
+    const b = fs.readFileSync(f);
+    return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  };
+  for (const [scale] of SCALES) {
+    const { file, pixels } = trayAsset(scale);
+    assert.deepEqual(dim(file), [pixels, pixels], file);
+    assert.equal(pixels, Math.round(16 * scale));
+  }
+  assert.equal(trayAsset(1.75).pixels, 28);
+  assert.equal(trayAsset(1.8).pixels, 32);
+  assert.equal(trayAsset(5).pixels, 48);
+  assert.equal(trayAsset(NaN).pixels, 16);
+});
