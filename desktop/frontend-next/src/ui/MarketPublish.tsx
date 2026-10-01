@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
 import type { AgentPort, MarketKind, MarketPackage, MarketPublished } from "../port/port";
@@ -176,9 +176,13 @@ type MineProps = { port: AgentPort; onInstalled: () => void; onViewInstalled?: (
 
 export function MyPackages(props: MineProps) {
   const [connection, setConnection] = useState({ port: props.port, generation: 0 });
+  const currentConnection = useRef(connection);
+  currentConnection.current = connection;
   // Reset before child effects can preview the previous account's slug on the new port.
   if (connection.port !== props.port) setConnection({ port: props.port, generation: connection.generation + 1 });
-  return <PackageList key={connection.generation} {...props} />;
+  return <PackageList key={connection.generation} {...props} onInstalled={() => {
+    if (currentConnection.current === connection) props.onInstalled();
+  }} />;
 }
 
 // Every row is the account's own package, so each can be installed here in
