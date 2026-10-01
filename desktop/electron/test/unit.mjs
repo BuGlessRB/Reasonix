@@ -124,7 +124,7 @@ test("an unreachable kernel is an answer, not a crash", async () => {
   assert.equal(await dead.trayState(), null);
 });
 
-const { reveal } = require("../src/reveal.js");
+const { reveal, revealWorkspace } = require("../src/reveal.js");
 
 // A kernel that answers /workspace/locate as the test says, and a shell that
 // only records what it was asked to open.
@@ -143,7 +143,7 @@ async function revealRig(answer, platform = process.platform) {
     openPath: async (p) => (opened.push(["open", p]), ""),
     showItemInFolder: (p) => opened.push(["select", p]),
   };
-  return { asked, opened, run: (base, rel) => reveal(client, shell, base, rel, platform), close: () => server.close() };
+  return { asked, opened, run: (base, rel) => reveal(client, shell, base, rel, platform), workspace: (root) => revealWorkspace(client, shell, root, platform), close: () => server.close() };
 }
 
 const ROOT = path.resolve(os.tmpdir(), "rx-workspace");
@@ -189,6 +189,22 @@ test("the page cannot steer reveal to a location the kernel did not name", async
     // A root answered as a file is still only selected: openPath would run it.
     assert.equal(await rig.run("/rt/r1", ""), null);
     assert.deepEqual(rig.opened, [["select", path.join(ROOT, "a.exe")]]);
+  } finally {
+    rig.close();
+  }
+});
+
+test("a listed project is shown through the hub and only on its answer", async () => {
+  const rig = await revealRig((url) =>
+    url.pathname === "/host/workspaces/locate" && url.searchParams.get("root") === "/work/a b"
+      ? [200, { path: path.join(ROOT, "a b"), dir: true }]
+      : [404, { code: "workspace.not_listed", error: "not listed" }],
+  );
+  try {
+    assert.equal(await rig.workspace("/work/a b"), null);
+    assert.equal((await rig.workspace("/etc")).code, "workspace.not_listed");
+    assert.deepEqual(rig.opened, [["select", path.join(ROOT, "a b")]]);
+    assert.equal(rig.asked[0], "/host/workspaces/locate?root=%2Fwork%2Fa%20b");
   } finally {
     rig.close();
   }

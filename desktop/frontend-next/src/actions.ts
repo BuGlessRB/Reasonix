@@ -281,6 +281,7 @@ export const ACTIONS: UIAction[] = [
   // state — which is why it is one id and why it is not a mutation.
   { id: "external.open", kind: "shell-native", target: "none", proof: "interaction" },
   { id: "remote-host.remove", kind: "destructive", target: "none", proof: "authority-effect" },
+  { id: "workspace.reveal", kind: "shell-native", target: "entity", proof: "interaction" },
   { id: "workspace.remove", kind: "destructive", target: "none", proof: "authority-effect" },
   { id: "extensions.invoke", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
 
