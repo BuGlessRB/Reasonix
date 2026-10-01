@@ -161,7 +161,7 @@ export function AddPlugin({ port, onClose, onInstalled, updating, source, onAppl
           <button
             className="act"
             data-action={updating ? "extensions.cancel" : "extensions.back"}
-            disabled={!!updating && busy}
+            disabled={busy}
             onClick={() => (updating ? onClose() : setPlan(null))}
           >
             {t(updating ? "取消" : "返回")}
