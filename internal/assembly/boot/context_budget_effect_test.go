@@ -109,6 +109,16 @@ context_window = 32000
 		t.Fatalf("first warned request carried %d notices, want 1", got)
 	}
 
+	var notice string
+	for _, m := range reqs[warned].Messages {
+		if strings.Contains(m.Content, "<context-budget>") {
+			notice = m.Content
+		}
+	}
+	if !strings.Contains(notice, "Keep working; do not stop, hand the work back") {
+		t.Fatalf("the notice that reached the provider does not tell the model the task continues across the fold:\n%s", notice)
+	}
+
 	// The rungs are edge-triggered, so the run can accumulate at most one notice
 	// per rung per fold — never one per step.
 	for i, req := range reqs {
