@@ -81,6 +81,25 @@ describe("composer submission", () => {
     expect(box.hasAttribute("aria-keyshortcuts")).toBe(false);
   });
 
+  it("still submits through the Send button on a touch-first pointer", async () => {
+    touchPointer();
+    const { box, onSubmit } = draw();
+    fireEvent.change(box, { target: { value: "点按发送", selectionStart: 4 } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith("点按发送"));
+  });
+
+  it("shows the tap-to-steer hint on a touch-first pointer during a live turn", () => {
+    touchPointer();
+    const { box, onSubmit } = draw({ running: true });
+    fireEvent.change(box, { target: { value: "补充一句", selectionStart: 4 } });
+    expect(fireEvent.keyDown(box, { key: "Enter" })).toBe(true);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("点按插话 · 回车换行")).toBeTruthy();
+  });
+
   it("locks repeated Enter presses until the first submit settles", async () => {
     const pending = deferred<boolean>();
     const onSubmit = vi.fn(() => pending.promise);
