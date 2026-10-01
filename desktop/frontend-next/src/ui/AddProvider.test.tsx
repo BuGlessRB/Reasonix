@@ -139,3 +139,55 @@ it("ties the name rule to the field and the button, and waits out IME compositio
   expect(field.getAttribute("aria-invalid")).toBe("true");
   expect(screen.getByRole("button", { name: "添加来源" }).getAttribute("aria-describedby")).toBe("addp-name-rule");
 });
+
+it("keeps Add disabled while an IME name is still being composed", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const saveProvider = vi.fn();
+  const port = { protocols: vi.fn(nameCatalog), saveProvider } as unknown as Port;
+  render(<AddProvider port={port} taken={[]} known={[]} onDone={() => {}} onCancel={() => {}} />);
+
+  const name = screen.getByLabelText("来源名称");
+  fireEvent.change(name, { target: { value: "company-relay" } });
+  fireEvent.change(screen.getByLabelText("接口地址"), { target: { value: "https://relay.example/v1" } });
+  const model = screen.getByRole("searchbox", { name: "搜索或添加模型" });
+  fireEvent.change(model, { target: { value: "m1" } });
+  fireEvent.keyDown(model, { key: "Enter", code: "Enter", charCode: 13 });
+  const add = screen.getByRole("button", { name: "添加来源" }) as HTMLButtonElement;
+  await waitFor(() => expect(add.disabled).toBe(false));
+
+  fireEvent.compositionStart(name);
+  fireEvent.change(name, { target: { value: "公司中转站" } });
+  expect(add.disabled).toBe(true);
+  fireEvent.click(add);
+  expect(saveProvider).not.toHaveBeenCalled();
+
+  fireEvent.compositionEnd(name);
+  expect(add.disabled).toBe(true);
+  fireEvent.change(name, { target: { value: "company-relay" } });
+  expect(add.disabled).toBe(false);
+});
+
+it("normalizes spaces around an ASCII name and refuses a blank one", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const saveProvider = vi.fn(async () => {});
+  const port = { protocols: vi.fn(nameCatalog), saveProvider } as unknown as Port;
+  render(<AddProvider port={port} taken={[]} known={[]} onDone={() => {}} onCancel={() => {}} />);
+
+  const name = screen.getByLabelText("来源名称");
+  const add = screen.getByRole("button", { name: "添加来源" }) as HTMLButtonElement;
+  expect(add.disabled).toBe(true);
+  fireEvent.change(name, { target: { value: "   " } });
+  expect(add.disabled).toBe(true);
+
+  fireEvent.change(name, { target: { value: " company-relay.1_x " } });
+  fireEvent.change(screen.getByLabelText("接口地址"), { target: { value: "https://relay.example/v1" } });
+  const model = screen.getByRole("searchbox", { name: "搜索或添加模型" });
+  fireEvent.change(model, { target: { value: "m1" } });
+  fireEvent.keyDown(model, { key: "Enter", code: "Enter", charCode: 13 });
+  await waitFor(() => expect(add.disabled).toBe(false));
+
+  fireEvent.click(add);
+  await waitFor(() => expect(saveProvider).toHaveBeenCalledWith(expect.objectContaining({
+    name: "company-relay.1_x",
+  })));
+});

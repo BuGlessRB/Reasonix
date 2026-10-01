@@ -353,7 +353,7 @@ export function AddProvider({
       </div>
 
       <div className="acts addp-footer">
-        <button className="act" data-action="provider.add" data-primary onClick={save} aria-describedby={nameBad ? "addp-name-rule" : undefined} disabled={busy || checkingModel !== "" || picked.length === 0 || name.trim() === "" || nameBad || kind === "" || baseUrl.trim() === "" || extraBad}>
+        <button className="act" data-action="provider.add" data-primary onClick={save} aria-describedby={nameBad ? "addp-name-rule" : undefined} disabled={busy || composing || checkingModel !== "" || picked.length === 0 || name.trim() === "" || nameBad || kind === "" || baseUrl.trim() === "" || extraBad}>
           {t(busy ? "保存中…" : "添加来源")}
         </button>
         <button className="act" onClick={onCancel} disabled={busy || checkingModel !== ""}>{t("取消")}</button>
