@@ -2766,6 +2766,7 @@
     font: var(--w-reg) var(--fs-meta) var(--mono); color: var(--faint) }
   .srv .acts { flex: none }
   .srv .why { margin: 4px 0 0 15px; font: var(--w-reg) var(--fs-ui)/1.55 var(--ui); color: var(--err) }
+  .srv .why[role="status"] { color: var(--muted) }
   .srv .peek { margin: 7px 0 1px 15px }
 
   .srv .srv-ab { display: flex; align-items: baseline; gap: 8px; margin: 5px 0 0 15px }

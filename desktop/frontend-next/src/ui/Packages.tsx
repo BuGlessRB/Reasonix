@@ -100,6 +100,7 @@ function Package({
         disabled={locked}
         onClick={() =>
           void run("export", async () => {
+            setExported(null);
             setExported(await port.exportPlugin(p.name));
           })
         }
@@ -169,8 +170,9 @@ function Package({
         </div>
       ))}
       {exported && (
-        <div className="why">
+        <div className="why" role="status">
           {exported.savedTo ? t("已保存至 {path}。", { path: exported.savedTo }) : t("导出完成。")}
+          {" "}
           {exported.required.length
             ? t("里面的密钥值已经去掉，装它的人要自己提供：{names}", { names: exported.required.join("、") })
             : t("该包不需要填写任何密钥。")}
@@ -180,7 +182,7 @@ function Package({
   );
 
   return (
-    <details className="srv" data-extension-name={p.name} data-st={p.enabled ? "ready" : "disabled"} aria-busy={locked} open={confirming || !!failed || undefined}>
+    <details className="srv" data-extension-name={p.name} data-st={p.enabled ? "ready" : "disabled"} aria-busy={locked} open={confirming || !!failed || !!exported || undefined}>
       <summary>{head}</summary>
       {confirm}
       {notes}
