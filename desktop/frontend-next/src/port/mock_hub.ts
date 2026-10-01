@@ -182,6 +182,8 @@ export class MockHub implements HubPort {
     return Promise.resolve<TreeWorkspace>({ root: path, name: path.split("/").pop() ?? path, remembered: true, sessions: [] });
   }
 
+  async revealWorkspace() {}
+
   removeWorkspace(path: string) {
     const at = this.roots.indexOf(path);
     if (at >= 0) this.roots.splice(at, 1);

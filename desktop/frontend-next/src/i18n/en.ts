@@ -1098,6 +1098,8 @@ export const EN: Record<string, string> = {
   "项目操作：{name}": "Project actions: {name}",
   "项目操作": "Project actions",
   "不删除文件": "Keeps files",
+  "在文件管理器中显示": "Show in file manager",
+  "文件夹已不在磁盘上": "Folder is gone",
   "删除会话：{title}": "Delete session: {title}",
   "会话在文件夹里打开，先添加一个": "A session opens in a folder; add one first",
   "添加文件夹": "Add folder",
