@@ -379,7 +379,7 @@ export function Outcome({ plan }: { plan: PluginPlan }) {
       <span className="nm">{plan.actions?.[0]?.name || t("安装")}</span>
       <span className="dt">
         {state === "ready" && t("装好了，下一轮就能用")}
-        {state === "action_required" && t("装好了，但这一轮还在跑：等它结束或新建会话后生效")}
+        {state === "action_required" && t("装好了，但运行时未重载：{reason}。请用「重载运行时」重试。", { reason: plan.reloadError! })}
         {state === "issue" && (plan.error || plan.next || t("没装上"))}
       </span>
     </div>
