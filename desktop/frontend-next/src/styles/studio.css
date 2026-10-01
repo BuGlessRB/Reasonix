@@ -3631,6 +3631,7 @@ body { font-size: 14px; line-height: 1.75; }
 .grp .now,
 .vway .lb,
 .addp .fields > label > span,
+.addp .fields .name-cell > label > span,
 .addp-section-head span { font-size: var(--prefs-meta); }
 .addp-head strong,
 .addp-section-head strong,

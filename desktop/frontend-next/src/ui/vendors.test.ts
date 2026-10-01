@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountLabel, disambiguate, nameFrom, vendorLabel } from "./vendors";
+import { accountLabel, disambiguate, nameFrom, sourceNameUsable, vendorLabel } from "./vendors";
 
 describe("nameFrom", () => {
   it("derives the config name from the host", () => {
@@ -71,4 +71,11 @@ describe("disambiguate", () => {
     ]);
     expect(named.map((v) => v.label)).toEqual(["个人", "公司"]);
   });
+});
+
+describe("sourceNameUsable", () => {
+  it.each([
+    ["a", true], ["a".repeat(64), true], ["a".repeat(65), false], [".a", false], ["-a", false],
+    ["_a", false], ["a.", true], ["a b", false], ["a/b", false], ["公司", false], ["ａｂｃ", false], ["relay-1.x_y", true],
+  ])("%j -> %s", (name, ok) => expect(sourceNameUsable(name)).toBe(ok));
 });

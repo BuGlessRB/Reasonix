@@ -422,3 +422,18 @@ func TestSaveProviderAcceptsEveryCatalogedWire(t *testing.T) {
 		t.Fatalf("the Responses source did not reach the config:\n%s", raw)
 	}
 }
+
+// The panel mirrors this pattern in vendors.ts (sourceNameUsable); the same
+// cases are asserted there so the two copies cannot drift apart silently.
+func TestProviderNameRE_Boundaries(t *testing.T) {
+	cases := map[string]bool{
+		"a": true, strings.Repeat("a", 64): true, strings.Repeat("a", 65): false,
+		".a": false, "-a": false, "_a": false, "a.": true, "a b": false, "a/b": false,
+		"公司": false, "ａｂｃ": false, "relay-1.x_y": true,
+	}
+	for name, want := range cases {
+		if got := providerNameRE.MatchString(name); got != want {
+			t.Errorf("providerNameRE(%q) = %v, want %v", name, got, want)
+		}
+	}
+}

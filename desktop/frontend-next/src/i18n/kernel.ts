@@ -42,7 +42,7 @@ const SAID: Record<string, string> = {
 
   // ── 来源：填错了什么 ─────────────────────────────────────────────
   "provider.name_required": "请为该来源填写名称",
-  "provider.name_invalid": "名称只能包含字母、数字、点、连字符和下划线",
+  "provider.name_invalid": "名称只能用字母、数字、点、连字符和下划线，以字母或数字开头，最长 64 个字符",
   "provider.name_taken": "已经有名为「{name}」的连接了，换一个名称",
   "provider.config_unreadable": "读不到配置文件，没法安全地选择密钥存放位置，请检查配置后重试",
   "provider.endpoint_required": "请填写接口地址",
