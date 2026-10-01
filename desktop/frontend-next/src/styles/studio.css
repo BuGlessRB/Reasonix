@@ -328,6 +328,7 @@ body { background: var(--page); }
 .onb-stage {
   height: calc(100dvh / var(--zoom, 1));
   scroll-padding-top: 64px;
+  container: onboarding / inline-size;
   display: flex;
   flex-direction: column;
   background:
@@ -1680,6 +1681,11 @@ body { background: var(--page) !important; }
 @media (max-width: 760px) {
   .app { --nav-w: 44px; }
   .studio-brand > span:nth-child(2) small { display: none; }
+  .flow { width: calc(100% - 20px); margin-inline: auto; padding-inline: 0; }
+  .compose { width: calc(100% - 20px); margin-inline: auto; }
+}
+
+@container onboarding (max-width: 760px) {
   .onb-shell { width: min(560px, calc(100% - 24px)); grid-template-columns: 1fr; }
   .onb-progress { padding: 18px 20px; border-right: 0; border-bottom: 1px solid var(--hair); }
   .onb-progress ol { margin-top: 14px; display: flex; gap: 10px; }
@@ -1687,8 +1693,6 @@ body { background: var(--page) !important; }
   .onb-progress li span small,
   .onb-progress p { display: none; }
   .onb { padding: 26px 22px 24px; }
-  .flow { width: calc(100% - 20px); margin-inline: auto; padding-inline: 0; }
-  .compose { width: calc(100% - 20px); margin-inline: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

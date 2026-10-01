@@ -667,6 +667,12 @@ what exists.
 
 ## Onboarding
 
+- The stage is the named inline-size container `onboarding`. The card folds at
+  760px of that container, so interface zoom changes its columns and spacing.
+- The fold follows available CSS width, not the unscaled viewport measured by
+  a media query. Form controls must fit inside the shell's clipping boundary.
+- `perf/onboarding.mjs` checks card bounds, the 760/761px boundary, saved zoom
+  and resizing, alongside scrolling, focus clearance and completing setup.
 - The connect card grows inside the opening scene rather than starting a second
   screen, so the introduction above it stays present and the palette follows the
   scene (a dark ground) rather than the app theme.

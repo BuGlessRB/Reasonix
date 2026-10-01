@@ -49,7 +49,8 @@ class BenchPort extends MockPort {
   }
 
   async appearance() {
-    const look = await super.appearance();
+    let look = await super.appearance();
+    if (query.has("zoom")) look = { ...look, zoom: Number(query.get("zoom")) };
     return PREF === null ? look : { ...look, language: PREF };
   }
 
