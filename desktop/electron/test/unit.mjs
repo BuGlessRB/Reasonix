@@ -7,7 +7,7 @@ import fs from "node:fs";
 
 const require = createRequire(import.meta.url);
 const { parse, readActs } = require("../src/host.js");
-const { contextTemplate, editMenuTemplate } = require("../src/editmenu.js");
+const { contextTemplate, editMenuTemplate, applicationMenuTemplate, menuInstaller } = require("../src/editmenu.js");
 const { uiLanguage } = require("../src/uilang.js");
 const { externalTarget } = require("../src/links.js");
 const { offerCleanup, ownBundle } = require("../src/legacy.js");
@@ -70,8 +70,42 @@ test("the edit menu's labels follow the interface language, not the system's", (
   assert.deepEqual(labels("zh"), ["撤销", "重做", "剪切", "复制", "粘贴", "全选"]);
   assert.deepEqual(labels("en"), ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"]);
   assert.equal(editMenuTemplate("zh").label, "编辑");
-  assert.deepEqual(editMenuTemplate("zh").submenu.filter((i) => i.role).map((i) => i.role),
-    ["undo", "redo", "cut", "copy", "paste", "selectAll"]);
+});
+
+test("the edit menu keeps everything the platform's own one carries", () => {
+  const roles = (items) => items.flatMap((i) => [i.role, ...(i.submenu ? roles(i.submenu) : [])]).filter(Boolean);
+  const want = ["undo", "redo", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll",
+    "showSubstitutions", "toggleSmartQuotes", "toggleSmartDashes", "toggleTextReplacement", "startSpeaking", "stopSpeaking"];
+  for (const lang of ["zh", "en"]) {
+    assert.deepEqual(roles(editMenuTemplate(lang).submenu), want);
+    const labels = (items) => items.flatMap((i) => [i.label, ...(i.submenu ? labels(i.submenu) : [])]).filter((l) => l !== undefined);
+    assert.ok(labels(editMenuTemplate(lang).submenu).every((l) => l.length > 0));
+  }
+  assert.deepEqual(editMenuTemplate("en").submenu.map((i) => i.role ?? i.type ?? i.label),
+    ["undo", "redo", "separator", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll", "separator", "Substitutions", "Speech"]);
+  assert.deepEqual(applicationMenuTemplate("zh").map((i) => i.role ?? "edit"), ["appMenu", "edit", "windowMenu"]);
+});
+
+test("the application menu is rebuilt when the language changes and not otherwise", () => {
+  const built = [];
+  const Menu = {
+    buildFromTemplate: (t) => (built.push(t), { template: t }),
+    setApplicationMenu: () => {},
+    getApplicationMenu: () => null,
+  };
+  const install = menuInstaller(Menu, "darwin");
+  let lang = "en";
+  install(() => lang);
+  install(() => lang);
+  assert.equal(built.length, 1);
+  lang = "zh";
+  install(() => lang);
+  assert.equal(built.length, 2);
+  assert.equal(built[1][1].label, "编辑");
+  let cleared = 0;
+  menuInstaller({ ...Menu, setApplicationMenu: () => cleared++ }, "linux")(() => "zh");
+  assert.equal(cleared, 1);
+  assert.equal(built.length, 2);
 });
 
 test("the interface language is the page's own choice, else the machine's", () => {
@@ -1206,6 +1240,7 @@ function loadShell({ lock, host }) {
       if (key === "getPath") return () => userData;
       if (key === "getVersion") return () => "9.9.9";
       if (key === "getLocale") return () => "en-US";
+      if (key === "getPreferredSystemLanguages") return () => ["en-US"];
       if (key === "isPackaged") return false;
       if (key === "quit") return () => { calls.push(["quit"]); quit(); };
       return inert;

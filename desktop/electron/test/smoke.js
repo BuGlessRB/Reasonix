@@ -307,7 +307,7 @@ async function menuChecks(win, js) {
 
   const edit = (menu?.items ?? [])[1];
   const editRoles = (edit?.submenu?.items ?? []).map((i) => String(i.role).toLowerCase());
-  check("the edit menu carries every editing command", ["undo", "redo", "cut", "copy", "paste", "selectall"].every((r) => editRoles.includes(r)), editRoles);
+  check("the edit menu carries every editing command", ["undo", "redo", "cut", "copy", "paste", "pasteandmatchstyle", "delete", "selectall"].every((r) => editRoles.includes(r)), editRoles);
 
   app.focus({ steal: true });
   win.focus();

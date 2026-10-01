@@ -1,29 +1,12 @@
 "use strict";
 const { Menu } = require("electron");
-const { contextTemplate, editMenuTemplate } = require("./editmenu");
+const { contextTemplate, menuInstaller } = require("./editmenu");
 
 // Without an application menu a WebContents has no copy, paste or undo at all:
 // macOS routes those shortcuts through it, and a window with none reads as a
 // broken text editor. Elsewhere the bar would render inside the window, and
 // those platforms bind the shortcuts themselves.
-let installedLang = null;
-
-function installApplicationMenu(languageOf = () => "en") {
-  if (process.platform !== "darwin") {
-    Menu.setApplicationMenu(null);
-    return null;
-  }
-  const lang = languageOf();
-  if (lang === installedLang) return Menu.getApplicationMenu();
-  installedLang = lang;
-  const menu = Menu.buildFromTemplate([
-    { role: "appMenu" },
-    editMenuTemplate(lang),
-    { role: "windowMenu" },
-  ]);
-  Menu.setApplicationMenu(menu);
-  return menu;
-}
+const installApplicationMenu = menuInstaller(Menu);
 
 // A production build ships without one, so a right-click in a text field offered
 // nothing at all. Roles rather than handlers: the clipboard work belongs to the

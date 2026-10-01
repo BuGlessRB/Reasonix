@@ -12,6 +12,16 @@ const WORDS = {
     copy: "复制",
     paste: "粘贴",
     selectAll: "全选",
+    pasteAndMatchStyle: "粘贴并匹配样式",
+    delete: "删除",
+    substitutions: "替换",
+    showSubstitutions: "显示替换",
+    smartQuotes: "智能引号",
+    smartDashes: "智能破折号",
+    textReplacement: "文本替换",
+    speech: "语音",
+    startSpeaking: "开始朗读",
+    stopSpeaking: "停止朗读",
   },
   en: {
     edit: "Edit",
@@ -21,6 +31,16 @@ const WORDS = {
     copy: "Copy",
     paste: "Paste",
     selectAll: "Select All",
+    pasteAndMatchStyle: "Paste and Match Style",
+    delete: "Delete",
+    substitutions: "Substitutions",
+    showSubstitutions: "Show Substitutions",
+    smartQuotes: "Smart Quotes",
+    smartDashes: "Smart Dashes",
+    textReplacement: "Text Replacement",
+    speech: "Speech",
+    startSpeaking: "Start Speaking",
+    stopSpeaking: "Stop Speaking",
   },
 };
 
@@ -53,8 +73,59 @@ function contextTemplate(params, lang) {
   return editItems(lang, params.editFlags ?? {});
 }
 
+// Everything the platform's own Edit menu carries, with the same roles, so
+// only the words change.
 function editMenuTemplate(lang) {
-  return { label: wordsFor(lang).edit, submenu: editItems(lang) };
+  const w = wordsFor(lang);
+  const items = editItems(lang);
+  const at = items.findIndex((i) => i.role === "selectAll");
+  items.splice(at - 1, 1);
+  items.splice(at - 1, 0,
+    { role: "pasteAndMatchStyle", label: w.pasteAndMatchStyle },
+    { role: "delete", label: w.delete });
+  items.push(
+    { type: "separator" },
+    {
+      label: w.substitutions,
+      submenu: [
+        { role: "showSubstitutions", label: w.showSubstitutions },
+        { type: "separator" },
+        { role: "toggleSmartQuotes", label: w.smartQuotes },
+        { role: "toggleSmartDashes", label: w.smartDashes },
+        { role: "toggleTextReplacement", label: w.textReplacement },
+      ],
+    },
+    {
+      label: w.speech,
+      submenu: [
+        { role: "startSpeaking", label: w.startSpeaking },
+        { role: "stopSpeaking", label: w.stopSpeaking },
+      ],
+    },
+  );
+  return { label: w.edit, submenu: items };
 }
 
-module.exports = { contextTemplate, editMenuTemplate };
+function applicationMenuTemplate(lang) {
+  return [{ role: "appMenu" }, editMenuTemplate(lang), { role: "windowMenu" }];
+}
+
+// Only the Edit menu follows the interface language; the application and window
+// menus are roles and follow the OS. Menu is injected so this runs without Electron.
+function menuInstaller(Menu, platform = process.platform) {
+  let installedLang = null;
+  return function installApplicationMenu(languageOf = () => "en") {
+    if (platform !== "darwin") {
+      Menu.setApplicationMenu(null);
+      return null;
+    }
+    const lang = languageOf();
+    if (lang === installedLang) return Menu.getApplicationMenu();
+    installedLang = lang;
+    const menu = Menu.buildFromTemplate(applicationMenuTemplate(lang));
+    Menu.setApplicationMenu(menu);
+    return menu;
+  };
+}
+
+module.exports = { contextTemplate, editMenuTemplate, applicationMenuTemplate, menuInstaller };

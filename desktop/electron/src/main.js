@@ -168,7 +168,6 @@ async function boot() {
     if (cause) dialog.showErrorBox(cause.title, cause.detail);
   });
   installContextMenu(win.webContents, win, uiLang);
-  installApplicationMenu(uiLang);
   installFullScreenKey(win.webContents, win);
   reload = installReload(win.webContents, win);
   win.once("ready-to-show", () => win.show());
@@ -316,7 +315,9 @@ function fromWindow(event) {
   return win && !win.isDestroyed() && event.sender === win.webContents ? win : null;
 }
 
-const uiLang = () => uiLanguage(loadPrefs(prefsFile(app.getPath("userData"))), app.getLocale());
+// The page reads navigator.languages[0], which is the first preferred system
+// language; app.getLocale() is the locale Chromium resolved, which can differ.
+const uiLang = () => uiLanguage(loadPrefs(prefsFile(app.getPath("userData"))), app.getPreferredSystemLanguages()[0] ?? app.getLocale());
 registerPrefs(ipcMain, () => prefsFile(app.getPath("userData")), fromWindow, () => installApplicationMenu(uiLang));
 
 ipcMain.handle("window:minimise", (event) => {
