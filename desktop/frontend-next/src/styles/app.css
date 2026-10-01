@@ -3273,6 +3273,8 @@
   }
   .mkt-fields .mono { font: var(--w-reg) var(--fs-meta)/1.5 var(--mono) }
   .mkt-fields textarea { resize: vertical }
+  .mkt-pub .mkt-fields :is(input, textarea):disabled,
+  .mkt-pub .mkt-seen:has(:disabled) { opacity: .5; cursor: default }
   .mkt-fields input:focus, .mkt-fields textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .mkt-fields input::placeholder { color: var(--ghost) }
   .mkt-vote { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 0 }
