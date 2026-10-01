@@ -2,7 +2,7 @@
 owner: @SivanCola
 backup: @esengine
 status: active
-reviewed: 2026-09-29
+reviewed: 2026-10-01
 ---
 
 # Skills
@@ -35,8 +35,28 @@ Installers that target `.reasonix/skills` — for example
 
 ## How a skill runs
 
-Only each skill's `name` and `description` enter the system prompt; the body is
-read when the skill is invoked, so an unused skill costs one line of context.
+The model receives a catalog of enabled, model-listed skills: names, clipped
+descriptions (about 130 characters per entry), and a subagent tag where
+applicable.
+
+Skills with `invocation: manual` stay out of the listing but remain callable
+by `/<name>` and, unless model invocation is disabled, `run_skill`.
+The model cannot call a skill with `disable-model-invocation: true`;
+the user can still invoke it explicitly by `/<name>`.
+
+The entry listing has a 4000-character budget. If descriptions would exceed
+it, the catalog lists names without descriptions and points to
+`use_capability` search; if names also exceed it, whole entries are omitted
+with a count of the remaining skills, which search still reaches.
+
+Reasonix projects the catalog into user-turn context when first needed, when
+its visible contents change, or after compaction. The cache-stable system
+prefix stays unchanged.
+
+After every skill is switched off, a previously delivered listing is replaced
+by a short notice. No catalog is sent when implicit invocation is disabled.
+
+Each skill's body is loaded when that skill is invoked.
 
 - The model invokes a skill with the `run_skill` tool.
 - You invoke one by typing `/<name>` (plugin skills are `/<plugin>:<name>`).
@@ -55,7 +75,8 @@ read when the skill is invoked, so an unused skill costs one line of context.
 | `runAs` | `inline` (default): the body joins the current turn. `subagent`: the skill runs in an isolated child loop and only its final answer returns. Claude-style `context: fork` or `agent:` also selects `subagent`. |
 | `model`, `effort` | Model and reasoning effort for a subagent skill. |
 | `read-only` | Run a subagent skill with writer tools removed and read-only shell. |
-| `invocation` | `manual` keeps the skill out of the model's index; it stays callable by name. |
+| `invocation` | `manual` keeps the skill out of the model's listing; it stays callable by name unless model invocation is disabled. |
+| `disable-model-invocation` | `true` prevents model calls; the user can still invoke the skill explicitly. |
 | `requires` | Capabilities the skill needs, e.g. `mcp-server:github`. |
 
 Unknown keys are ignored, so a skill written for another agent loads as-is.
