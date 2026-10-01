@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Queue as QueueSnapshot, QueueItem } from "../port/port";
 import { t } from "../i18n";
 import { reason } from "../i18n/kernel";
+import { BLOCK_WHY } from "../i18n/queue_why";
+
 import { Overflow } from "./Overflow";
 import { StudioIcon } from "./StudioIcon";
 
@@ -174,6 +176,8 @@ export function Queue({ queue, running, onRead, onEdit, onMove, onCancel, onSend
       <div className="qitems">
         {items.map((it, i) => {
           const live = !queue.readonly && editing !== it.id;
+          const coded = it.blockCode ? BLOCK_WHY[it.blockCode] : undefined;
+          const why = coded ? t(coded) : it.blockReason;
           return (
             <div key={it.id} className="qi" data-state={it.state}>
               {/* The chip is the answer to "did that land". Its wording says
@@ -210,7 +214,7 @@ export function Queue({ queue, running, onRead, onEdit, onMove, onCancel, onSend
                 <Overflow className="pv" text={it.preview} />
               )}
               {!!it.refs?.length && <span className="rf">{t("冻结 {n} 文件", { n: it.refs.length })}</span>}
-              {it.blockReason && <span className="qwhy">{it.blockReason}</span>}
+              {why && <span className="qwhy">{why}</span>}
               {unread?.id === it.id && (
                 <span className="qwhy" data-err="" role="alert">
                   {t("无法读取该条的正文，未打开编辑：{why}", { why: unread.why })}
