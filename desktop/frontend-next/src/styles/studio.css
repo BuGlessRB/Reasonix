@@ -326,7 +326,8 @@ body { background: var(--page); }
 
 /* First-run connection */
 .onb-stage {
-  min-height: 100vh;
+  height: calc(100dvh / var(--zoom, 1));
+  scroll-padding-top: 64px;
   display: flex;
   flex-direction: column;
   background:
@@ -336,6 +337,7 @@ body { background: var(--page); }
 }
 .onb-brandbar {
   height: 64px;
+  flex: none;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -358,9 +360,10 @@ body { background: var(--page); }
 .onb-shell {
   width: min(920px, calc(100% - 48px));
   margin: auto;
+  flex: none;
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr);
-  overflow: hidden;
+  overflow: clip;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--surface);
@@ -1672,7 +1675,7 @@ body { background: var(--page) !important; }
 .onb-model-menu .mi:hover,
 .onb-model-menu .mi[data-lead] { background: var(--overlay); }
 .onb-model-menu .mfind { background: var(--float); color: var(--text); border-bottom-color: var(--border); }
-.onb-foot { padding: 14px 24px 18px; text-align: center; color: var(--ghost); font: 500 10px/1 var(--ui); }
+.onb-foot { flex: none; padding: 14px 24px 18px; text-align: center; color: var(--ghost); font: 500 10px/1 var(--ui); }
 
 @media (max-width: 760px) {
   .app { --nav-w: 44px; }
@@ -1760,7 +1763,7 @@ body { background: var(--page) !important; }
 
 .onb-stage::after {
   content: "";
-  position: absolute;
+  position: fixed;
   z-index: -1;
   top: 7%;
   right: 10%;
@@ -1777,7 +1780,8 @@ body { background: var(--page) !important; }
 }
 
 .onb-brandbar {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 2;
   background: color-mix(in srgb, var(--page) 76%, transparent);
   -webkit-backdrop-filter: blur(18px) saturate(1.12);
