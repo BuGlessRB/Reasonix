@@ -205,8 +205,11 @@ func TestReplyIsNeverRetriedAfterAnUnansweredRequest(t *testing.T) {
 	if !errors.Is(err, ErrOffline) {
 		t.Fatalf("err = %v", err)
 	}
-	if tr.calls.Load() != 1 || len(rs.hits) != 1 {
-		t.Fatalf("the reply was attempted %d times and reached the service %d times", tr.calls.Load(), len(rs.hits))
+	rs.mu2.Lock()
+	reached := len(rs.hits)
+	rs.mu2.Unlock()
+	if tr.calls.Load() != 1 || reached != 1 {
+		t.Fatalf("the reply was attempted %d times and reached the service %d times", tr.calls.Load(), reached)
 	}
 }
 
