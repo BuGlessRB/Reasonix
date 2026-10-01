@@ -2862,6 +2862,7 @@
     background: var(--raised); color: var(--text); font: var(--w-reg) var(--fs-ui)/1.7 var(--mono); resize: vertical;
   }
   .addsrv .paste::placeholder, .addpkg .paste::placeholder { color: var(--ghost); white-space: pre-line }
+  .addpkg .paste:disabled { background: var(--overlay); cursor: default }
   .addsrv .paste:focus, .addpkg .paste:focus { outline: 2px solid var(--focus); outline-offset: 1px }
   .addsrv .acts, .addpkg .acts { display: flex; align-items: center; gap: 8px; margin-top: 10px }
   .addsrv .acts .note, .addpkg .acts .note { flex: 1; font: var(--w-reg) var(--fs-meta) var(--ui); color: var(--ghost) }
