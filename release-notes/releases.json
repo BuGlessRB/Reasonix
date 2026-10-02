@@ -2,6 +2,170 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "1.39.7",
+      "date": "2026-10-02",
+      "channel": "stable",
+      "targetingVersion": 1,
+      "title": {
+        "en": "Reasonix 1.39.7",
+        "zh": "Reasonix 1.39.7"
+      },
+      "summary": {
+        "en": "Desktop fixes for session totals resetting, long-turn history paging, remote session switching, forked sessions and Goal editing, plus a partial fix for sessions missing after migration.",
+        "zh": "桌面端修复：会话用量统计清零、长轮次历史分页、远端会话切换、分叉会话和编辑目标，并部分修复迁移后会话消失的问题。"
+      },
+      "surfaces": [
+        "desktop"
+      ],
+      "guides": [],
+      "highlights": [
+        {
+          "kind": "fixed",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Session totals no longer reset when you switch away and back",
+            "zh": "切换会话后再切回来，用量统计不再清零"
+          },
+          "body": {
+            "en": "Sessions in the current store kept no usage snapshot, so request count, tokens, cost and read-file records reset to zero after switching to another session and back. They are now saved per session and restored when it opens; a missing or damaged file falls back to empty and never blocks the switch.",
+            "zh": "当前存储格式的会话没有保存用量快照，切换到别的会话再切回来后，请求数、令牌数、费用和已读文件记录都会归零。现在这些数据按会话保存，打开会话时恢复；文件缺失或损坏时回退为空，不会影响切换。"
+          },
+          "refs": [
+            11621
+          ]
+        },
+        {
+          "kind": "fixed",
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Switching remote sessions while one is busy keeps your message and history",
+            "zh": "远端会话忙碌时切换，消息和历史不再丢失"
+          },
+          "body": {
+            "en": "A submission made while the remote session was between states could fail outright, busy submissions did not show in the queue at once, and returning to a visited session waited for the full history. Temporary transitions are now retried with the message and attachments kept, queued messages appear immediately, running sessions stay attached in the background, and a visited session paints its resident history first, then reconciles with the authoritative one.",
+            "zh": "远端会话处于过渡状态时提交的消息可能直接失败，忙碌时提交的消息不会立刻出现在队列里，回到访问过的会话还要等完整历史加载。现在临时过渡会在保留消息和附件的前提下重试，排队的消息立即显示，运行中的会话在后台保持连接，访问过的会话先显示已有历史，再与权威历史对账。"
+          },
+          "refs": [
+            11345,
+            11512
+          ]
+        }
+      ],
+      "changes": {
+        "new": [],
+        "improved": [],
+        "fixed": [
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "A long turn cut by a history page boundary folds, and the newest page loads at the bottom",
+              "zh": "被历史分页截断的长轮次可以折叠，滚到底部会自动加载最新一页"
+            },
+            "body": {
+              "en": "When a history page cut a turn, its tool cards stayed expanded with no fold button until the earlier page loaded. That group now folds like any settled turn. After loading older pages, reaching the bottom of the window now requests the next page once automatically, so a folded long turn no longer looks like the end of the conversation. The manual buttons stay.",
+              "zh": "历史分页把一轮对话截成两半时，后半部分的工具卡片会一直展开且没有折叠按钮，直到前一页加载完。现在它和其他已完成的轮次一样可以折叠。加载更早的页面后，滚到窗口底部会自动请求下一页一次，折叠起来的长轮次不再看起来像对话结尾。手动按钮仍然保留。"
+            },
+            "refs": [
+              11338
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "A second fork of one session no longer makes the workspace history unloadable",
+              "zh": "同一个会话第二次分叉后，工作区历史不再无法加载"
+            },
+            "body": {
+              "en": "A fork's source is its parent session directory, and a source can be registered only once. The second fork of the same parent hit a conflict and the workspace history failed to load. The registration is now skipped when that source is already mapped.",
+              "zh": "分叉的来源是它的父会话目录，而一个来源只能登记一次。同一个父会话的第二次分叉会撞上冲突，导致工作区历史无法加载。现在来源已登记时会跳过重复登记。"
+            },
+            "refs": [
+              11587,
+              11597
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Editing a Goal opens an in-app form instead of failing",
+              "zh": "编辑目标改为应用内表单，不再点击后无反应"
+            },
+            "body": {
+              "en": "The composer's Edit goal action called a browser prompt that the desktop shell does not support, so clicking it did nothing. It now opens an inline form with the objective and the maximum rounds, with validation.",
+              "zh": "输入框里的「编辑目标」调用了桌面外壳不支持的浏览器输入框，点击后没有任何反应。现在改为内嵌表单，可以修改目标和最大轮数，并带校验。"
+            },
+            "refs": [
+              11573,
+              11576
+            ]
+          },
+          {
+            "targets": [
+              "desktop"
+            ],
+            "title": {
+              "en": "Sessions from older tabs in an unregistered project no longer stop at a workspace conflict (partial fix)",
+              "zh": "未登记项目里旧标签页的会话不再卡在工作区冲突（部分修复）"
+            },
+            "body": {
+              "en": "Migrating a saved tab that points into a project directory no registered project owns used the tab's own scope, which could report a workspace conflict. The scope now comes from the session's recorded project root when it matches that directory; any other mismatch still reports the conflict. This is only a partial fix for #11641: entries already marked as conflicts are not cleared automatically, and the reporter's exact case is still under investigation.",
+              "zh": "迁移一个指向未登记项目目录的旧标签页时，会沿用标签页自己的范围，可能报「工作区冲突」。现在当会话记录的项目根目录与该目录一致时，范围取自会话记录；其他不一致仍会报告冲突。这只是 #11641 的部分修复：已被标记为冲突的条目不会自动清除，报告者的具体情况仍在调查。"
+            },
+            "refs": [
+              11641,
+              11647
+            ]
+          }
+        ]
+      },
+      "upgrade": [],
+      "risks": [
+        {
+          "targets": [
+            "desktop"
+          ],
+          "title": {
+            "en": "Some migrated sessions may still be missing (#11641)",
+            "zh": "部分迁移后的会话可能仍然缺失（#11641）"
+          },
+          "body": {
+            "en": "Recovery entries already marked as workspace conflicts are not cleared by this release. If sessions are still missing after updating, please add details to #11641.",
+            "zh": "本版本不会清除已经被标记为工作区冲突的恢复条目。更新后如果会话仍然缺失，请到 #11641 补充信息。"
+          },
+          "refs": [
+            11641
+          ]
+        }
+      ],
+      "contributors": [
+        "XTLine"
+      ],
+      "links": {
+        "github": "https://github.com/esengine/DeepSeek-Reasonix/releases/tag/desktop-v1.39.7",
+        "compare": "https://github.com/esengine/DeepSeek-Reasonix/compare/desktop-v1.39.6...desktop-v1.39.7",
+        "download": "https://reasonix.io/?download=desktop&channel=stable#start"
+      },
+      "releaseId": "1.39.7",
+      "baseVersion": "1.39.7",
+      "status": "reviewed",
+      "previousRelease": "1.39.6",
+      "builds": {
+        "cli": "v1.39.7",
+        "desktop": "v1.39.7",
+        "npm": "1.39.7"
+      }
+    },
+    {
       "version": "1.39.6",
       "date": "2026-10-01",
       "channel": "stable",
