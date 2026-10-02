@@ -18,6 +18,8 @@
   <a href="https://esengine.github.io/DeepSeek-Reasonix/">Website</a>
   &nbsp;·&nbsp;
   <strong><a href="https://discord.gg/XF78rEME2D">Discord</a></strong>
+  &nbsp;·&nbsp;
+  <strong><a href="https://qm.qq.com/q/i59b0z2R8s">QQ</a></strong>
 </p>
 
 <p align="center">
@@ -31,6 +33,7 @@
   <a href="https://github.com/esengine/DeepSeek-Reasonix/graphs/contributors"><img src="https://img.shields.io/github/contributors/esengine/DeepSeek-Reasonix.svg?style=flat-square&color=bc8cff&labelColor=161b22&logo=github&logoColor=white" alt="contributors"/></a>
   <a href="https://github.com/esengine/DeepSeek-Reasonix/discussions"><img src="https://img.shields.io/github/discussions/esengine/DeepSeek-Reasonix.svg?style=flat-square&color=58a6ff&labelColor=161b22&logo=github&logoColor=white" alt="Discussions"/></a>
   <a href="https://discord.gg/XF78rEME2D"><img src="https://img.shields.io/badge/discord-join-5865F2.svg?style=flat-square&labelColor=161b22&logo=discord&logoColor=white" alt="Discord"/></a>
+  <a href="https://qm.qq.com/q/i59b0z2R8s"><img src="https://img.shields.io/badge/QQ%20group-1093562660-12B7F5.svg?style=flat-square&labelColor=161b22&logo=tencentqq&logoColor=white" alt="QQ group 1093562660"/></a>
 </p>
 
 <p align="center">
@@ -47,6 +50,8 @@
 
 > [!IMPORTANT]
 > **Community · 加入社区** — bilingual Discord for setup help (`#help` / `#求助`), workflow showcases, and feature ideas. → **<https://discord.gg/XF78rEME2D>**
+>
+> QQ group **DeepSeek-Reasonix官方群** (`1093562660`) → **<https://qm.qq.com/q/i59b0z2R8s>** ([QR code](./docs/assets/qq-group.svg))
 
 <br/>
 
