@@ -428,6 +428,13 @@ func (t *Tool) applyInstallPluginPackage(ctx context.Context, req request, act *
 			return newErr(ErrApprovalDenied, "plugin source changed since the approved plan (approved commit %s, found %s) and the approved snapshot could not be restored: %v; re-run without apply to review the new plan", act.Commit, commit, err)
 		}
 	}
+	if act.Mode == "link" {
+		resolved, err := filepath.EvalSymlinks(sourceRoot)
+		if err != nil {
+			return newErr(ErrSourceUnreadable, "%v", err)
+		}
+		sourceRoot = resolved
+	}
 	pkg, warnings, err := pluginpkg.ParseDir(sourceRoot)
 	if err != nil {
 		return newErr(ErrInvalidManifest, "%v", err)
