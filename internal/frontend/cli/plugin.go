@@ -238,8 +238,8 @@ func pluginShowCommand(args []string) int {
 		return 1
 	}
 	summary := pkg.CapabilitySummary()
-	fmt.Printf("name: %s\nversion: %s\nenabled: %t\nkind: %s\nroot: %s\nsource: %s\nskills: %d\ncommands: %d\nprompts: %d\nhooks: %d\nmcpServers: %d\nthemes: %d\n",
-		p.Name, p.Version, p.Enabled, p.ManifestKind, root, p.Source, summary.Skills, summary.Commands, summary.Prompts, summary.Hooks, summary.MCPServers, summary.Themes)
+	fmt.Printf("name: %s\nversion: %s\nenabled: %t\nkind: %s\nroot: %s\nsource: %s\nskills: %d\nagents: %d\ncommands: %d\nprompts: %d\nhooks: %d\nmcpServers: %d\nthemes: %d\n",
+		p.Name, p.Version, p.Enabled, p.ManifestKind, root, p.Source, summary.Skills, summary.Agents, summary.Commands, summary.Prompts, summary.Hooks, summary.MCPServers, summary.Themes)
 	if summary.Runtime {
 		fmt.Print(pluginpkg.RuntimeTrustText(pkg.Manifest.Runtime))
 	}
@@ -251,6 +251,7 @@ func pluginShowCommand(args []string) int {
 }
 
 func printPluginInventory(pluginName string, inv pluginpkg.Inventory) {
+	printPluginAgents(pluginName, inv.Agents)
 	if len(inv.Skills) > 0 {
 		fmt.Println("usage:")
 		fmt.Println("  skills are available in interactive sessions; run /skills to browse them, or invoke a skill directly with /<plugin>:<name>.")
@@ -330,6 +331,20 @@ func printPluginInventory(pluginName string, inv pluginpkg.Inventory) {
 			}
 			fmt.Printf("  %s\t%s\t%s\n", server.Name, server.Transport, target)
 		}
+	}
+}
+
+func printPluginAgents(pluginName string, agents []pluginpkg.AgentRef) {
+	if len(agents) == 0 {
+		return
+	}
+	fmt.Println("agents:")
+	for _, agent := range agents {
+		desc := strings.Join(strings.Fields(agent.Description), " ")
+		if desc == "" {
+			desc = "(no description)"
+		}
+		fmt.Printf("  /%s:agent:%s\t%s\n", pluginName, agent.Name, desc)
 	}
 }
 
