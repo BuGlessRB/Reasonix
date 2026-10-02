@@ -17,6 +17,7 @@ import { StudioIcon } from "./StudioIcon";
 import { usePromptRefine } from "./PromptRefine";
 import { useProviderOrder } from "../state/providerorder";
 import { useDraft } from "./useDraft";
+import { touchKeyboard } from "./touchKeyboard";
 
 interface Props {
   port: AgentPort;
@@ -111,6 +112,7 @@ let chipSeq = 0;
 const chipId = () => `c${++chipSeq}`;
 
 export function Composer({ port, status, running, quote, focus, onSubmit, onChanged, onError, onSettings = () => {}, changeCount = 0, pulse = 0, draftKey = "" }: Props) {
+  const touch = touchKeyboard();
   const providerOrder = useProviderOrder();
   const [branch, setBranch] = useState("");
   useEffect(() => {
@@ -528,7 +530,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
           role="combobox"
           aria-label={t("任务输入")}
           aria-describedby={guide}
-          aria-keyshortcuts="Enter Shift+Enter"
+          aria-keyshortcuts={touch ? undefined : "Enter Shift+Enter"}
           aria-busy={submitting}
           readOnly={submitting}
           aria-expanded={menu.open}
@@ -601,7 +603,7 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
               menu.dismiss();
               return;
             }
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter" && !e.shiftKey && !touch) {
               e.preventDefault();
               send();
             }
@@ -623,7 +625,9 @@ export function Composer({ port, status, running, quote, focus, onSubmit, onChan
               ? t("正在添加附件…")
               : failed
                 ? t("有附件添加失败，请重试或移除")
-                : t(running ? "Enter 插话 · Shift+Enter 换行" : "Enter 发送 · Shift+Enter 换行")}
+                : t(touch
+                  ? running ? "点按插话 · 回车换行" : "点按发送 · 回车换行"
+                  : running ? "Enter 插话 · Shift+Enter 换行" : "Enter 发送 · Shift+Enter 换行")}
         </span>
         {showCount && <span className="fcount">{t("{n} 字 · {lines} 行", { n: text.length, lines })}</span>}
       </div>
