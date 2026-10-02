@@ -55,7 +55,7 @@ func pluginUsage() {
   reasonix plugin show <name>
   reasonix plugin enable <name>
   reasonix plugin disable <name>
-  reasonix plugin remove <name>
+  reasonix plugin remove <name> --yes
   reasonix plugin doctor <name>
   reasonix plugin migrate <name> --to-v2`)
 }
