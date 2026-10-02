@@ -87,21 +87,25 @@ func TestADocumentNamesItsOwnersAsCodeOwnersDoes(t *testing.T) {
 		return "---\nowner: " + owner + "\nbackup: " + backup + "\nstatus: active\nreviewed: 2026-09-17\n---\n# T\n"
 	}
 	root := docRepo(t, map[string]string{
-		".github/CODEOWNERS": "* @a @b\n/docs/ @b @a\n",
-		"docs/good.md":       header("@b", "@a"),
-		"docs/swapped.md":    header("@a", "@b"),
-		"docs/bare.md":       "# No header\n",
-		"top.md":             header("@a", "@b"),
-		"README.md":          "# Landing page, owned through CODEOWNERS only\n",
-		"REASONIX.md":        "# Read by a model verbatim\n",
+		".github/CODEOWNERS":  "* @a @b\n/docs/ @b @a\n",
+		"docs/good.md":        header("@b", "@a"),
+		"docs/double.md":      header(`"@b"`, `"@a"`),
+		"docs/single.md":      header("'@b'", "'@a'"),
+		"docs/swapped.md":     header("@a", "@b"),
+		"docs/quoted-swap.md": header(`"@a"`, `"@b"`),
+		"docs/broken.md":      header(`"@b`, `"@a"`),
+		"docs/bare.md":        "# No header\n",
+		"top.md":              header("@a", "@b"),
+		"README.md":           "# Landing page, owned through CODEOWNERS only\n",
+		"REASONIX.md":         "# Read by a model verbatim\n",
 	})
 	got := ruleFindings(checkDocs(root), ruleDocOwner)
 	flagged := map[string]string{}
 	for _, f := range got {
 		flagged[f.File] = f.Msg
 	}
-	if len(flagged) != 2 || flagged["docs/swapped.md"] == "" || flagged["docs/bare.md"] == "" {
-		t.Fatalf("flagged = %v, want exactly the swapped owners and the missing header", flagged)
+	if len(flagged) != 4 || flagged["docs/swapped.md"] == "" || flagged["docs/quoted-swap.md"] == "" || flagged["docs/broken.md"] == "" || flagged["docs/bare.md"] == "" {
+		t.Fatalf("flagged = %v, want swapped owners, malformed quotes and the missing header", flagged)
 	}
 	if !strings.Contains(flagged["docs/swapped.md"], "CODEOWNERS line 2") {
 		t.Fatalf("the finding must point at the rule it disagrees with: %s", flagged["docs/swapped.md"])
