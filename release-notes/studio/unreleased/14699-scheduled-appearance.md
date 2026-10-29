@@ -1,0 +1,2 @@
+- 新增：外观设置支持每日定时深色，其余时间浅色；支持跨午夜、本机保存和唤醒刷新，桌面边框与背景同步明暗。实现 #14699。
+- Added: daily scheduled dark mode, light outside its range; overnight ranges, local preferences and resume refresh. Desktop frame and background follow the resolved scheme. Implements #14699.

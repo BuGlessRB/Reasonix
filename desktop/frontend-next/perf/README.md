@@ -43,6 +43,7 @@ node perf/verify.mjs     # 行为验证：跟随、块的装卸、切页往返�
 node perf/panels.mjs     # 两侧栏：收起补间、拖动改宽、上下限、窄屏退场
 node perf/look.mjs       # 外观验证：字号、界面缩放、自定义字体、壁纸上传与调节（含焦点）
 node perf/measure.mjs    # Custom conversation percentage, preset retention, narrow composer controls and populated phone layout
+node perf/theme-schedule.mjs # Scheduled appearance: daily boundaries, midnight, reload/resume, modes, active packs and DST; THEME_SCHEDULE_SHOTS writes wide/phone light/dark screenshots
 node perf/pick.mjs       # 补全菜单：/ 和 @ 的选中态，深浅两色下各走一遍
 node perf/models.mjs     # 连接面板：网关报出一百多个模型时，这一屏还能不能用
 node perf/side.mjs       # 右栏：端点自己写的一句话有多长，都不该改变栏宽
@@ -86,6 +87,14 @@ node perf/jump-ends.mjs # 回到顶部/跳到最新按钮一次点击直达两�
 node perf/sessionrows.mjs # 会话行样式：34px、1px 紧凑间距、单行省略；本机/远程、悬浮/焦点、浅/深、窄/宽
 node perf/start.mjs     # 经工作台标签/边缘把手打开工作台先出入口页（文件/改动/浏览器），不替人开浏览器；标题栏 Browser 按钮仍直达浏览器（浅/深 × 宽/窄）
 ```
+
+`theme-schedule.mjs` is a manual smoke, not a default guard. For real native
+effects, build the normal Studio page and host, then run `pnpm theme-live` from
+`desktop/electron` with an isolated `REASONIX_HOME`.
+
+Run it again with the same home and `REASONIX_THEME_RESTART=1` to check restart
+tint and current-clock reconciliation. It reads actual `nativeTheme.themeSource`
+and `BrowserWindow` background effects, including rejected IPC reporters.
 
 `lang.mjs` 从仓库外跑时用 `PERF_SRC` 指向 `src/`（它要读固件源码来决定
 哪些中文不必翻）。`PERF_URL` 可以指向别的地址；`bench.mjs` 和 `scale.mjs` 另收 `PERF_SCALES`、

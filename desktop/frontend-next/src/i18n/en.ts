@@ -790,7 +790,12 @@ export const EN: Record<string, string> = {
   "内置": "Built in",
   "第三方": "Third party",
   "{n} 个已装": "{n} installed",
-  "跟随系统时会随系统主题切换；手动选择后将保持固定。": "Following the system switches with it; once you choose a theme yourself, it stays fixed.",
+  "跟随系统时会随系统主题切换；浅色和深色保持固定；定时按本机时间每天切换。": "Follow the system switches with your OS; Light and Dark stay fixed; Scheduled switches daily using this device's clock.",
+  "定时": "Scheduled",
+  "深色开始时间": "Dark mode starts",
+  "恢复浅色时间": "Light mode resumes",
+  "每天按本机时间切换，可跨午夜；开始时进入深色，结束时恢复浅色。": "Switches daily in local time, including overnight: dark at the start, light at the end.",
+  "开始和结束时间相同时全天使用浅色。": "Equal start and end times keep light mode all day.",
 
   // ── 连接与来源 ───────────────────────────────────────────────────
   "添加模型来源": "Add a model source",

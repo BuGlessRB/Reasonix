@@ -945,6 +945,36 @@ and `PreCompact` fire in every agent a session runs. Each fires under a
 - `SubagentStop` fires on every end: answer, failure, cancel or refusal;
 - neither can block: exit 2 only warns.
 
+## Studio appearance schedule
+
+In **Settings → Appearance → Light and dark**, choose **Scheduled** to use
+dark mode during a daily local-time range and light mode outside it. The initial
+range is 20:00–07:00; edit either time to apply it immediately.
+
+The start is inclusive and the end is exclusive. Overnight ranges cross
+midnight. Equal times mean light all day; choose **Dark** for dark all day.
+
+**Follow the system**, **Light**, and **Dark** retain their existing behaviour.
+Choosing one stops the schedule without forgetting its times. The title-bar
+theme toggle also chooses a fixed mode.
+
+The range and mode stay on this device, using the same local preferences as
+other theme choices. Desktop restores these across launches; web preferences
+belong to the browser origin. If storage cannot be written, the choice lasts
+only for the current window.
+
+Scheduling uses the device's clock and timezone, not a server timezone. Skipped
+or repeated daylight-saving times follow the actual local clock. Returning to
+the window, restoring a page, or reloading recalculates the current scheme.
+
+The active theme pack and text contrast still apply. Scheduling changes the
+pack's light/dark variant, not the selected pack. The desktop window's native
+frame and background follow the same resolved scheme.
+
+Before the page loads, the shell uses the last saved resolved scheme as a
+startup tint. The page then recalculates from the current clock and updates
+the shell. CLI/TUI theme settings are unchanged.
+
 ## Keyboard shortcuts
 
 Shortcuts are documented by client because users usually look for the keys that
