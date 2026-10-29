@@ -5027,6 +5027,8 @@
   }
   .fontown::placeholder { color: var(--ghost) }
   .fontown:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px }
+  .fontown[type="time"] { color-scheme: light }
+  :root[data-theme="dark"] .fontown[type="time"] { color-scheme: dark }
 
   .fontsample {
     padding: 7px 10px; border-radius: var(--r-sm); background: var(--overlay);

@@ -565,11 +565,7 @@ export const ACTIONS: UIAction[] = [
   // different capability from changing its opacity, so the four sliders share
   // one id and say which parameter on data-value.
   //
-  // These stay apart on purpose. theme.activate installs a palette pack;
-  // appearance.scheme is light, dark or follow-the-system. wallpaper.change
-  // and wallpaper.remove decide which image there is; appearance.background is
-  // how the image that is already there is drawn. And weight and contrast are
-  // two different things a reader wants, however alike they look in CSS.
+  // A pack supplies colours; the scheme decides when its light or dark set is used.
   { id: "appearance.language", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "appearance.zoom", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
   { id: "web-access.backend", kind: "kernel-mutation", target: "none", proof: "authority-effect" },
@@ -594,6 +590,7 @@ export const ACTIONS: UIAction[] = [
   // Kept where the window keeps them: these are this browser's, and no kernel
   // state moves.
   { id: "appearance.scheme", kind: "view", target: "none", proof: "browser" },
+  { id: "appearance.schedule", kind: "view", target: "entity", proof: "browser" },
   { id: "appearance.weight", kind: "view", target: "none", proof: "browser" },
   { id: "appearance.contrast", kind: "view", target: "none", proof: "browser" },
   { id: "appearance.effects", kind: "view", target: "none", proof: "browser" },

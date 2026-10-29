@@ -36,6 +36,7 @@ import { ThemeRemove } from "./ThemeRemove";
 import { WallpaperSceneImport } from "./WallpaperSceneImport";
 import { WallpaperVolumeSlider } from "./WallpaperVolumeSlider";
 import { useThemeInventory } from "./useThemeInventory";
+import { ThemeScheduleFields } from "./ThemeScheduleFields";
 
 // "" follows the machine; the rest are explicit, the same shape the light/dark
 // control uses.
@@ -50,6 +51,7 @@ export const SCHEMES: [string, string][] = [
   ["auto", "跟随系统"],
   ["light", "浅色"],
   ["dark", "深色"],
+  ["scheduled", "定时"],
 ];
 
 interface Props {
@@ -235,7 +237,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
         <div className="grp-hd">
           <h3>{t("明暗")}</h3>
         </div>
-        <p className="hint">{t("跟随系统时会随系统主题切换；手动选择后将保持固定。")}</p>
+        <p className="hint">{t("跟随系统时会随系统主题切换；浅色和深色保持固定；定时按本机时间每天切换。")}</p>
         <div className="grp-items">
           <div className="seg" data-text role="group" aria-label={t("明暗")}>
             {SCHEMES.map(([id, name]) => (
@@ -244,6 +246,7 @@ export function Appearance({ port, theme, onTheme, contrast, onContrast, weight,
               </button>
             ))}
           </div>
+          {theme === "scheduled" && <ThemeScheduleFields />}
         </div>
         <ApplyNote id="mode" />
       </section>
