@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -324,6 +325,102 @@ func TestEnabledPluginsHonorsActivation(t *testing.T) {
 	got := cfg.EnabledPlugins("", store)
 	if len(got) != 1 || got[0].Name != "b" {
 		t.Fatalf("EnabledPlugins = %+v, want [b]", got)
+	}
+}
+
+// A repository-declared server's approval must survive the repository being
+// moved or renamed, since the identity is now the first commit.
+func TestProjectOverrideSurvivesRepositoryRename(t *testing.T) {
+	requireGitRepoIdentity(t)
+	home := testenv.TempDir(t)
+	store := NewActivationStore(home)
+	entry := PluginEntry{Name: "codegraph", Source: MCPSourceProjectMCPJSON}
+
+	base := testenv.TempDir(t)
+	repo := filepath.Join(base, "before")
+	initGitRepoForTest(t, repo)
+	if err := store.SetServerEnabled(entry, repo, ActivationProject, true); err != nil {
+		t.Fatalf("SetServerEnabled: %v", err)
+	}
+	moved := filepath.Join(base, "after")
+	if err := os.Rename(repo, moved); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if on, err := store.IsEnabled(entry, moved); err != nil || !on {
+		t.Fatalf("after rename: enabled=%v err=%v, want the approval to follow", on, err)
+	}
+}
+
+// An override filed by an older build under the git-dir key still resolves, and
+// the next write migrates it onto the current key.
+func TestWriteMigratesOffTheOldRepoKey(t *testing.T) {
+	requireGitRepoIdentity(t)
+	home := testenv.TempDir(t)
+	store := NewActivationStore(home)
+	entry := PluginEntry{Name: "codegraph", Source: MCPSourceProjectMCPJSON}
+	repo := filepath.Join(testenv.TempDir(t), "repo")
+	initGitRepoForTest(t, repo)
+
+	legacy := legacyRepoKey(repo)
+	if legacy == "" || legacy == ProjectKey(repo) {
+		t.Fatalf("legacyRepoKey = %q, ProjectKey = %q, want distinct non-empty", legacy, ProjectKey(repo))
+	}
+	if err := store.SetOverride(ActivationOverride{
+		Kind: CapabilityMCP, Scope: ActivationProject, Key: legacy,
+		Source: string(MCPSourceProjectMCPJSON), Name: entry.Name, Enabled: true,
+		Identity: ProjectDeclarationDigest(entry, repo),
+	}); err != nil {
+		t.Fatalf("SetOverride: %v", err)
+	}
+	if on, err := store.IsEnabled(entry, repo); err != nil || !on {
+		t.Fatalf("old row: enabled=%v err=%v, want it to resolve", on, err)
+	}
+	if err := store.SetServerEnabled(entry, repo, ActivationProject, true); err != nil {
+		t.Fatalf("SetServerEnabled: %v", err)
+	}
+	file, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, ok := findOverride(file.Overrides, overrideKey(ActivationOverride{
+		Kind: CapabilityMCP, Scope: ActivationProject, Key: legacy,
+		Source: string(MCPSourceProjectMCPJSON), Name: entry.Name,
+	})); ok {
+		t.Fatal("the old repo-keyed row survived the write, want it migrated away")
+	}
+	if _, ok := findOverride(file.Overrides, overrideKey(ActivationOverride{
+		Kind: CapabilityMCP, Scope: ActivationProject, Key: ProjectKey(repo),
+		Source: string(MCPSourceProjectMCPJSON), Name: entry.Name,
+	})); !ok {
+		t.Fatal("no row under the current project key after the write")
+	}
+}
+
+func requireGitRepoIdentity(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("git repository fixtures are exercised on POSIX in this suite")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+}
+
+func initGitRepoForTest(t *testing.T, dir string) {
+	t.Helper()
+	mustMkdir(t, dir)
+	runGitForTest(t, dir, "init", "-q", "-b", "main")
+	mustWrite(t, filepath.Join(dir, "f.txt"), "hi\n")
+	runGitForTest(t, dir, "add", "f.txt")
+	runGitForTest(t, dir, "-c", "user.email=t@example.com", "-c", "user.name=test", "commit", "-q", "-m", "init")
+}
+
+func runGitForTest(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
 

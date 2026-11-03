@@ -1,10 +1,11 @@
 // Package workspaceid derives the durable key a workspace's personal settings
 // are filed under. Linked worktrees of one repository share a key, so a switch
 // flipped in the main tree still applies in every worktree cut from it — nine
-// worktrees are one project, not nine. Folders outside a repository key by
-// path instead. Like environment.WorkspaceVCS this reads the filesystem rather
-// than asking git, so it costs nothing on a settings render and cannot flap on
-// a slow subprocess.
+// worktrees are one project, not nine, and a moved or renamed repository keeps
+// its key because a repository is identified by its first commit rather than
+// the path its git dir happens to sit at. Folders outside a repository key by
+// path instead. Reading a workspace costs filesystem walks; resolving a
+// repository's first commit asks git once per repository per process.
 package workspaceid
 
 import (
@@ -23,9 +24,13 @@ const (
 )
 
 // Info describes what a workspace root belongs to. Everything here comes from
-// reading files, so a settings render can ask for it without spawning git.
+// reading files, except the repository key, which needs its first commit.
 type Info struct {
 	Key string // storage key: RepoPrefix or PathPrefix
+	// LegacyRepoKey is the key this repository would have had before identity
+	// became move-stable: RepoPrefix plus the git-dir path digest. It is empty
+	// outside a repository and equals Key when the first commit is unavailable.
+	LegacyRepoKey string
 	// RepoDir is the repository's shared Git directory, identical across linked
 	// worktrees, or "" outside a repository. GitDir is this tree's own.
 	RepoDir      string
@@ -50,7 +55,8 @@ func Describe(root string) Info {
 			info.RepoDir, info.GitDir = common, own
 			info.CheckoutRoot = dir
 			info.Prefix, _ = filepath.Rel(dir, base)
-			info.Key = RepoPrefix + digest(common)
+			info.LegacyRepoKey = RepoPrefix + digest(common)
+			info.Key = RepoPrefix + repoDigest(common)
 			info.Branch = branchAt(own)
 			info.Trees = countTrees(common)
 			return info
@@ -64,6 +70,17 @@ func Describe(root string) Info {
 		}
 		dir = parent
 	}
+}
+
+// repoDigest keys a repository by its first commit when one is available, so a
+// moved or renamed working tree keeps its key. An empty, shallow or unreadable
+// repository falls back to the git-dir path digest, which is what every
+// repository used before this and what LegacyRepoKey still reports.
+func repoDigest(commonDir string) string {
+	if root := rootCommitID(commonDir); root != "" {
+		return digest("root:" + root)
+	}
+	return digest(commonDir)
 }
 
 // Key returns the storage key for root: RepoPrefix when root sits inside a Git

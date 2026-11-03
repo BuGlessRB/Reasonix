@@ -349,6 +349,10 @@ func (s *ActivationStore) update(mutate func(*ActivationFile)) error {
 // repository when root is in one, so every linked worktree shares it.
 func ProjectKey(root string) string { return workspaceid.Key(root) }
 
+// legacyRepoKey is the project key this root's repository used before identity
+// became move-stable — the git-dir path digest. Writes migrate a row off it.
+func legacyRepoKey(root string) string { return workspaceid.Describe(root).LegacyRepoKey }
+
 // placeProjectRow files override under root, falling back to the global layer
 // when there is no project to name. A project row with no key is unreachable —
 // nothing resolves it — so a switch flipped with no workspace open would
@@ -367,11 +371,17 @@ func placeProjectRow(override ActivationOverride, root string) ActivationOverrid
 }
 
 // projectKeys lists the identities a project override may be stored under, most
-// current first. The legacy entry lets a pre-rename override keep working.
+// current first. The legacy repo key keeps an override written before repository
+// identity became move-stable resolvable, and the legacy entry lets a pre-rename
+// override keep working too.
 func projectKeys(root string) []string {
 	var keys []string
-	if key := workspaceid.Key(root); key != "" {
-		keys = append(keys, key)
+	info := workspaceid.Describe(root)
+	if info.Key != "" {
+		keys = append(keys, info.Key)
+	}
+	if info.LegacyRepoKey != "" && info.LegacyRepoKey != info.Key {
+		keys = append(keys, info.LegacyRepoKey)
 	}
 	if fingerprint := workspaceid.PathFingerprint(root); fingerprint != "" {
 		keys = append(keys, activationLegacyPrefix+fingerprint)

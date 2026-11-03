@@ -106,19 +106,46 @@ func (s *ActivationStore) AwaitingDecision(entry PluginEntry, root string) bool 
 
 // SetServerEnabled records a durable decision for entry at scope.
 // Enabling a repository-declared server records the declaration it was given
-// for, as it reads now.
+// for, as it reads now. Either way the write migrates the repository's old
+// git-dir-keyed row, so only the current key resolves.
 func (s *ActivationStore) SetServerEnabled(entry PluginEntry, root string, scope ActivationScope, enabled bool) error {
 	override := ServerOverrideFor(entry, root, scope)
 	override.Enabled = enabled
+	var err error
 	if repoDeclared, _, _ := mcpIdentity(entry); repoDeclared && enabled {
-		return s.confirmDeclaration(override, ProjectDeclarationDigest(entry, root))
+		err = s.confirmDeclaration(override, ProjectDeclarationDigest(entry, root))
+	} else {
+		err = s.SetOverride(override)
 	}
-	return s.SetOverride(override)
+	if err != nil {
+		return err
+	}
+	return s.dropLegacyRepoRow(override, root)
 }
 
-// ClearServer removes entry's override at scope, restoring what it inherits.
+// ClearServer removes entry's override at scope, restoring what it inherits. It
+// also drops the old repository-keyed row so a stale one cannot resurface.
 func (s *ActivationStore) ClearServer(entry PluginEntry, root string, scope ActivationScope) error {
-	return s.ClearOverride(ServerOverrideFor(entry, root, scope))
+	override := ServerOverrideFor(entry, root, scope)
+	if err := s.ClearOverride(override); err != nil {
+		return err
+	}
+	return s.dropLegacyRepoRow(override, root)
+}
+
+// dropLegacyRepoRow removes a project row filed under the repository's old
+// git-dir key, which the caller's own write would otherwise leave behind. A
+// non-repository root, or a key already current, needs no migration.
+func (s *ActivationStore) dropLegacyRepoRow(override ActivationOverride, root string) error {
+	if override.Scope != ActivationProject {
+		return nil
+	}
+	legacy := legacyRepoKey(root)
+	if legacy == "" || legacy == override.Key {
+		return nil
+	}
+	override.Key = legacy
+	return s.ClearOverride(override)
 }
 
 // ClearServerEverywhere drops entry's rows at both layers. Uninstall uses it:
